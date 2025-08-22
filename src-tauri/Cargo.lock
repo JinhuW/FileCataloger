@@ -3562,9 +3562,9 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 
 [[package]]
 name = "tauri"
-version = "2.8.1"
+version = "2.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2a95cd68dd3e97bfe689ed6076ea16c68389feabc51ec4a63138bbe4892c8d7"
+checksum = "a54629607ea3084a8b455c1ebe888cbdfc4de02fa5edb2e40db0dc97091007e3"
 dependencies = [
  "anyhow",
  "bytes",
@@ -3705,9 +3705,9 @@ dependencies = [
 
 [[package]]
 name = "tauri-plugin-opener"
-version = "2.4.0"
+version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ecee219f11cdac713ab32959db5d0cceec4810ba4f4458da992292ecf9660321"
+checksum = "786156aa8e89e03d271fbd3fe642207da8e65f3c961baa9e2930f332bf80a1f5"
 dependencies = [
  "dunce",
  "glob",
