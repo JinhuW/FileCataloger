@@ -1,0 +1,13 @@
+{
+  "recommendations": [
+    "tauri-apps.tauri-vscode",
+    "rust-lang.rust-analyzer",
+    "dbaeumer.vscode-eslint",
+    "esbenp.prettier-vscode",
+    "bradlc.vscode-tailwindcss",
+    "EditorConfig.EditorConfig",
+    "formulahendry.auto-rename-tag",
+    "vitest.explorer",
+    "ZixuanChen.vitest-explorer"
+  ]
+}

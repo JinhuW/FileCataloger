@@ -1,0 +1,60 @@
+version: 2
+updates:
+  # Enable version updates for npm
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '04:00'
+    open-pull-requests-limit: 10
+    reviewers:
+      - 'you' # Replace with your GitHub username
+    labels:
+      - 'dependencies'
+      - 'javascript'
+    groups:
+      development-dependencies:
+        dependency-type: 'development'
+        patterns:
+          - '@types/*'
+          - 'eslint*'
+          - 'prettier*'
+          - 'vitest*'
+          - '@testing-library/*'
+      production-dependencies:
+        dependency-type: 'production'
+        patterns:
+          - 'react*'
+          - '@tauri-apps/*'
+
+  # Enable version updates for Rust
+  - package-ecosystem: 'cargo'
+    directory: '/src-tauri'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '04:00'
+    open-pull-requests-limit: 10
+    reviewers:
+      - 'you' # Replace with your GitHub username
+    labels:
+      - 'dependencies'
+      - 'rust'
+    groups:
+      tauri-dependencies:
+        patterns:
+          - 'tauri*'
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '04:00'
+    reviewers:
+      - 'you' # Replace with your GitHub username
+    labels:
+      - 'dependencies'
+      - 'github-actions'

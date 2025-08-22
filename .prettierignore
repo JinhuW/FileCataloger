@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Production builds
+dist/
+build/
+
+# Tauri generated files
+src-tauri/target/
+
+# Lock files
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# IDE
+.vscode/
+.idea/
+
+# Environment variables
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+.nyc_output/

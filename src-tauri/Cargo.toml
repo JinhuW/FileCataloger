@@ -1,0 +1,56 @@
+[package]
+name = "tauri-app"
+version = "0.1.0"
+description = "A Tauri App"
+authors = ["you"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "tauri_app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+# Pedantic lints
+pedantic = "warn"
+# Additional restrictions
+restriction = "warn"
+# Allow some common patterns
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+blanket_clippy_restriction_lints = "allow"
+implicit_return = "allow"
+question_mark_used = "allow"
+separated_literal_suffix = "allow"
+mod_module_files = "allow"
+self_named_module_files = "allow"
+std_instead_of_core = "allow"
+std_instead_of_alloc = "allow"
+single_call_fn = "allow"
+missing_docs_in_private_items = "allow"
+absolute_paths = "allow"
+min_ident_chars = "allow"
+missing_trait_methods = "allow"
+exhaustive_structs = "allow"
+exhaustive_enums = "allow"
+pub_use = "allow"
+pub_with_shorthand = "allow"
+
