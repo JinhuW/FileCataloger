@@ -28,6 +28,7 @@ export interface AppPreferences {
     maxSimultaneous: number;
     animationSpeed: 'slow' | 'normal' | 'fast' | 'instant';
     theme: 'light' | 'dark' | 'auto';
+    createOnlyOnFirstDragAndShake: boolean; // Only create shelf on first drag+shake action
   };
   
   // File Handling
@@ -84,7 +85,8 @@ const DEFAULT_PREFERENCES: AppPreferences = {
     autoHideDelay: 5000,
     maxSimultaneous: 5,
     animationSpeed: 'normal',
-    theme: 'auto'
+    theme: 'auto',
+    createOnlyOnFirstDragAndShake: true // Default: only create on first drag+shake
   },
   
   fileHandling: {

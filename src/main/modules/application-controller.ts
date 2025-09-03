@@ -5,6 +5,7 @@ import { EnhancedDragDetector } from './enhanced-drag-detector';
 import { createNativeDragMonitor, NativeDragMonitor } from '@native/drag-monitor';
 import { ShelfManager } from './shelf-manager';
 import { errorHandler, ErrorSeverity, ErrorCategory } from './error-handler';
+import { PreferencesManager } from './preferences-manager';
 import { MouseTracker } from '@shared/types';
 
 /**
@@ -30,6 +31,8 @@ export class ApplicationController extends EventEmitter {
   private shelfAutoHideTimers = new Map<string, NodeJS.Timeout>(); // Track auto-hide timers
   private isDragging: boolean = false; // Track current drag state
   private activeEmptyShelfId: string | null = null; // Track the single active empty shelf
+  private hasCreatedShelfInSession: boolean = false; // Track if shelf was created in this drag session
+  private preferencesManager: PreferencesManager;
   
   
   // Configuration
@@ -44,6 +47,9 @@ export class ApplicationController extends EventEmitter {
 
   constructor() {
     super();
+    
+    // Initialize preferences manager
+    this.preferencesManager = PreferencesManager.getInstance();
     
     // Initialize modules
     this.mouseTracker = createMouseTracker();
@@ -101,11 +107,13 @@ export class ApplicationController extends EventEmitter {
             onDragStart: () => {
               console.log('Native file drag detected (fresh drag operation)');
               this.isDragging = true;
+              this.hasCreatedShelfInSession = false; // Reset session flag on new drag
               this.emit('drag-started');
             },
             onDragEnd: () => {
               console.log('Native drag ended');
               this.isDragging = false;
+              this.hasCreatedShelfInSession = false; // Reset session flag when drag ends
               this.emit('drag-ended');
             },
             onDragData: (data) => {
@@ -302,6 +310,17 @@ export class ApplicationController extends EventEmitter {
       
       console.log('✅ Processing drag+shake - will create shelf');
       
+      // Check preference for creating only on first drag+shake
+      const prefs = this.preferencesManager.getPreferences();
+      if (prefs.shelf.createOnlyOnFirstDragAndShake && this.hasCreatedShelfInSession) {
+        console.log('🚫 Shelf already created in this drag session (preference: createOnlyOnFirstDragAndShake)');
+        // Just show the existing shelf without creating a new one
+        if (this.activeEmptyShelfId) {
+          this.shelfManager.showShelf(this.activeEmptyShelfId);
+        }
+        return;
+      }
+      
       // Check if we already have an active empty shelf
       if (this.activeEmptyShelfId) {
         const shelfConfig = this.shelfManager.getShelfConfig(this.activeEmptyShelfId);
@@ -346,6 +365,7 @@ export class ApplicationController extends EventEmitter {
       // Track this as the active empty shelf
       this.activeEmptyShelfId = shelfId;
       this.activeShelves.add(shelfId);
+      this.hasCreatedShelfInSession = true; // Mark that shelf was created in this session
       
       // Auto-hide empty shelf after timeout
       this.scheduleEmptyShelfAutoHide(shelfId);
