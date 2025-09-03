@@ -1,0 +1,17 @@
+{
+  "name": "drag-monitor-darwin",
+  "version": "1.0.0",
+  "description": "Native macOS drag monitoring module",
+  "main": "index.js",
+  "gypfile": true,
+  "scripts": {
+    "build": "node-gyp rebuild",
+    "clean": "node-gyp clean"
+  },
+  "dependencies": {
+    "node-addon-api": "^5.1.0"
+  },
+  "devDependencies": {
+    "node-gyp": "^9.4.0"
+  }
+}
