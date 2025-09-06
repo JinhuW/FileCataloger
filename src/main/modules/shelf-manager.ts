@@ -271,7 +271,8 @@ export class ShelfManager extends EventEmitter {
    */
   private async loadShelfContent(window: BrowserWindow, config: ShelfConfig): Promise<void> {
     // Load the React shelf renderer HTML
-    const rendererPath = path.join(__dirname, '../renderer/shelf.html');
+    // __dirname is dist/main/modules, so go up twice to get to dist/, then into renderer/
+    const rendererPath = path.join(__dirname, '../../renderer/shelf.html');
     
     try {
       console.log(`📂 Loading shelf window from: ${rendererPath}`);

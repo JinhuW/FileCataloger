@@ -29,6 +29,9 @@ export interface ShakeDetectionConfig {
   timeWindow: number; // milliseconds
   minDistance: number; // pixels
   debounceTime: number; // milliseconds
+  minVelocity?: number; // minimum velocity in pixels/ms
+  maxVelocity?: number; // maximum velocity to filter out erratic movements
+  velocityWeight?: number; // weight factor for velocity in intensity calculation
 }
 
 export interface ShakeDetector {

@@ -11,8 +11,16 @@ export function createMouseTracker(): MouseTracker {
   try {
     switch (platform) {
       case 'darwin':
-        // Use native macOS tracker with CGEventTap
-        return new DarwinNativeTracker();
+        // Try to use native macOS tracker with CGEventTap
+        try {
+          const tracker = new DarwinNativeTracker();
+          console.log('Successfully initialized native macOS mouse tracker');
+          return tracker;
+        } catch (nativeError) {
+          console.warn('Native macOS tracker unavailable, falling back to Node.js implementation');
+          console.warn('This is normal if native modules haven\'t been built yet.');
+          return new NodeMouseTracker();
+        }
         
       case 'win32':
         // Native Windows tracker not yet implemented, use Node.js fallback  

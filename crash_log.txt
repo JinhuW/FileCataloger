@@ -1,0 +1,153 @@
+yarn run v1.22.22
+$ electron ./dist/main/index.js
+✅ Successfully loaded native macOS tracker from: /Users/jinhu/Development/dropover_clone/src/native/mouse-tracker/darwin/build/Release/mouse_tracker_darwin.node
+Created MacOSMouseTracker instance
+Native macOS tracker initialized successfully
+Successfully initialized native macOS mouse tracker
+✅ Native drag monitor loaded from: /Users/jinhu/Development/dropover_clone/src/native/drag-monitor/build/Release/drag_monitor_darwin.node
+✅ Native DarwinDragMonitor instance created successfully (loader)
+[90m[2025-09-06T14:11:45.422Z][0m [32m[INFO][0m [35m[ApplicationController][0m 🚀 ApplicationController constructor started
+[90m[2025-09-06T14:11:45.422Z][0m [32m[INFO][0m [35m[ApplicationController][0m ✓ PreferencesManager initialized
+[90m[2025-09-06T14:11:45.424Z][0m [32m[INFO][0m [35m[ApplicationController][0m ✓ Mouse tracker initialized successfully
+[90m[2025-09-06T14:11:45.425Z][0m [32m[INFO][0m [35m[ShakeDetector][0m ShakeDetector initialized with config: {
+  minDirectionChanges: 2,
+  timeWindow: 600,
+  minDistance: 5,
+  debounceTime: 300,
+  minVelocity: 0.5,
+  maxVelocity: 50,
+  velocityWeight: 1.5
+}
+[90m[2025-09-06T14:11:45.426Z][0m [32m[INFO][0m [35m[DragShakeDetector][0m ✅ Native macOS drag monitor initialized
+[90m[2025-09-06T14:11:45.426Z][0m [32m[INFO][0m [35m[ApplicationController][0m ✓ Drag-shake detector initialized
+[90m[2025-09-06T14:11:45.428Z][0m [32m[INFO][0m Logger initialized successfully {
+  logDirectory: '/Users/jinhu/Library/Application Support/Electron/logs',
+  currentLogFile: 'app-2025-09-06.log',
+  config: {
+    logLevel: 0,
+    enableConsoleLogging: true,
+    enableFileLogging: true,
+    logDirectory: '/Users/jinhu/Library/Application Support/Electron/logs',
+    maxLogFiles: 7,
+    logFilePrefix: 'app',
+    logFileExtension: 'log'
+  }
+}
+✓ Tray icon created successfully
+✓ System tray created
+✅ Native macOS mouse tracking started with button detection
+✅ Native drag monitor started with polling (loader)
+[HIGH] [performance] Performance warning: memory-critical at 97.5%
+Performance issue detected: {
+  id: 'err_1757167905534_bwlgpe351',
+  timestamp: 1757167905534,
+  severity: 'high',
+  category: 'performance',
+  message: 'Performance warning: memory-critical at 97.5%',
+  stack: undefined,
+  context: { type: 'memory-critical', value: 97.5 },
+  userAction: undefined,
+  systemInfo: {
+    platform: 'darwin',
+    arch: 'arm64',
+    version: '28.2.0',
+    memory: {
+      rss: 96337920,
+      heapTotal: 8716288,
+      heapUsed: 5042268,
+      external: 2460376,
+      arrayBuffers: 0
+    }
+  }
+}
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+🔍 About to call hasActiveDrag()
+✅ hasActiveDrag returned: false
+
+#
+# Fatal error in HandleScope::HandleScope
+# Entering the V8 API without proper locking in place
+#
+
+/Users/jinhu/Development/dropover_clone/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron exited with signal SIGTRAP
+error Command failed with exit code 1.
+info Visit https://yarnpkg.com/en/docs/cli/run for documentation about this command.

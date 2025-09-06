@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { ShakeDetector, ShakeDetectionConfig, MousePosition, Vector2D } from '@shared/types';
+import { createLogger, Logger } from './logger';
 
 /**
  * Advanced shake detection algorithm with ring buffer and vector pooling
@@ -8,12 +9,17 @@ import { ShakeDetector, ShakeDetectionConfig, MousePosition, Vector2D } from '@s
  * to activate the shelf system
  */
 export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector {
-  // Default configuration - much more sensitive for easier shake detection
+  private logger: Logger;
+
+  // Default configuration - ULTRA sensitive for testing
   private config: ShakeDetectionConfig = {
-    minDirectionChanges: 2,     // Only 2 direction changes needed (was 4)
-    timeWindow: 600,            // Increased time window for easier detection
-    minDistance: 5,             // Very low minimum distance (was 8)
-    debounceTime: 300           // Faster debounce for quicker re-triggering
+    minDirectionChanges: 1,     // Only 1 direction change needed (very easy)
+    timeWindow: 2000,           // Very long time window
+    minDistance: 1,             // Minimum possible distance
+    debounceTime: 50,           // Very fast debounce
+    minVelocity: 0.01,         // Almost no velocity needed
+    maxVelocity: 100,          // High max velocity
+    velocityWeight: 1.5        // Weight factor for velocity in intensity calculation
   };
 
   // Ring buffer for efficient position history
@@ -41,7 +47,9 @@ export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector
 
   constructor() {
     super();
+    this.logger = createLogger('ShakeDetector');
     this.initializeVectorPool();
+    this.logger.info('ShakeDetector initialized with config:', this.config);
   }
 
   public configure(config: Partial<ShakeDetectionConfig>): void {
@@ -50,12 +58,14 @@ export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector
 
   public start(): void {
     if (this.isActive) {
-      console.warn('ShakeDetector is already active');
+      this.logger.warn('ShakeDetector is already active');
       return;
     }
 
     this.isActive = true;
     this.resetDetectionState();
+    this.logger.info('✅ ShakeDetector started - shake your mouse to trigger shelf creation');
+    this.logger.info('📊 Shake config:', JSON.stringify(this.config, null, 2));
   }
 
   public stop(): void {
@@ -71,11 +81,21 @@ export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector
    */
   public processPosition(position: MousePosition): void {
     if (!this.isActive) {
+      // Log this occasionally to verify position events are being received
+      if (Math.random() < 0.001) { // 0.1% chance to avoid spam
+        this.logger.debug('Received position but ShakeDetector is not active:', position);
+      }
       return;
     }
 
-    // Since fallback tracker doesn't have button state, process all movements
-    // This allows shake detection to work when dragging files
+    // Log every 100th position to verify active processing
+    if (this.bufferIndex % 100 === 0) {
+      this.logger.debug('Processing position (active):', position, 'buffer index:', this.bufferIndex);
+      console.log(`🔍 ShakeDetector processing position: x=${position.x}, y=${position.y}, buffer=${this.bufferIndex}`);
+    }
+
+    // Process all shake events - drag detection is handled separately
+    // The drag-shake detector will validate if we're actually dragging
     
     // Add to ring buffer
     this.addToBuffer(position);
@@ -88,7 +108,24 @@ export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector
    * Add position to ring buffer
    */
   private addToBuffer(position: MousePosition): void {
-    this.positionBuffer[this.bufferIndex] = { ...position };
+    // Ensure position has all required fields
+    const positionToStore: MousePosition = {
+      x: position.x,
+      y: position.y,
+      timestamp: position.timestamp || Date.now(),
+      leftButtonDown: position.leftButtonDown || false
+    };
+    
+    if (this.bufferIndex % 50 === 0) {
+      console.log(`📌 Storing position in buffer[${this.bufferIndex}]:`, {
+        x: positionToStore.x,
+        y: positionToStore.y,
+        timestamp: positionToStore.timestamp,
+        timestampAge: Date.now() - positionToStore.timestamp
+      });
+    }
+    
+    this.positionBuffer[this.bufferIndex] = positionToStore;
     this.bufferIndex = (this.bufferIndex + 1) % this.BUFFER_SIZE;
     
     if (this.bufferIndex === 0) {
@@ -126,15 +163,32 @@ export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector
   private analyzeMovement(): void {
     const positions = this.getRecentPositions(this.config.timeWindow);
     
+    // Log analysis attempts occasionally to verify this method is being called
+    if (this.bufferIndex % 50 === 0) {
+      this.logger.debug('Analyzing movement:', positions.length, 'positions in last', this.config.timeWindow, 'ms');
+    }
+    
+    // More aggressive logging for debugging
+    if (this.bufferIndex % 20 === 0 && positions.length > 0) {
+      console.log(`📊 Analyzing ${positions.length} positions, need >= 4 for shake detection`);
+    }
+    
     if (positions.length < 4) {
+      if (this.bufferIndex % 100 === 0) {
+        this.logger.debug('Not enough positions for shake detection:', positions.length, '< 4 required');
+      }
       return; // Need at least 4 positions to detect direction changes
     }
 
-    // Calculate direction changes
+    // Calculate direction changes with velocity tracking
     let directionChanges = 0;
     let lastDirection: Vector2D | null = null;
     let totalDistance = 0;
     let maxVelocity = 0;
+    let avgVelocity = 0;
+    let velocityCount = 0;
+    let accelerationChanges = 0;
+    let lastVelocity = 0;
 
     for (let i = 1; i < positions.length; i++) {
       const prev = positions[i - 1];
@@ -153,11 +207,32 @@ export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector
         continue;
       }
 
-      // Calculate velocity
+      // Calculate velocity with filtering
       const timeDelta = curr.timestamp - prev.timestamp;
+      let velocity = 0;
       if (timeDelta > 0) {
-        const velocity = distance / timeDelta;
-        maxVelocity = Math.max(maxVelocity, velocity);
+        velocity = distance / timeDelta;
+        
+        // Filter out erratic movements
+        if (this.config.maxVelocity && velocity > this.config.maxVelocity) {
+          velocity = this.config.maxVelocity;
+        }
+        
+        // Track velocity statistics
+        if (this.config.minVelocity && velocity >= this.config.minVelocity) {
+          maxVelocity = Math.max(maxVelocity, velocity);
+          avgVelocity = (avgVelocity * velocityCount + velocity) / (velocityCount + 1);
+          velocityCount++;
+          
+          // Track acceleration changes (rapid speed changes indicate shake)
+          if (lastVelocity > 0) {
+            const acceleration = Math.abs(velocity - lastVelocity) / timeDelta;
+            if (acceleration > 0.01) { // Significant acceleration change
+              accelerationChanges++;
+            }
+          }
+          lastVelocity = velocity;
+        }
       }
 
       // Normalize direction
@@ -184,9 +259,32 @@ export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector
     // Update analytics
     this.analytics.maxVelocity = Math.max(this.analytics.maxVelocity, maxVelocity);
 
-    // Check if shake pattern detected
-    if (directionChanges >= this.config.minDirectionChanges) {
+    // Log analysis results occasionally for debugging
+    if (directionChanges > 0 && this.bufferIndex % 25 === 0) {
+      this.logger.debug(`Movement analysis: ${directionChanges} direction changes (need ${this.config.minDirectionChanges}), distance: ${totalDistance.toFixed(1)} (need ${this.config.minDistance}), avg velocity: ${avgVelocity.toFixed(2)}, acceleration changes: ${accelerationChanges}`);
+    }
+
+    // Enhanced shake detection with velocity consideration
+    const minVel = this.config.minVelocity || 0.5;
+    const velocityWeight = this.config.velocityWeight || 1.5;
+    const velocityFactor = avgVelocity >= minVel ? velocityWeight : 0.5;
+    const hasValidVelocity = maxVelocity >= minVel && avgVelocity >= minVel * 0.7;
+    const hasAccelerationPattern = accelerationChanges >= Math.max(1, directionChanges - 1);
+    
+    // Check if shake pattern detected with velocity-based criteria
+    if (directionChanges >= this.config.minDirectionChanges && hasValidVelocity) {
+      this.logger.info(`✅ Velocity-based shake detected! Changes: ${directionChanges}, Distance: ${totalDistance}, Avg Velocity: ${avgVelocity.toFixed(2)}, Acceleration Changes: ${accelerationChanges}`);
+      console.log(`🎉 SHAKE DETECTED! Direction changes: ${directionChanges}, Total distance: ${totalDistance.toFixed(2)}`);
+      this.handleShakeDetected(directionChanges, totalDistance, avgVelocity * velocityFactor);
+    } else if (directionChanges >= this.config.minDirectionChanges + 1 && hasAccelerationPattern) {
+      // Alternative detection: more direction changes with acceleration pattern
+      this.logger.info(`✅ Acceleration-based shake detected! Changes: ${directionChanges}, Acceleration Changes: ${accelerationChanges}`);
+      console.log(`🎊 SHAKE DETECTED (acceleration)! Direction changes: ${directionChanges}`);
       this.handleShakeDetected(directionChanges, totalDistance, maxVelocity);
+    } else if (directionChanges >= this.config.minDirectionChanges) {
+      // Even easier detection for testing
+      console.log(`🎈 SHAKE DETECTED (simple)! Direction changes: ${directionChanges}, Total distance: ${totalDistance.toFixed(2)}`);
+      this.handleShakeDetected(directionChanges, totalDistance, 1.0);
     }
   }
 
@@ -228,9 +326,10 @@ export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector
 
     this.lastShakeTime = now;
     
-    console.log(`🎯 SHAKE DETECTED! Changes: ${directionChanges}, Distance: ${distance.toFixed(1)}, Velocity: ${velocity.toFixed(2)}, Intensity: ${intensity.toFixed(2)}`);
+    this.logger.info(`🎯 SHAKE DETECTED! Changes: ${directionChanges}, Distance: ${distance.toFixed(1)}, Velocity: ${velocity.toFixed(2)}, Intensity: ${intensity.toFixed(2)}`);
     
     // Emit shake event
+    this.logger.info('🎯 SHAKE DETECTED! Direction changes:', directionChanges, 'Intensity:', intensity.toFixed(2));
     this.emit('shake', {
       directionChanges,
       distance,

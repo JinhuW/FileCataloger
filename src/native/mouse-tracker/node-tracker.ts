@@ -12,6 +12,22 @@ export class NodeMouseTracker extends BaseMouseTracker {
   private pollInterval?: NodeJS.Timeout;
   private readonly POLL_RATE = 60; // 60 FPS
   private readonly POLL_INTERVAL = 1000 / this.POLL_RATE;
+  private isLeftButtonDown: boolean = false;
+
+  constructor() {
+    super();
+    this.setupButtonSimulation();
+  }
+  
+  private setupButtonSimulation(): void {
+    // In fallback mode, we cannot detect real mouse buttons
+    // Shelf creation will require actual drag operations
+    console.log('⚠️ Fallback mode: Mouse button detection not available');
+    console.log('📌 Shelf will only appear when dragging files');
+    
+    // Default to false - no button simulation
+    this.isLeftButtonDown = false;
+  }
 
   start(): void {
     if (this.isActive) {
@@ -65,7 +81,12 @@ export class NodeMouseTracker extends BaseMouseTracker {
       
       // Only update if position has changed
       if (point.x !== this.lastPosition.x || point.y !== this.lastPosition.y) {
-        this.updatePosition(point.x, point.y);
+        this.updatePosition(point.x, point.y, {
+          x: point.x,
+          y: point.y,
+          timestamp: Date.now(),
+          leftButtonDown: false // Cannot detect button state in fallback mode
+        });
       }
     } catch (error) {
       // Screen API might not be available in some contexts

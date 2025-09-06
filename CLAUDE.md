@@ -2,229 +2,155 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project Overview
+## CRITICAL FEATURE REQUIREMENTS - DO NOT CHANGE
 
-This is a Dropover Desktop Clone - an Electron-based application that replicates Dropover's functionality for managing temporary file storage via floating shelves. The app features global mouse tracking, shake detection for shelf activation, and drag-and-drop file management.
+### Drag + Shake Detection Feature
+**IMPORTANT**: The core feature is **drag + shake detection**. The shelf should ONLY appear when:
+1. User is actively dragging files/folders from Finder or other apps
+2. AND shakes the mouse while dragging
 
-## Technology Stack
+**DO NOT**:
+- Create shelves on shake alone (without drag)
+- Change this core behavior without explicit user request
+- Assume shake-only triggering is acceptable
 
-- **Core**: Electron 28.x, Node.js 20 LTS, TypeScript 5.x, Only use typescript and never use javascript
-- **UI**: React 18, Tailwind CSS, Framer Motion
-- **Native**: node-gyp for platform-specific integrations (Win32 API, CGEventTap for macOS, X11/Wayland for Linux)
-- **Build**: Electron Forge, electron-builder
+**Current Challenge**: 
+- Native drag detection module has loading issues in fallback mode
+- Need to properly detect when files are being dragged from Finder BEFORE shake occurs
+- The system should detect the drag operation first, then respond to shake gesture
 
-## Development Commands
+## Essential Commands
 
+### Development
 ```bash
 # Install dependencies
 yarn install
 
-# TypeScript compilation
-yarn tsc
+# Build native modules (required for mouse tracking)
+cd src/native/mouse-tracker/darwin && node-gyp rebuild && cd ../../../..
+cd src/native/drag-monitor && yarn install && node-gyp rebuild && cd ../..
 
-# Build the project
+# Run development server
+yarn dev
+
+# Type checking - MUST RUN before committing
+yarn tsc
+# or
+yarn typecheck
+```
+
+### Build & Production
+```bash
+# Build all components
 yarn build
 
-# Run in development mode
-yarn dev
+# Build individual components
+yarn build:main      # Main process
+yarn build:renderer   # React UI
+yarn build:preload   # Preload scripts
+
+# Start built application
+yarn start
 
 # Package for distribution
 yarn package
-
-# Run tests
-yarn test
-
-# Type checking
-yarn tsc --noEmit
-
-# Linting (when configured)
-yarn lint
+yarn make
 ```
 
-## Project Architecture
+## Architecture Overview
 
-The application follows a multi-process architecture:
+This is an Electron desktop application that replicates Dropover's functionality with native macOS integration.
 
-### Main Process (`src/main/`)
-- **Application Controller**: Lifecycle management, global event coordination
-- **Mouse Tracker**: Native platform-specific mouse position tracking
-- **Shake Detector**: Algorithm to detect cursor shake gestures (6+ direction changes within 500ms)
-- **Drag Detector**: Global drag operation detection via pasteboard monitoring
-- **Shelf Manager**: Creates and manages floating shelf windows
+### Core Components
 
-### Renderer Process (`src/renderer/`)
-- **React Components**: Shelf UI, settings window
-- **IPC Communication**: Secure bridge between renderer and main process via contextBridge
+1. **Main Process** (`src/main/`)
+   - `ApplicationController`: Central coordinator for all modules
+   - `ShelfManager`: Manages multiple shelf windows
+   - `DragShakeDetector`: Combines drag detection with shake gestures
+   - `PerformanceMonitor`: CPU/memory tracking with auto-cleanup
+   - `PreferencesManager`: User settings with ElectronStore
+   - `KeyboardManager`: Global shortcuts
+   - `ErrorHandler`: Multi-level error system with categorization
+   - `Logger`: File-based logging with rotation
 
-### Native Modules (`src/native/`)
-- Platform-specific implementations for mouse tracking
-- macOS: CGEventTap API
-- Windows: Win32 hooks
-- Linux: X11/Wayland events
+2. **Native Modules** (`src/native/`)
+   - `mouse-tracker`: CGEventTap-based mouse tracking for macOS
+   - `drag-monitor`: Native drag detection module
+   - Built with node-gyp, requires rebuild after node_modules changes
 
-## Key Implementation Patterns
+3. **Renderer Process** (`src/renderer/`)
+   - React 19 with TypeScript
+   - Tailwind CSS for styling
+   - Framer Motion for animations
+   - Zustand for state management
 
-### Platform Detection
-Always use factory pattern for platform-specific code:
-```typescript
-switch (process.platform) {
-  case 'darwin': // macOS
-  case 'win32':  // Windows
-  case 'linux':  // Linux
-}
-```
+4. **IPC Communication**
+   - Typed IPC channels defined in `src/shared/types.ts`
+   - Contextual bridge exposed via preload script
 
-### IPC Security
-All renderer-main communication must go through validated IPC channels using contextBridge in preload scripts. Never expose raw ipcRenderer.
+### Module Interactions
+
+- **Shake Detection**: Mouse tracker → DragShakeDetector → ShelfManager → Creates shelf window
+- **Error Flow**: Any module → ErrorHandler → Logger → File system
+- **Preferences**: PreferencesManager ↔ All modules (singleton pattern)
+- **Performance**: PerformanceMonitor → Triggers GC on high memory → Logs warnings
+
+## Critical Implementation Details
+
+### Native Module Requirements
+- **macOS Accessibility**: App requires accessibility permissions for mouse tracking
+- **Python**: Required for node-gyp to build native modules
+- **Build Order**: Native modules must be built before running the app
 
 ### Window Management
-- Shelves are frameless, transparent BrowserWindows
-- Always set `contextIsolation: true` and `nodeIntegration: false`
-- Use window pooling for performance (max 3 cached windows)
+- Shelves are frameless, always-on-top BrowserWindows
+- Each shelf has unique ID tracked by ShelfManager
+- Windows persist position and state between sessions
 
-### State Persistence
-- User preferences stored via electron-store
-- Shelf positions and pinned states are persisted
-- Recent shelves list maintained (max 10)
+### Error Handling Strategy
+- Four severity levels: LOW, MEDIUM, HIGH, CRITICAL
+- Seven categories: SYSTEM, NATIVE, USER_INPUT, FILE_OPERATION, WINDOW, IPC, PERFORMANCE
+- Automatic fallback to Node.js mouse tracking if native fails
+- User-friendly error messages with technical details in logs
 
-## File Structure Requirements
+### Performance Constraints
+- Memory limit: 500MB triggers GC
+- CPU limit: 80% triggers performance warning
+- Mouse tracking: Must maintain 60fps (16ms latency)
+- Empty shelf auto-hide: 5 seconds default
 
-```
-src/
-├── main/                 # Main process code
-│   ├── index.ts         # Entry point
-│   ├── shake-detector.ts
-│   ├── drag-detector.ts
-│   ├── shelf-manager.ts
-│   └── shelf.ts
-├── renderer/            # React UI code
-│   ├── components/
-│   └── styles/
-├── native/              # Platform-specific native code
-│   └── mouse-tracker/
-└── preload/            # Preload scripts for IPC
-```
+## TypeScript Configuration
 
-## Testing Requirements
+- **Strict mode enabled** - All strict checks active
+- Path aliases configured:
+  - `@main/*` → `src/main/*`
+  - `@renderer/*` → `src/renderer/*`
+  - `@native/*` → `src/native/*`
+  - `@shared/*` → `src/shared/*`
 
-- Unit tests for shake detection algorithm
-- Integration tests for shelf creation/destruction
-- Mock native modules in tests using Jest moduleNameMapper
-- E2E tests using Spectron for critical user flows
+## File Organization
 
-## Performance Considerations
+- Components follow PascalCase: `ShelfManager.ts`
+- Modules export singleton instances: `export const shelfManager = new ShelfManager()`
+- Shared types in `src/shared/types.ts`
+- Logger types in `src/shared/logger.ts`
 
-- Batch mouse events (process every 16ms for 60fps)
-- Implement item virtualization for shelves with 50+ items
-- Use lazy window creation and pooling
-- Ring buffer for mouse position history (max 100 entries)
+## Testing Approach
 
-## Security Requirements
+No test framework is currently configured. To add tests:
+1. Install test framework (Jest/Vitest recommended)
+2. Add test scripts to package.json
+3. Create `__tests__` directories in respective modules
 
-- Sanitize all file paths (remove `..` traversal attempts)
-- Validate file types before accepting drops
-- Set Content Security Policy in all HTML files
-- Never log or commit sensitive information
-- Sign binaries for distribution
+## Known Issues & Workarounds
+
+1. **Native module build failures**: Ensure Python 3.x and Xcode Command Line Tools installed
+2. **Accessibility permissions**: Guide users through System Preferences → Security & Privacy → Accessibility
+3. **High memory usage**: PerformanceMonitor auto-triggers GC at 500MB threshold
 
 ## Development Notes
 
-- The Implementation.md file contains detailed specifications for each module
-- TypeScript strict mode is enabled - ensure all types are properly defined
-- React components should use functional components with hooks
-- Animations use Framer Motion - maintain 60fps performance
-
-## Important: Drag Detection Pattern
-
-**When implementing drag detection for Dropover-like functionality:**
-- **Be optimistic**: Enable drag mode when shake is detected, even without confirmed file dragging
-- **Auto-timeout**: Disable drag mode after 3 seconds to prevent accidental activation  
-- **Reason**: Native file dragging from Finder is hard to detect reliably without complex native code
-- **User Experience First**: Prioritize feature availability over perfect detection accuracy
-
-See CODING_NOTES.md for detailed explanation of this issue and solution.
-
-## Agent System for Development Workflow
-
-This project includes specialized Claude agents in `.claude/agents/` to assist with different aspects of development:
-
-### Available Agents
-- **@electron-expert**: Main process, IPC security, window management
-- **@react-frontend-expert**: React components, animations, UI/UX
-- **@native-module-expert**: Platform-specific code, native integrations
-- **@performance-expert**: Optimization, memory management, profiling
-- **@testing-validation-expert**: Testing, validation, CI/CD
-
-### Stage Completion Workflow
-
-After completing any development stage, use the testing-validation expert to ensure quality:
-
-```bash
-# Example: After implementing shake detection
-@testing-validation-expert Please validate the shake detection implementation:
-1. Create unit tests for ShakeDetector class
-2. Test edge cases and performance
-3. Validate cross-platform compatibility
-4. Check memory usage under load
-```
-
-### Development Stage Checklist
-
-When finishing a feature or module:
-
-1. **Code Review**
-   ```
-   @testing-validation-expert Review the [module name] for:
-   - Code quality and best practices
-   - Security vulnerabilities
-   - Performance bottlenecks
-   - Missing error handling
-   ```
-
-2. **Test Creation**
-   ```
-   @testing-validation-expert Generate comprehensive tests for [module name]:
-   - Unit tests with >80% coverage
-   - Integration tests for IPC communication
-   - E2E tests for user workflows
-   ```
-
-3. **Validation**
-   ```
-   @testing-validation-expert Validate [module name]:
-   - Run all tests and check coverage
-   - Perform security audit
-   - Check cross-platform compatibility
-   - Verify performance benchmarks
-   ```
-
-4. **Documentation**
-   ```
-   @testing-validation-expert Update documentation for [module name]:
-   - API documentation
-   - Usage examples
-   - Performance characteristics
-   ```
-
-### CI/CD Integration
-
-Before merging any feature:
-```
-@testing-validation-expert Set up CI validation for this PR:
-- Configure GitHub Actions workflow
-- Add platform-specific tests
-- Set up coverage reporting
-- Configure automated security scanning
-```
-
-### Performance Validation
-
-For performance-critical components:
-```
-@testing-validation-expert @performance-expert 
-Create performance benchmarks for [component]:
-- Measure operation throughput
-- Check memory usage patterns
-- Validate 60fps UI performance
-- Test under stress conditions
-```
+- Always run `yarn tsc` before committing to catch type errors
+- Native modules require rebuild after Node version changes
+- Preferences stored at `~/Library/Application Support/dropover_clone/`
+- Logs stored at `~/Library/Application Support/dropover_clone/logs/` with 7-day retention

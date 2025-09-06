@@ -38,29 +38,10 @@ module.exports = {
     {
       name: '@electron-forge/maker-dmg',
       config: {
-        name: 'Dropover Clone'
+        name: 'Dropover Clone',
+        format: 'UDZO'
       }
     }
   ],
-  plugins: [
-    {
-      name: '@electron-forge/plugin-webpack',
-      config: {
-        mainConfig: './webpack.main.config.js',
-        renderer: {
-          config: './webpack.renderer.config.js',
-          entryPoints: [
-            {
-              html: './src/renderer/index.html',
-              js: './src/renderer/index.tsx',
-              name: 'main_window',
-              preload: {
-                js: './src/preload/index.ts'
-              }
-            }
-          ]
-        }
-      }
-    }
-  ]
+  plugins: []
 };

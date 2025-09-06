@@ -2,7 +2,7 @@
   "targets": [
     {
       "target_name": "mouse_tracker_darwin",
-      "sources": [ "mouse_tracker.mm" ],
+      "sources": [ "mouse_tracker_darwin.mm" ],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")"
       ],
@@ -19,16 +19,17 @@
           "-fobjc-arc"
         ]
       },
+      "link_settings": {
+        "libraries": [
+          "-framework CoreGraphics",
+          "-framework ApplicationServices",
+          "-framework Foundation",
+          "-framework Carbon"
+        ]
+      },
       "conditions": [
         ["OS=='mac'", {
-          "sources": [ "mouse_tracker.mm" ],
-          "link_settings": {
-            "libraries": [
-              "-framework CoreGraphics",
-              "-framework ApplicationServices",
-              "-framework Foundation"
-            ]
-          }
+          "sources": [ "mouse_tracker_darwin.mm" ]
         }]
       ],
       "defines": [ "NAPI_DISABLE_CPP_EXCEPTIONS" ]

@@ -24,7 +24,9 @@ const validChannels = [
   'shelf:update-config',
   'shelf:debug',
   'settings:get',
-  'settings:set'
+  'settings:set',
+  'logger:log',
+  'logger:set-level'
 ] as const;
 
 type ValidChannel = typeof validChannels[number];

@@ -5,6 +5,8 @@ import { preferencesManager } from './modules/preferences-manager';
 import { keyboardManager } from './modules/keyboard-manager';
 import { performanceMonitor } from './modules/performance-monitor';
 import { errorHandler, ErrorSeverity, ErrorCategory } from './modules/error-handler';
+import { Logger, LogLevel } from './modules/logger';
+import { LogEntry } from '../shared/logger';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -16,8 +18,11 @@ class DropoverApp {
   private applicationController: ApplicationController;
   private tray: Tray | null = null;
   private isQuitting: boolean = false;
+  private logger: Logger;
 
   constructor() {
+    // Initialize logger first
+    this.logger = Logger.getInstance();
     this.applicationController = new ApplicationController();
     this.initializeApp();
   }
@@ -44,19 +49,27 @@ class DropoverApp {
     // Handle app quit
     app.on('before-quit', async (event) => {
       if (!this.isQuitting) {
+        event.preventDefault();
         this.isQuitting = true;
         
         // Stop all services
-        keyboardManager.stop();
-        performanceMonitor.stop();
-        await this.applicationController.destroy();
-        errorHandler.shutdown();
-        
-        // Clean up tray
-        if (this.tray) {
-          this.tray.destroy();
-          this.tray = null;
+        try {
+          keyboardManager.stop();
+          performanceMonitor.stop();
+          await this.applicationController.destroy();
+          errorHandler.shutdown();
+          
+          // Clean up tray
+          if (this.tray) {
+            this.tray.destroy();
+            this.tray = null;
+          }
+        } catch (error) {
+          console.error('Error during cleanup:', error);
         }
+        
+        // Force quit after cleanup
+        app.exit(0);
       }
     });
 
@@ -330,6 +343,36 @@ class DropoverApp {
     ipcMain.on('shelf:debug', (event, data) => {
       // Debug logging removed for production
     });
+
+    // Logger IPC handlers
+    ipcMain.on('logger:log', (event, logEntry: LogEntry) => {
+      // Forward renderer logs to main logger for file logging
+      if (logEntry.processType === 'renderer') {
+        const contextLogger = this.logger.createContextLogger(
+          logEntry.context ? `renderer:${logEntry.context}` : 'renderer'
+        );
+        
+        // Log with appropriate level
+        switch (logEntry.level) {
+          case LogLevel.DEBUG:
+            contextLogger.debug(logEntry.message, ...(logEntry.data || []));
+            break;
+          case LogLevel.INFO:
+            contextLogger.info(logEntry.message, ...(logEntry.data || []));
+            break;
+          case LogLevel.WARN:
+            contextLogger.warn(logEntry.message, ...(logEntry.data || []));
+            break;
+          case LogLevel.ERROR:
+            contextLogger.error(logEntry.message, ...(logEntry.data || []));
+            break;
+        }
+      }
+    });
+
+    ipcMain.on('logger:set-level', (event, level: LogLevel) => {
+      this.logger.setLogLevel(level);
+    });
   }
 
   private createMainWindow(): void {
@@ -354,11 +397,18 @@ class DropoverApp {
     // Load the index.html of the app from the built renderer
     const rendererPath = path.join(__dirname, '../renderer/index.html');
     this.mainWindow.loadFile(rendererPath);
+    
+    // Open DevTools in development for debugging
+    if (!app.isPackaged) {
+      this.mainWindow.webContents.openDevTools({ mode: 'detach' });
+    }
 
-    // Don't auto-show - only show when explicitly requested
-    // this.mainWindow.once('ready-to-show', () => {
-    //   this.mainWindow?.show();
-    // });
+    // Show window in development for debugging
+    if (!app.isPackaged) {
+      this.mainWindow.once('ready-to-show', () => {
+        this.mainWindow?.show();
+      });
+    }
 
     // Emitted when the window is closed - hide instead of destroy for menu bar apps
     this.mainWindow.on('close', (event) => {

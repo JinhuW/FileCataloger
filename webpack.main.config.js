@@ -2,7 +2,7 @@ const path = require('path');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = {
-  mode: 'development',
+  mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
   entry: './src/main/index.ts',
   output: {
     path: path.resolve(__dirname, 'dist/main'),
@@ -13,12 +13,24 @@ module.exports = {
       {
         test: /\.ts$/,
         include: /src/,
+        exclude: /\.node$/,
         use: [{ loader: 'ts-loader' }]
+      },
+      {
+        test: /\.node$/,
+        use: [
+          {
+            loader: 'node-loader',
+            options: {
+              name: '[name].[ext]'
+            }
+          }
+        ]
       }
     ]
   },
   resolve: {
-    extensions: ['.ts', '.js'],
+    extensions: ['.ts', '.js', '.node'],
     alias: {
       '@main': path.resolve(__dirname, 'src/main'),
       '@renderer': path.resolve(__dirname, 'src/renderer'),
@@ -31,6 +43,7 @@ module.exports = {
   target: 'electron-main',
   externals: {
     'electron': 'commonjs electron',
+    './drag_monitor_darwin.node': 'commonjs ./drag_monitor_darwin.node',
     './build/Release/drag_monitor_darwin.node': 'commonjs ./build/Release/drag_monitor_darwin.node'
   },
   node: {

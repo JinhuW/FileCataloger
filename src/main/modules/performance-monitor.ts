@@ -52,7 +52,7 @@ export class PerformanceMonitor extends EventEmitter {
   private thresholds: PerformanceThresholds = {
     cpuWarning: 70,
     cpuCritical: 90,
-    memoryWarning: 80,
+    memoryWarning: 90,  // Increased from 80 to 90 - macOS typically uses high memory
     memoryCritical: 95,
     appMemoryLimit: 500
   };
@@ -263,10 +263,11 @@ export class PerformanceMonitor extends EventEmitter {
     if (appMemoryMB > this.thresholds.appMemoryLimit) {
       this.emitWarning('app-memory-limit', appMemoryMB);
       
+      // DISABLED: Can cause V8 API locking issues
       // Trigger garbage collection if available
-      if (global.gc) {
-        global.gc();
-      }
+      // if (global.gc) {
+      //   global.gc();
+      // }
     } else {
       this.clearWarning('appMemory');
     }

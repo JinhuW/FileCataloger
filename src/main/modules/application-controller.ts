@@ -1,12 +1,12 @@
 import { EventEmitter } from 'events';
-import { createMouseTracker } from '@native/mouse-tracker';
-import { AdvancedShakeDetector } from './shake-detector';
-import { EnhancedDragDetector } from './enhanced-drag-detector';
-import { createNativeDragMonitor, NativeDragMonitor } from '@native/drag-monitor';
+import { screen } from 'electron';
+import { createMouseTracker } from '../../native/mouse-tracker';
+import { DragShakeDetector } from './drag-shake-detector-v2';
 import { ShelfManager } from './shelf-manager';
 import { errorHandler, ErrorSeverity, ErrorCategory } from './error-handler';
 import { PreferencesManager } from './preferences-manager';
-import { MouseTracker } from '@shared/types';
+import { MouseTracker } from '../../shared/types';
+import { Logger, createLogger } from './logger';
 
 /**
  * Main application controller that coordinates all modules
@@ -20,10 +20,9 @@ import { MouseTracker } from '@shared/types';
  */
 export class ApplicationController extends EventEmitter {
   private mouseTracker: MouseTracker;
-  private shakeDetector: AdvancedShakeDetector;
-  private dragDetector: EnhancedDragDetector;  // Enhanced drag detector with optimistic activation
-  private nativeDragMonitor: NativeDragMonitor | null;  // Native macOS drag monitor
+  private dragShakeDetector: DragShakeDetector;
   private shelfManager: ShelfManager;
+  private logger: Logger;
   
   private isRunning: boolean = false;
   private activeShelves = new Set<string>();
@@ -48,31 +47,37 @@ export class ApplicationController extends EventEmitter {
   constructor() {
     super();
     
+    // Initialize logger with context
+    this.logger = createLogger('ApplicationController');
+    this.logger.info('🚀 ApplicationController constructor started');
+    
     // Initialize preferences manager
     this.preferencesManager = PreferencesManager.getInstance();
+    this.logger.info('✓ PreferencesManager initialized');
     
     // Initialize modules
-    this.mouseTracker = createMouseTracker();
-    this.shakeDetector = new AdvancedShakeDetector();
-    
-    // Try to use native drag monitor on macOS
-    this.nativeDragMonitor = null;
-    if (this.config.useNativeDragMonitor && process.platform === 'darwin') {
-      this.nativeDragMonitor = createNativeDragMonitor();
-      if (this.nativeDragMonitor) {
-        console.log('✓ Native drag monitor available for macOS');
-      } else {
-        console.warn('⚠️ Native drag monitor failed to initialize, falling back to enhanced detector');
-      }
+    try {
+      this.mouseTracker = createMouseTracker();
+      this.logger.info('✓ Mouse tracker initialized successfully');
+    } catch (error) {
+      this.logger.error('❌ Failed to initialize mouse tracker:', error);
+      // For now, create the tracker anyway to avoid null reference issues
+      // We need to implement a proper fallback tracker
+      const NodeTracker = require('@native/mouse-tracker').NodeTracker;
+      this.mouseTracker = new NodeTracker();
+      this.logger.warn('⚠️ Using fallback NodeTracker for mouse tracking');
     }
     
-    // Use enhanced drag detector as fallback
-    this.dragDetector = new EnhancedDragDetector();
+    // Initialize combined drag and shake detector
+    this.dragShakeDetector = new DragShakeDetector();
+    this.logger.info('✓ Drag-shake detector initialized');
     
     this.shelfManager = new ShelfManager();
     
     this.setupEventHandlers();
     this.setupErrorHandling();
+    
+    // Test shelf creation removed - shelves are created on demand via shake/drag
   }
 
   /**
@@ -80,69 +85,41 @@ export class ApplicationController extends EventEmitter {
    */
   public async start(): Promise<void> {
     if (this.isRunning) {
-      console.warn('ApplicationController is already running');
+      this.logger.warn('ApplicationController is already running');
       return;
     }
 
     try {
-      console.log('Starting Dropover application...');
+      this.logger.info('Starting Dropover application...');
       
       // Start mouse tracking
+      this.logger.info('Starting mouse tracker...');
       this.mouseTracker.start();
-      console.log('✓ Mouse tracker started');
+      this.logger.info('✓ Mouse tracker started');
+      
+      // Log initial position to verify tracking
+      setTimeout(() => {
+        this.logger.debug('Mouse tracker active - move your mouse to see position updates');
+      }, 500);
 
-      // Start shake detection (disabled by default)
-      if (this.config.enableShakeGesture) {
-        this.shakeDetector.start();
-        console.log('✓ Shake detector started');
-      } else {
-        console.log('⚠️ Shake detector disabled - manual shelf creation only');
-      }
+      // Start combined drag-shake detector
+      this.dragShakeDetector.start();
+      this.logger.info('✓ Drag-shake detector started');
 
-      // Start drag detection
+      // Shelves are created on demand via shake/drag gestures
+
+      // Keep enhanced drag detector for compatibility
       if (this.config.enableDragDetection) {
-        if (this.nativeDragMonitor) {
-          // Use native drag monitor with improved change count detection
-          const started = this.nativeDragMonitor.start({
-            onDragStart: () => {
-              console.log('Native file drag detected (fresh drag operation)');
-              this.isDragging = true;
-              this.hasCreatedShelfInSession = false; // Reset session flag on new drag
-              this.emit('drag-started');
-            },
-            onDragEnd: () => {
-              console.log('Native drag ended');
-              this.isDragging = false;
-              this.hasCreatedShelfInSession = false; // Reset session flag when drag ends
-              this.emit('drag-ended');
-            },
-            onDragData: (data) => {
-              console.log('Drag data received:', data);
-            }
-          });
-          
-          if (started) {
-            console.log('✓ Native drag monitor started (using change count detection)');
-            console.log('ℹ️ Drag files and shake your mouse to create a shelf');
-          } else {
-            console.log('⚠️ Native drag monitor failed, using enhanced detector');
-            this.dragDetector.start();
-          }
-        } else {
-          // Fall back to enhanced drag detector
-          this.dragDetector.start();
-          console.log('✓ Enhanced drag detector started (optimistic mode)');
-        }
-      } else {
-        console.log('⚠️ Drag detection disabled');
+        this.dragShakeDetector.start();
+        this.logger.info('✓ Enhanced drag detector started (compatibility)');
       }
 
       this.isRunning = true;
       this.emit('started');
       
-      console.log('🚀 Dropover application started successfully!');
+      this.logger.info('🚀 Dropover application started successfully!');
     } catch (error) {
-      console.error('Failed to start application:', error);
+      this.logger.error('Failed to start application:', error);
       this.emit('error', error);
       throw error;
     }
@@ -159,14 +136,8 @@ export class ApplicationController extends EventEmitter {
     try {
       // Stop all modules
       this.mouseTracker.stop();
-      this.shakeDetector.stop();
-      this.dragDetector.stop();
-      
-      // Stop native drag monitor if active
-      if (this.nativeDragMonitor) {
-        this.nativeDragMonitor.stop();
-        this.nativeDragMonitor.destroy();
-      }
+      this.dragShakeDetector.stop();
+      this.dragShakeDetector.stop();
       
       // Close all shelves
       for (const shelfId of this.activeShelves) {
@@ -176,7 +147,7 @@ export class ApplicationController extends EventEmitter {
       this.isRunning = false;
       this.emit('stopped');
     } catch (error) {
-      console.error('Error stopping application:', error);
+      this.logger.error('Error stopping application:', error);
       this.emit('error', error);
     }
   }
@@ -188,18 +159,18 @@ export class ApplicationController extends EventEmitter {
     // Listen for critical errors
     errorHandler.on('error', (error) => {
       if (error.severity === ErrorSeverity.CRITICAL) {
-        console.error('Critical error detected, may need to restart:', error);
+        this.logger.error('Critical error detected, may need to restart:', error);
       }
     });
 
     // Listen for native errors to fallback
     errorHandler.on('native-error', (error) => {
-      console.warn('Native module error, using fallback:', error);
+      this.logger.warn('Native module error, using fallback:', error);
     });
 
     // Listen for performance issues
     errorHandler.on('performance-issue', (error) => {
-      console.warn('Performance issue detected:', error);
+      this.logger.warn('Performance issue detected:', error);
     });
 
     // Handle mouse tracker errors
@@ -216,35 +187,63 @@ export class ApplicationController extends EventEmitter {
    * Set up event handlers between modules
    */
   private setupEventHandlers(): void {
-    // Mouse position updates -> Shake detector
+    // Mouse position updates -> Drag-shake detector
+    let positionLogCount = 0;
+    let wasLeftButtonDown = false;
+    
     this.mouseTracker.on('position', (position) => {
-      this.shakeDetector.processPosition(position);
+      // Debug logging to trace position structure
+      if (positionLogCount === 0) {
+        console.log('📌 ApplicationController first position received:', {
+          x: position.x,
+          y: position.y,
+          timestamp: position.timestamp,
+          leftButtonDown: position.leftButtonDown,
+          typeOfX: typeof position.x,
+          typeOfY: typeof position.y
+        });
+      }
+      
+      // Log every 100th position to avoid spam
+      if (++positionLogCount % 100 === 0) {
+        this.logger.debug('Mouse tracking active - position:', position);
+      }
+      
+      // Detect left button release (disabled in fallback mode since button is always "pressed")
+      // In production with native tracking, this would clear shelves on button release
+      if (wasLeftButtonDown && !position.leftButtonDown) {
+        this.logger.info('🖱️ Left button released - clearing empty shelves');
+        this.clearEmptyShelves();
+      }
+      
+      wasLeftButtonDown = position.leftButtonDown || false;
+      this.dragShakeDetector.processPosition(position);
     });
 
     // Mouse tracker errors
     this.mouseTracker.on('error', (error) => {
-      console.error('Mouse tracker error:', error);
+      this.logger.error('Mouse tracker error:', error);
       this.emit('mouse-tracking-error', error);
     });
 
-    // Shake detection -> Create shelf
-    this.shakeDetector.on('shake', (shakeData) => {
-      this.handleShakeGesture(shakeData);
+    // Drag-shake detection -> Create shelf
+    this.dragShakeDetector.on('dragShake', (event) => {
+      this.handleDragShakeEvent(event);
     });
 
     // Enhanced drag detector events
-    this.dragDetector.on('drag-start', () => {
-      console.log('🎯 Drag operation started (optimistic)');
+    this.dragShakeDetector.on('drag-start', () => {
+      this.logger.info('🎯 Drag operation started (optimistic)');
       this.emit('drag-started');
     });
     
-    this.dragDetector.on('drag-end', () => {
-      console.log('🛑 Drag operation ended');
+    this.dragShakeDetector.on('drag-end', () => {
+      this.logger.info('🛑 Drag operation ended');
       this.emit('drag-ended');
     });
     
-    this.dragDetector.on('files-detected', (files) => {
-      console.log('📁 Files detected in drag:', files);
+    this.dragShakeDetector.on('files-detected', (files) => {
+      this.logger.debug('📁 Files detected in drag:', files);
       this.emit('files-in-drag', files);
     });
 
@@ -262,7 +261,7 @@ export class ApplicationController extends EventEmitter {
     this.shelfManager.on('shelf-item-added', (shelfId, item) => {
       // Cancel auto-hide timer when items are added
       this.cancelShelfAutoHide(shelfId);
-      console.log(`📦 Item added to shelf ${shelfId}, auto-hide cancelled`);
+      this.logger.info(`📦 Item added to shelf ${shelfId}, auto-hide cancelled`);
       this.emit('shelf-item-added', shelfId, item);
     });
 
@@ -270,7 +269,7 @@ export class ApplicationController extends EventEmitter {
       // Check if shelf is now empty and schedule auto-hide if so
       const config = this.shelfManager.getShelfConfig(shelfId);
       if (config && config.items.length === 0 && !config.isPinned) {
-        console.log(`🗑️ Shelf ${shelfId} is now empty, scheduling auto-hide`);
+        this.logger.info(`🗑️ Shelf ${shelfId} is now empty, scheduling auto-hide`);
         this.scheduleEmptyShelfAutoHide(shelfId);
       }
       this.emit('shelf-item-removed', shelfId, itemId);
@@ -278,7 +277,62 @@ export class ApplicationController extends EventEmitter {
   }
 
   /**
-   * Handle shake gesture
+   * Handle drag-shake events
+   */
+  private async handleDragShakeEvent(event: any): Promise<void> {
+    try {
+      this.logger.info(`🎯 Drag-shake event: ${event.type}, dragging: ${event.isDragging}, items: ${event.items?.length || 0}`);
+      
+      // Only create shelf if user is dragging files
+      // The drag-shake detector now properly checks for actual drag operations
+      if (!event.isDragging && event.items.length === 0) {
+        this.logger.info('⚠️ Shake detected but no drag operation - ignoring');
+        return;
+      }
+      
+      // Check if we already have ANY active shelf to prevent duplicates
+      if (this.activeShelves.size > 0 || this.activeEmptyShelfId) {
+        const existingShelfId = this.activeEmptyShelfId || Array.from(this.activeShelves)[0];
+        const shelfConfig = this.shelfManager.getShelfConfig(existingShelfId);
+        if (shelfConfig && shelfConfig.isVisible) {
+          this.logger.info(`♻️ Reusing existing shelf: ${existingShelfId} (preventing duplicate)`);
+          this.shelfManager.showShelf(existingShelfId);
+          return;
+        }
+      }
+      
+      // Create a new shelf only if we don't have any active ones
+      this.logger.info('📦 Creating new shelf at cursor position');
+      const currentPos = this.mouseTracker.getCurrentPosition();
+      const shelfId = await this.shelfManager.createShelf({
+        position: { x: currentPos.x - 150, y: currentPos.y - 200 },
+        isPinned: false,
+        isVisible: true,
+        items: []
+      });
+      
+      if (shelfId) {
+        // Clear any existing shelves from tracking to ensure only one
+        this.activeShelves.clear();
+        this.activeEmptyShelfId = shelfId;
+        this.activeShelves.add(shelfId);
+        this.logger.info(`✅ Single shelf created: ${shelfId}`);
+        
+        // Schedule auto-hide for empty shelf
+        this.scheduleEmptyShelfAutoHide(shelfId);
+        
+        // Log dragged items if any
+        if (event.items && event.items.length > 0) {
+          this.logger.info('📁 Dragged items detected:', event.items.map((item: any) => item.name));
+        }
+      }
+    } catch (error) {
+      this.logger.error('Error handling drag-shake event:', error);
+    }
+  }
+
+  /**
+   * Handle shake gesture (legacy compatibility)
    */
   private async handleShakeGesture(shakeData: {
     directionChanges: number;
@@ -288,90 +342,45 @@ export class ApplicationController extends EventEmitter {
     timestamp: number;
   }): Promise<void> {
     try {
-      console.log('🎯 Shake gesture received in ApplicationController:', shakeData);
+      this.logger.info('🎯 Shake gesture received in ApplicationController:', shakeData);
       
-      // Check if user is dragging files (native detection or optimistic mode)
-      console.log(`[Shake Handler] isDragging: ${this.isDragging}`);
+      // IMPORTANT: Only create shelf if we're in drag mode (drag + shake)
+      // The drag-shake detector should have already set drag mode if files are being dragged
       if (!this.isDragging) {
-        // If no native drag detected, enable optimistic mode and check clipboard
-        console.log('[Shake Handler] No native drag detected, checking clipboard...');
-        this.dragDetector.enableOptimisticDragMode();
-        const hasFiles = this.dragDetector.checkNow();
-        console.log(`[Shake Handler] Clipboard check result: ${hasFiles}`);
-        
-        if (!hasFiles) {
-          console.log('Shake detected but no drag operation - ignoring');
-          return;
-        }
-        console.log('📁 Shake with clipboard files detected (optimistic mode)');
-      } else {
-        console.log('📁 Shake with native drag detected');
-      }
-      
-      console.log('✅ Processing drag+shake - will create shelf');
-      
-      // Check preference for creating only on first drag+shake
-      const prefs = this.preferencesManager.getPreferences();
-      if (prefs.shelf.createOnlyOnFirstDragAndShake && this.hasCreatedShelfInSession) {
-        console.log('🚫 Shelf already created in this drag session (preference: createOnlyOnFirstDragAndShake)');
-        // Just show the existing shelf without creating a new one
-        if (this.activeEmptyShelfId) {
-          this.shelfManager.showShelf(this.activeEmptyShelfId);
-        }
+        this.logger.info('⚠️ Shake detected but NOT dragging files - ignoring (need drag + shake)');
         return;
       }
       
-      // Check if we already have an active empty shelf
-      if (this.activeEmptyShelfId) {
-        const shelfConfig = this.shelfManager.getShelfConfig(this.activeEmptyShelfId);
-        if (shelfConfig && shelfConfig.items.length === 0) {
-          console.log(`🔄 Reusing existing empty shelf: ${this.activeEmptyShelfId} (keeping at original position)`);
-          // Just show the existing shelf without moving it
-          this.shelfManager.showShelf(this.activeEmptyShelfId);
-          // Don't move it - let it stay where it was created
+      // Check if we already have an active shelf to prevent duplicates
+      if (this.activeShelves.size > 0) {
+        const existingShelfId = Array.from(this.activeShelves)[0];
+        const shelfConfig = this.shelfManager.getShelfConfig(existingShelfId);
+        if (shelfConfig && shelfConfig.isVisible) {
+          this.logger.info(`♻️ Reusing existing shelf: ${existingShelfId} (preventing duplicate)`);
           return;
-        } else {
-          // Shelf is no longer empty, clear reference
-          this.activeEmptyShelfId = null;
         }
       }
       
-      // Check if we already have too many VISIBLE shelves
-      const visibleShelfCount = this.getVisibleShelfCount();
-      if (visibleShelfCount >= this.config.maxSimultaneousShelves) {
-        console.warn(`Maximum number of visible shelves reached (${visibleShelfCount}/${this.config.maxSimultaneousShelves})`);
-        return;
-      }
-
-      // Create a new shelf at cursor position
-      const currentPosition = this.mouseTracker.getCurrentPosition();
-      console.log(`Current mouse position: x=${currentPosition.x}, y=${currentPosition.y}`);
-      
-      const shelfPosition = {
-        x: currentPosition.x - 150, // Center shelf on cursor
-        y: currentPosition.y - 200
-      };
-      console.log(`Creating shelf at position: x=${shelfPosition.x}, y=${shelfPosition.y}`);
-      
+      // Create shelf for drag + shake
+      this.logger.info('✅ DRAG + SHAKE detected - creating shelf');
+      const mousePos = screen.getCursorScreenPoint();
       const shelfId = await this.shelfManager.createShelf({
-        position: shelfPosition,
-        isPinned: false,
-        isVisible: true,
-        items: []
+        position: { x: mousePos.x, y: mousePos.y }
       });
-
-      console.log(`📦 New shelf created via drag+shake: ${shelfId} (${this.getVisibleShelfCount()}/${this.config.maxSimultaneousShelves} visible)`);
       
-      // Track this as the active empty shelf
-      this.activeEmptyShelfId = shelfId;
-      this.activeShelves.add(shelfId);
-      this.hasCreatedShelfInSession = true; // Mark that shelf was created in this session
-      
-      // Auto-hide empty shelf after timeout
-      this.scheduleEmptyShelfAutoHide(shelfId);
+      if (shelfId) {
+        // Clear any existing shelves from tracking to ensure only one
+        this.activeShelves.clear();
+        this.activeShelves.add(shelfId);
+        this.logger.info(`✅ SHELF CREATED for drag+shake: ${shelfId} at position (${mousePos.x}, ${mousePos.y})`);
+        this.hasCreatedShelfInSession = true;
+        
+        // Schedule auto-hide for empty shelf
+        this.scheduleEmptyShelfAutoHide(shelfId);
+      }
 
     } catch (error) {
-      console.error('Error handling shake gesture:', error);
+      this.logger.error('Error handling shake gesture:', error);
     }
   }
 
@@ -387,7 +396,7 @@ export class ApplicationController extends EventEmitter {
     const timer = setTimeout(() => {
       const shelfConfig = this.shelfManager.getShelfConfig(shelfId);
       if (shelfConfig && shelfConfig.items.length === 0) {
-        console.log(`⏰ Auto-hiding empty shelf after ${this.config.emptyShelfTimeout}ms: ${shelfId}`);
+        this.logger.info(`⏰ Auto-hiding empty shelf after ${this.config.emptyShelfTimeout}ms: ${shelfId}`);
         this.shelfManager.hideShelf(shelfId);
         
         // Destroy the shelf after a short delay if still empty
@@ -395,7 +404,7 @@ export class ApplicationController extends EventEmitter {
           const updatedConfig = this.shelfManager.getShelfConfig(shelfId);
           if (updatedConfig && updatedConfig.items.length === 0) {
             this.shelfManager.destroyShelf(shelfId);
-            console.log(`🗑️ Destroyed empty shelf: ${shelfId}`);
+            this.logger.info(`🗑️ Destroyed empty shelf: ${shelfId}`);
             // Clear active empty shelf reference if it's this one
             if (this.activeEmptyShelfId === shelfId) {
               this.activeEmptyShelfId = null;
@@ -403,7 +412,7 @@ export class ApplicationController extends EventEmitter {
           }
         }, 1000);
       } else {
-        console.log(`📌 Shelf ${shelfId} has ${shelfConfig?.items.length} items - not auto-hiding`);
+        this.logger.debug(`📌 Shelf ${shelfId} has ${shelfConfig?.items.length} items - not auto-hiding`);
       }
       
       // Clean up timer reference
@@ -422,7 +431,34 @@ export class ApplicationController extends EventEmitter {
     if (timer) {
       clearTimeout(timer);
       this.shelfAutoHideTimers.delete(shelfId);
-      console.log(`🚫 Cancelled auto-hide for shelf: ${shelfId}`);
+      this.logger.debug(`🚫 Cancelled auto-hide for shelf: ${shelfId}`);
+    }
+  }
+
+  /**
+   * Clear all empty shelves when left button is released
+   */
+  private clearEmptyShelves(): void {
+    if (this.activeEmptyShelfId) {
+      const shelfConfig = this.shelfManager.getShelfConfig(this.activeEmptyShelfId);
+      if (shelfConfig && (!shelfConfig.items || shelfConfig.items.length === 0)) {
+        this.logger.info(`🗑️ Clearing empty shelf on button release: ${this.activeEmptyShelfId}`);
+        this.shelfManager.destroyShelf(this.activeEmptyShelfId);
+        this.activeShelves.delete(this.activeEmptyShelfId);
+        this.cancelShelfAutoHide(this.activeEmptyShelfId);
+        this.activeEmptyShelfId = null;
+      }
+    }
+    
+    // Also clear any other empty shelves
+    for (const shelfId of this.activeShelves) {
+      const shelfConfig = this.shelfManager.getShelfConfig(shelfId);
+      if (shelfConfig && (!shelfConfig.items || shelfConfig.items.length === 0)) {
+        this.logger.info(`🗑️ Clearing additional empty shelf: ${shelfId}`);
+        this.shelfManager.destroyShelf(shelfId);
+        this.activeShelves.delete(shelfId);
+        this.cancelShelfAutoHide(shelfId);
+      }
     }
   }
 
@@ -441,6 +477,22 @@ export class ApplicationController extends EventEmitter {
   }
 
   /**
+   * Create a test shelf for debugging
+   */
+  private async createTestShelf(): Promise<void> {
+    try {
+      this.logger.info('🧪 Creating test shelf at center of screen');
+      const testShelfId = await this.shelfManager.createShelf({
+        position: { x: 100, y: 100 }
+      });
+      this.logger.info('🧪 Test shelf created with ID:', testShelfId);
+      this.activeShelves.add(testShelfId);
+    } catch (error) {
+      this.logger.error('🧪 Failed to create test shelf:', error);
+    }
+  }
+
+  /**
    * Get application status
    */
   public getStatus() {
@@ -450,13 +502,13 @@ export class ApplicationController extends EventEmitter {
       totalShelves: this.activeShelves.size, // Total including hidden
       modules: {
         mouseTracker: this.mouseTracker.isTracking(),
-        shakeDetector: this.shakeDetector ? true : false,
-        dragDetector: this.dragDetector ? true : false
+        shakeDetector: this.dragShakeDetector ? true : false,
+        dragDetector: this.dragShakeDetector ? true : false
       },
       analytics: {
         mouseTracker: this.mouseTracker.getPerformanceMetrics?.() || null,
-        shakeDetector: this.shakeDetector.getAnalytics(),
-        dragDetector: null // Analytics not available for current detector
+        shakeDetector: null, // Analytics removed in v2
+        dragDetector: null // Native module analytics
       }
     };
   }
@@ -465,7 +517,7 @@ export class ApplicationController extends EventEmitter {
    * Handle drop start event from shelf
    */
   public handleDropStart(shelfId: string): void {
-    console.log(`Preventing auto-hide for shelf: ${shelfId}`);
+    this.logger.debug(`Preventing auto-hide for shelf: ${shelfId}`);
     this.activeDropOperations.add(shelfId);
   }
 
@@ -473,7 +525,7 @@ export class ApplicationController extends EventEmitter {
    * Handle drop end event from shelf
    */
   public handleDropEnd(shelfId: string): void {
-    console.log(`Re-enabling auto-hide for shelf: ${shelfId}`);
+    this.logger.debug(`Re-enabling auto-hide for shelf: ${shelfId}`);
     this.activeDropOperations.delete(shelfId);
   }
 
@@ -482,7 +534,7 @@ export class ApplicationController extends EventEmitter {
    */
   public handleFilesDropped(shelfId: string, filePaths: string[]): void {
     try {
-      console.log(`📁 HANDLING DROPPED FILES on shelf ${shelfId}:`, filePaths);
+      this.logger.info(`📁 HANDLING DROPPED FILES on shelf ${shelfId}:`, filePaths);
       
       // Cancel any auto-hide timer since shelf now has files
       this.cancelShelfAutoHide(shelfId);
@@ -496,29 +548,29 @@ export class ApplicationController extends EventEmitter {
         createdAt: Date.now()
       }));
 
-      console.log(`📁 Adding ${items.length} items to shelf ${shelfId}`);
+      this.logger.info(`📁 Adding ${items.length} items to shelf ${shelfId}`);
 
       // Add items to shelf
       for (const item of items) {
         const success = this.shelfManager.addItemToShelf(shelfId, item);
-        console.log(`📁 Added item ${item.name} to shelf ${shelfId}: ${success ? 'SUCCESS' : 'FAILED'}`);
+        this.logger.debug(`📁 Added item ${item.name} to shelf ${shelfId}: ${success ? 'SUCCESS' : 'FAILED'}`);
       }
 
       // Mark shelf as pinned since it now has content
       const config = this.shelfManager.getShelfConfig(shelfId);
       if (config) {
         config.isPinned = true;
-        console.log(`📌 SHELF PINNED: ${shelfId} with ${items.length} files (items.length: ${config.items.length})`);
+        this.logger.info(`📌 SHELF PINNED: ${shelfId} with ${items.length} files (items.length: ${config.items.length})`);
       } else {
-        console.error(`📌 ERROR: Could not find config for shelf ${shelfId} to pin it`);
+        this.logger.error(`📌 ERROR: Could not find config for shelf ${shelfId} to pin it`);
       }
 
       // Remove from active drop operations
       this.activeDropOperations.delete(shelfId);
-      console.log(`📁 Finished handling dropped files on shelf ${shelfId}`);
+      this.logger.info(`📁 Finished handling dropped files on shelf ${shelfId}`);
       
     } catch (error) {
-      console.error('📁 ERROR handling dropped files:', error);
+      this.logger.error('📁 ERROR handling dropped files:', error);
       this.activeDropOperations.delete(shelfId);
     }
   }
@@ -548,17 +600,17 @@ export class ApplicationController extends EventEmitter {
     // Apply configuration changes
     if ('enableShakeGesture' in newConfig && this.isRunning) {
       if (newConfig.enableShakeGesture && !oldConfig.enableShakeGesture) {
-        this.shakeDetector.start();
+        this.dragShakeDetector.start();
       } else if (!newConfig.enableShakeGesture && oldConfig.enableShakeGesture) {
-        this.shakeDetector.stop();
+        this.dragShakeDetector.stop();
       }
     }
 
     if ('enableDragDetection' in newConfig && this.isRunning) {
       if (newConfig.enableDragDetection && !oldConfig.enableDragDetection) {
-        this.dragDetector.start();
+        this.dragShakeDetector.start();
       } else if (!newConfig.enableDragDetection && oldConfig.enableDragDetection) {
-        this.dragDetector.stop();
+        this.dragShakeDetector.stop();
       }
     }
   }
@@ -571,14 +623,14 @@ export class ApplicationController extends EventEmitter {
     
     // Destroy all modules
     this.mouseTracker.removeAllListeners();
-    this.shakeDetector.destroy();
+    this.dragShakeDetector.destroy();
     
     // Stop drag detector
-    this.dragDetector.stop();
+    this.dragShakeDetector.stop();
     
     this.shelfManager.destroy();
     
     this.removeAllListeners();
-    console.log('ApplicationController destroyed');
+    this.logger.info('ApplicationController destroyed');
   }
 }
