@@ -9,6 +9,23 @@ export interface ShelfItemComponentProps {
 }
 
 /**
+ * Comparison function for React.memo to prevent unnecessary re-renders
+ */
+const shelfItemPropsAreEqual = (
+  prevProps: ShelfItemComponentProps,
+  nextProps: ShelfItemComponentProps
+): boolean => {
+  return (
+    prevProps.item.id === nextProps.item.id &&
+    prevProps.item.name === nextProps.item.name &&
+    prevProps.item.size === nextProps.item.size &&
+    prevProps.item.createdAt === nextProps.item.createdAt &&
+    prevProps.isCompact === nextProps.isCompact &&
+    prevProps.onAction === nextProps.onAction
+  );
+};
+
+/**
  * Individual shelf item component
  */
 export const ShelfItemComponent = React.memo<ShelfItemComponentProps>(({
@@ -315,6 +332,6 @@ export const ShelfItemComponent = React.memo<ShelfItemComponentProps>(({
       </AnimatePresence>
     </motion.div>
   );
-});
+}, shelfItemPropsAreEqual);
 
 ShelfItemComponent.displayName = 'ShelfItemComponent';

@@ -1,7 +1,8 @@
 import { BrowserWindow, screen, ipcMain } from 'electron';
 import { EventEmitter } from 'events';
 import * as path from 'path';
-import { ShelfConfig, DockPosition, Vector2D, ShelfItem } from '@shared/types';
+import { ShelfConfig, DockPosition, Vector2D, ShelfItem } from '../../shared/types';
+import { SHELF_CONSTANTS, WINDOW_CONSTANTS, IPC_CHANNELS } from '../../shared/constants';
 
 /**
  * Advanced shelf window management system
@@ -14,16 +15,16 @@ export class ShelfManager extends EventEmitter {
   
   // Window pool for performance optimization
   private windowPool: BrowserWindow[] = [];
-  private readonly MAX_POOL_SIZE = 3;
+  private readonly MAX_POOL_SIZE = SHELF_CONSTANTS.MAX_POOL_SIZE;
   
   // Active shelves tracking
   private activeShelves = new Set<string>();
   private dockPositions = new Map<DockPosition, string[]>();
   
   // Configuration
-  private readonly DEFAULT_SHELF_SIZE = { width: 300, height: 400 };
-  private readonly DOCK_MARGIN = 10;
-  private readonly AUTO_HIDE_DELAY = 3000; // milliseconds
+  private readonly DEFAULT_SHELF_SIZE = { width: SHELF_CONSTANTS.DEFAULT_WIDTH, height: SHELF_CONSTANTS.DEFAULT_HEIGHT };
+  private readonly DOCK_MARGIN = SHELF_CONSTANTS.DOCK_MARGIN;
+  private readonly AUTO_HIDE_DELAY = SHELF_CONSTANTS.AUTO_HIDE_DELAY;
 
   constructor() {
     super();
@@ -43,42 +44,42 @@ export class ShelfManager extends EventEmitter {
    * Set up IPC event handlers
    */
   private setupEventHandlers(): void {
-    ipcMain.handle('shelf:create', async (event, config: Partial<ShelfConfig>) => {
+    ipcMain.handle(IPC_CHANNELS.SHELF_CREATE, async (event, config: Partial<ShelfConfig>) => {
       return this.createShelf(config);
     });
 
-    ipcMain.handle('shelf:destroy', async (event, shelfId: string) => {
+    ipcMain.handle(IPC_CHANNELS.SHELF_DESTROY, async (event, shelfId: string) => {
       return this.destroyShelf(shelfId);
     });
 
-    ipcMain.handle('shelf:show', async (event, shelfId: string) => {
+    ipcMain.handle(IPC_CHANNELS.SHELF_SHOW, async (event, shelfId: string) => {
       return this.showShelf(shelfId);
     });
 
-    ipcMain.handle('shelf:hide', async (event, shelfId: string) => {
+    ipcMain.handle(IPC_CHANNELS.SHELF_HIDE, async (event, shelfId: string) => {
       return this.hideShelf(shelfId);
     });
 
-    ipcMain.handle('shelf:dock', async (event, shelfId: string, position: DockPosition) => {
+    ipcMain.handle(IPC_CHANNELS.SHELF_DOCK, async (event, shelfId: string, position: DockPosition) => {
       return this.dockShelf(shelfId, position);
     });
 
-    ipcMain.handle('shelf:undock', async (event, shelfId: string) => {
+    ipcMain.handle(IPC_CHANNELS.SHELF_UNDOCK, async (event, shelfId: string) => {
       return this.undockShelf(shelfId);
     });
 
-    ipcMain.handle('shelf:add-item', async (event, shelfId: string, item: ShelfItem) => {
+    ipcMain.handle(IPC_CHANNELS.SHELF_ADD_ITEM, async (event, shelfId: string, item: ShelfItem) => {
       console.log('📡 IPC: shelf:add-item received for shelf', shelfId, 'with item:', item);
       const result = this.addItemToShelf(shelfId, item);
       console.log('📤 IPC: shelf:add-item result:', result);
       return result;
     });
 
-    ipcMain.handle('shelf:remove-item', async (event, shelfId: string, itemId: string) => {
+    ipcMain.handle(IPC_CHANNELS.SHELF_REMOVE_ITEM, async (event, shelfId: string, itemId: string) => {
       return this.removeItemFromShelf(shelfId, itemId);
     });
 
-    ipcMain.handle('shelf:update-config', async (event, shelfId: string, changes: Partial<ShelfConfig>) => {
+    ipcMain.handle(IPC_CHANNELS.SHELF_UPDATE_CONFIG, async (event, shelfId: string, changes: Partial<ShelfConfig>) => {
       return this.updateShelfConfig(shelfId, changes);
     });
   }
@@ -97,7 +98,7 @@ export class ShelfManager extends EventEmitter {
       isPinned: config.isPinned !== undefined ? config.isPinned : false,
       items: config.items || [],
       isVisible: config.isVisible !== undefined ? config.isVisible : true,
-      opacity: config.opacity || 0.9,
+      opacity: config.opacity || SHELF_CONSTANTS.OPACITY,
       isDropZone: config.isDropZone || false,
       autoHide: config.autoHide || false
     };
@@ -170,10 +171,10 @@ export class ShelfManager extends EventEmitter {
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: false, // Set to false for development
+        sandbox: true, // Enable sandboxing for security
         // __dirname is dist/main/modules, so go up to main, then up to dist, then into preload
         preload: path.join(__dirname, '../../preload/index.js'),
-        webSecurity: false // Allow file:// protocol for dropped files
+        webSecurity: false // Temporarily disable for development to avoid CSP issues with webpack eval
       }
     });
 
@@ -573,6 +574,18 @@ export class ShelfManager extends EventEmitter {
         // Notify renderer
         window.webContents.send('shelf:item-removed', itemId);
         this.emit('shelf-item-removed', shelfId, removedItem);
+        
+        // Check if shelf is now empty and should be destroyed
+        if (config.items.length === 0) {
+          console.log(`🗑️ Shelf ${shelfId} is now empty, destroying it`);
+          // Unpin the shelf first
+          config.isPinned = false;
+          // Destroy the shelf after a short delay to allow UI to update
+          setTimeout(() => {
+            this.destroyShelf(shelfId);
+          }, 100);
+        }
+        
         return true;
       }
     }

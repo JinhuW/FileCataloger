@@ -6,6 +6,7 @@ import { errorHandler, ErrorSeverity, ErrorCategory } from './error-handler';
 import { PreferencesManager } from './preferences-manager';
 import { MouseTracker } from '../../shared/types';
 import { Logger, createLogger } from './logger';
+import { SHELF_CONSTANTS, APP_CONSTANTS, TIMER_CONSTANTS, PERFORMANCE_CONSTANTS } from '../../shared/constants';
 
 /**
  * Main application controller that coordinates all modules
@@ -36,13 +37,16 @@ export class ApplicationController extends EventEmitter {
   
   // Configuration
   private config = {
-    autoHideDelay: 3000,
-    maxSimultaneousShelves: 5,
+    autoHideDelay: SHELF_CONSTANTS.AUTO_HIDE_DELAY,
+    maxSimultaneousShelves: APP_CONSTANTS.MAX_SIMULTANEOUS_SHELVES,
     enableShakeGesture: true, // Enable shake detection for manual shelf creation
     enableDragDetection: true, // Enable to check for files when shake happens
     useNativeDragMonitor: true, // Use native macOS drag monitoring if available
-    emptyShelfTimeout: 5000 // Auto-hide empty shelves after 5 seconds
+    emptyShelfTimeout: SHELF_CONSTANTS.EMPTY_TIMEOUT
   };
+  
+  // Track cleanup for memory leak prevention
+  private cleanupTimers = new Set<NodeJS.Timeout>();
 
   constructor() {
     super();
@@ -204,8 +208,8 @@ export class ApplicationController extends EventEmitter {
         });
       }
       
-      // Log every 100th position to avoid spam
-      if (++positionLogCount % 100 === 0) {
+      // Log every Nth position to avoid spam
+      if (++positionLogCount % PERFORMANCE_CONSTANTS.POSITION_LOG_INTERVAL === 0) {
         this.logger.debug('Mouse tracking active - position:', position);
       }
       
@@ -250,7 +254,7 @@ export class ApplicationController extends EventEmitter {
           this.logger.info(`🧹 Clearing ${this.activeDropOperations.size} shelves from drop operations`);
           this.activeDropOperations.clear();
         }
-      }, 1000); // 1 second delay to ensure drops are processed
+      }, TIMER_CONSTANTS.THROTTLE_DELAY * 10); // 1 second delay to ensure drops are processed
       
       this.emit('drag-ended');
     });
@@ -382,6 +386,8 @@ export class ApplicationController extends EventEmitter {
     
     // Schedule new timer
     const timer = setTimeout(() => {
+      // Remove from cleanup tracking when timer fires
+      this.cleanupTimers.delete(timer);
       // Don't auto-hide shelves that are receiving drops
       if (this.activeDropOperations.has(shelfId)) {
         this.logger.info(`⏸️ Shelf ${shelfId} is receiving drops - rescheduling auto-hide`);
@@ -423,8 +429,9 @@ export class ApplicationController extends EventEmitter {
       this.shelfAutoHideTimers.delete(shelfId);
     }, this.config.emptyShelfTimeout);
     
-    // Store timer reference
+    // Store timer reference for both tracking systems
     this.shelfAutoHideTimers.set(shelfId, timer);
+    this.cleanupTimers.add(timer);
     this.logger.info(`⏰ Scheduled auto-hide for shelf ${shelfId} in ${this.config.emptyShelfTimeout}ms`);
   }
   
@@ -436,6 +443,7 @@ export class ApplicationController extends EventEmitter {
     if (timer) {
       clearTimeout(timer);
       this.shelfAutoHideTimers.delete(shelfId);
+      this.cleanupTimers.delete(timer);
       this.logger.debug(`🚫 Cancelled auto-hide for shelf: ${shelfId}`);
     }
   }
@@ -666,6 +674,18 @@ export class ApplicationController extends EventEmitter {
    */
   public async destroy(): Promise<void> {
     await this.stop();
+    
+    // Clean up all timers to prevent memory leaks
+    for (const timer of this.cleanupTimers) {
+      clearTimeout(timer);
+    }
+    this.cleanupTimers.clear();
+    
+    // Clear all shelf auto-hide timers
+    for (const timer of this.shelfAutoHideTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.shelfAutoHideTimers.clear();
     
     // Destroy all modules
     this.mouseTracker.removeAllListeners();

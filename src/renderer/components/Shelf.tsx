@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShelfConfig, ShelfItem } from '@shared/types';
+import { ShelfConfig, ShelfItem } from '../../shared/types';
 import { ShelfHeader } from './ShelfHeader';
 import { ShelfItemList } from './ShelfItemList';
 import { ShelfDropZone } from './ShelfDropZone';
 import { ErrorBoundary } from './ErrorBoundary';
+import { SHELF_CONSTANTS, ANIMATION_CONSTANTS } from '../../shared/constants';
 
 export interface ShelfProps {
   config: ShelfConfig;
@@ -26,7 +27,7 @@ export const Shelf = React.memo<ShelfProps>(({
 }) => {
   const [isDragOver, setIsDragOver] = useState(false);
   const [isCompact, setIsCompact] = useState(false);
-  const [shelfHeight, setShelfHeight] = useState(300); // Dynamic shelf height
+  const [shelfHeight, setShelfHeight] = useState<number>(SHELF_CONSTANTS.DEFAULT_HEIGHT); // Dynamic shelf height
 
   // Use items directly without filtering
   const filteredItems = config.items;
@@ -65,19 +66,19 @@ export const Shelf = React.memo<ShelfProps>(({
   // Toggle compact mode and adjust height based on item count
   useEffect(() => {
     const itemCount = config.items.length;
-    setIsCompact(itemCount > 20);
+    setIsCompact(itemCount > SHELF_CONSTANTS.COMPACT_MODE_THRESHOLD);
     
     // Dynamically adjust shelf height based on content
-    const itemHeight = itemCount > 20 ? 32 : 60;
-    const itemMargin = itemCount > 20 ? 1 : 4;
-    const headerHeight = 48; // Approximate header height
-    const containerPadding = 16; // Padding inside item container
-    const minContentHeight = 150; // Minimum content area height
-    const maxContentHeight = 430; // Slightly more than 400 to account for scrollbar
+    const itemHeight = itemCount > SHELF_CONSTANTS.COMPACT_MODE_THRESHOLD ? SHELF_CONSTANTS.ITEM_HEIGHT_COMPACT : SHELF_CONSTANTS.ITEM_HEIGHT_NORMAL;
+    const itemMargin = itemCount > SHELF_CONSTANTS.COMPACT_MODE_THRESHOLD ? SHELF_CONSTANTS.ITEM_MARGIN_COMPACT : SHELF_CONSTANTS.ITEM_MARGIN_NORMAL;
+    const headerHeight = SHELF_CONSTANTS.HEADER_HEIGHT;
+    const containerPadding = SHELF_CONSTANTS.CONTAINER_PADDING;
+    const minContentHeight = SHELF_CONSTANTS.MIN_CONTENT_HEIGHT;
+    const maxContentHeight = SHELF_CONSTANTS.MAX_CONTENT_HEIGHT;
     
     if (itemCount === 0) {
       // When empty, show a reasonable size for the drop zone
-      setShelfHeight(250);
+      setShelfHeight(SHELF_CONSTANTS.EMPTY_SHELF_HEIGHT);
     } else {
       // Calculate ideal height based on items (including margins between them)
       const totalItemsHeight = itemCount * (itemHeight + itemMargin) + containerPadding;
@@ -85,10 +86,10 @@ export const Shelf = React.memo<ShelfProps>(({
         Math.max(totalItemsHeight, minContentHeight), 
         maxContentHeight
       );
-      const idealHeight = headerHeight + contentHeight + 20; // Extra padding for safety
+      const idealHeight = headerHeight + contentHeight + SHELF_CONSTANTS.EXTRA_HEIGHT_PADDING;
       
       // Set height within bounds
-      setShelfHeight(Math.min(Math.max(idealHeight, 200), 600));
+      setShelfHeight(Math.min(Math.max(idealHeight, SHELF_CONSTANTS.MIN_HEIGHT), SHELF_CONSTANTS.MAX_HEIGHT));
     }
   }, [config.items.length]);
 
@@ -96,7 +97,7 @@ export const Shelf = React.memo<ShelfProps>(({
     <ErrorBoundary>
       <motion.div
         className={`shelf-container ${config.isPinned ? 'pinned' : ''} ${isCompact ? 'compact' : ''}`}
-        initial={{ opacity: 0, scale: 0.9 }}
+        initial={{ opacity: ANIMATION_CONSTANTS.SHELF_INITIAL_OPACITY, scale: ANIMATION_CONSTANTS.SHELF_INITIAL_SCALE }}
         animate={{ 
           opacity: config.isVisible ? config.opacity : 0,
           scale: config.isVisible ? 1 : 0.9
@@ -107,7 +108,7 @@ export const Shelf = React.memo<ShelfProps>(({
           backdropFilter: 'blur(10px)',
           border: '1px solid rgba(255, 255, 255, 0.1)',
           borderRadius: '12px',
-          overflow: 'clip', // Use clip to prevent overflow but maintain rounded corners
+          overflow: 'visible', // Allow content to be visible but clip at borders
           minWidth: '280px',
           maxWidth: '400px',
           height: `${shelfHeight}px`,
@@ -263,52 +264,65 @@ export const Shelf = React.memo<ShelfProps>(({
           }
         }}
       >
-        {/* Shelf Header - Fixed position */}
-        <div style={{ 
-          flexShrink: 0, 
-          position: 'sticky',
+        {/* Inner container to properly handle overflow */}
+        <div style={{
+          position: 'absolute',
           top: 0,
-          zIndex: 100,
-          borderRadius: '12px 12px 0 0',
-          overflow: 'hidden'
-        }}>
-          <ShelfHeader
-            config={config}
-            itemCount={filteredItems.length}
-            onTogglePin={() => handleConfigChange({ isPinned: !config.isPinned })}
-            onClose={onClose}
-          />
-        </div>
-
-        {/* Shelf Content */}
-        <div className="shelf-content" style={{ 
-          flex: 1, 
-          overflow: 'auto', // Changed to auto to allow scrolling
-          minHeight: '150px',
+          left: 0,
+          right: 0,
+          bottom: 0,
           display: 'flex',
           flexDirection: 'column',
-          borderRadius: '0 0 12px 12px',
-          background: 'rgba(0, 0, 0, 0.2)', // Ensure content area has background
-          backdropFilter: 'blur(5px)'
+          borderRadius: '12px',
+          overflow: 'hidden',
+          background: 'transparent'
         }}>
-          <AnimatePresence mode="sync">
-            {filteredItems.length > 0 ? (
-              <ShelfItemList
-                key="items"
-                items={filteredItems}
-                isCompact={isCompact}
-                onItemAction={handleItemAction}
-              />
-            ) : (
-              <ShelfDropZone
-                key="dropzone"
-                isDragOver={isDragOver}
-                onDrop={handleDrop}
-                isEmpty={config.items.length === 0}
-                hasSearchQuery={false}
-              />
-            )}
-          </AnimatePresence>
+          {/* Shelf Header - Sticky position */}
+          <div style={{ 
+            flexShrink: 0, 
+            position: 'sticky',
+            top: 0,
+            zIndex: 100,
+            background: 'rgba(30, 30, 30, 0.95)',
+            backdropFilter: 'blur(10px)',
+            borderBottom: '1px solid rgba(255, 255, 255, 0.1)'
+          }}>
+            <ShelfHeader
+              config={config}
+              itemCount={filteredItems.length}
+              onTogglePin={() => handleConfigChange({ isPinned: !config.isPinned })}
+              onClose={onClose}
+            />
+          </div>
+
+          {/* Shelf Content */}
+          <div className="shelf-content" style={{ 
+            flex: 1, 
+            overflow: 'auto',
+            minHeight: '150px',
+            display: 'flex',
+            flexDirection: 'column',
+            position: 'relative'
+          }}>
+            <AnimatePresence mode="sync">
+              {filteredItems.length > 0 ? (
+                <ShelfItemList
+                  key="items"
+                  items={filteredItems}
+                  isCompact={isCompact}
+                  onItemAction={handleItemAction}
+                />
+              ) : (
+                <ShelfDropZone
+                  key="dropzone"
+                  isDragOver={isDragOver}
+                  onDrop={handleDrop}
+                  isEmpty={config.items.length === 0}
+                  hasSearchQuery={false}
+                />
+              )}
+            </AnimatePresence>
+          </div>
         </div>
 
         {/* Drag Over Overlay */}
@@ -327,6 +341,7 @@ export const Shelf = React.memo<ShelfProps>(({
                 bottom: 0,
                 background: 'rgba(59, 130, 246, 0.2)',
                 border: '2px dashed rgba(59, 130, 246, 0.5)',
+                borderRadius: '12px',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',

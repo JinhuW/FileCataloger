@@ -7,6 +7,7 @@ import { performanceMonitor } from './modules/performance-monitor';
 import { errorHandler, ErrorSeverity, ErrorCategory } from './modules/error-handler';
 import { Logger, LogLevel } from './modules/logger';
 import { LogEntry } from '../shared/logger';
+import { securityConfig } from './modules/security-config';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -91,8 +92,8 @@ class DropoverApp {
       }
     }
     
-    // Set app security defaults
-    this.setSecurityDefaults();
+    // Initialize security configuration
+    securityConfig.initialize();
     
     // Create system tray
     this.createSystemTray();
@@ -121,19 +122,6 @@ class DropoverApp {
     this.setupIpcHandlers();
   }
 
-  private setSecurityDefaults(): void {
-    // Prevent navigation to external URLs
-    app.on('web-contents-created', (event, contents) => {
-      contents.on('will-navigate', (navigationEvent, navigationUrl) => {
-        const parsedUrl = new URL(navigationUrl);
-        
-        // Allow navigation to localhost during development
-        if (parsedUrl.origin !== 'http://localhost:8080' && parsedUrl.origin !== 'https://localhost:8080') {
-          navigationEvent.preventDefault();
-        }
-      });
-    });
-  }
 
   private createSystemTray(): void {
     try {
