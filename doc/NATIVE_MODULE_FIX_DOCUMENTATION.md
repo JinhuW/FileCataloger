@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document details the resolution of critical thread safety issues in the Dropover Clone's native modules that prevented the shelf from appearing when performing the drag + shake gesture. The core issue was improper thread handling in the native mouse tracker causing V8 API locking errors.
+This document details the resolution of critical thread safety issues in the Drag & Drop application's native modules that prevented the shelf from appearing when performing the drag + shake gesture. The core issue was improper thread handling in the native mouse tracker causing V8 API locking errors.
 
 ## The Problem
 

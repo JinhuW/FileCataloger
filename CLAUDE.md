@@ -14,10 +14,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Change this core behavior without explicit user request
 - Assume shake-only triggering is acceptable
 
-**Current Challenge**: 
-- Native drag detection module has loading issues in fallback mode
-- Need to properly detect when files are being dragged from Finder BEFORE shake occurs
-- The system should detect the drag operation first, then respond to shake gesture
+**Status**: ✅ **WORKING** - Native modules fixed and drag + shake detection fully functional
 
 ## Essential Commands
 
@@ -28,7 +25,7 @@ yarn install
 
 # Build native modules (required for mouse tracking)
 cd src/native/mouse-tracker/darwin && node-gyp rebuild && cd ../../../..
-cd src/native/drag-monitor && yarn install && node-gyp rebuild && cd ../..
+cd src/native/drag-monitor && node-gyp rebuild && cd ../..
 
 # Run development server
 yarn dev

@@ -68,7 +68,10 @@ export class ShelfManager extends EventEmitter {
     });
 
     ipcMain.handle('shelf:add-item', async (event, shelfId: string, item: ShelfItem) => {
-      return this.addItemToShelf(shelfId, item);
+      console.log('📡 IPC: shelf:add-item received for shelf', shelfId, 'with item:', item);
+      const result = this.addItemToShelf(shelfId, item);
+      console.log('📤 IPC: shelf:add-item result:', result);
+      return result;
     });
 
     ipcMain.handle('shelf:remove-item', async (event, shelfId: string, itemId: string) => {
@@ -168,7 +171,8 @@ export class ShelfManager extends EventEmitter {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: false, // Set to false for development
-        preload: path.join(__dirname, '../preload/index.js'),
+        // __dirname is dist/main/modules, so go up to main, then up to dist, then into preload
+        preload: path.join(__dirname, '../../preload/index.js'),
         webSecurity: false // Allow file:// protocol for dropped files
       }
     });
@@ -239,6 +243,11 @@ export class ShelfManager extends EventEmitter {
    * Set up event handlers for a shelf window
    */
   private setupWindowEventHandlers(window: BrowserWindow, shelfId: string): void {
+    // Log console messages from renderer
+    window.webContents.on('console-message', (_event, _level, message) => {
+      console.log(`[Shelf ${shelfId}] ${message}`);
+    });
+    
     // Handle window close
     window.on('closed', () => {
       this.handleWindowClosed(shelfId);
@@ -276,6 +285,10 @@ export class ShelfManager extends EventEmitter {
     
     try {
       console.log(`📂 Loading shelf window from: ${rendererPath}`);
+      const preloadPath = path.join(__dirname, '../../preload/index.js');
+      console.log(`🔌 Preload script path: ${preloadPath}`);
+      console.log(`🔌 __dirname is: ${__dirname}`);
+      console.log(`🔍 Preload exists: ${require('fs').existsSync(preloadPath)}`);
       
       // Load the file first
       await window.loadFile(rendererPath);
@@ -283,6 +296,16 @@ export class ShelfManager extends EventEmitter {
       // Send configuration after loading
       window.webContents.once('did-finish-load', () => {
         console.log(`✅ Shelf window loaded, sending config for ${config.id}`);
+        
+        // Check if preload worked
+        window.webContents.executeJavaScript(`
+          console.log('Checking window.api from main:', typeof window.api);
+          console.log('Checking window.electronAPI from main:', typeof window.electronAPI);
+          typeof window.api !== 'undefined' || typeof window.electronAPI !== 'undefined'
+        `).then(hasApi => {
+          console.log(`🔌 Preload API available in renderer: ${hasApi}`);
+        });
+        
         window.webContents.send('shelf:config', config);
       });
       
@@ -291,6 +314,11 @@ export class ShelfManager extends EventEmitter {
         console.log(`👁️ Showing shelf window ${config.id}`);
         window.show();
         window.focus();
+        
+        // Temporarily disable DevTools to avoid crashes
+        // if (process.env.NODE_ENV !== 'production') {
+        //   window.webContents.openDevTools({ mode: 'detach' });
+        // }
       }
       
       // Also send config after a delay as fallback
@@ -496,15 +524,37 @@ export class ShelfManager extends EventEmitter {
     const config = this.shelfConfigs.get(shelfId);
     const window = this.shelves.get(shelfId);
     
+    console.log(`📦 ADD ITEM TO SHELF: ${shelfId}`);
+    console.log(`  - Config exists: ${!!config}`);
+    console.log(`  - Window exists: ${!!window}`);
+    console.log(`  - Window destroyed: ${window ? window.isDestroyed() : 'N/A'}`);
+    console.log(`  - Current items: ${config?.items.length || 0}`);
+    console.log(`  - Item to add:`, item);
+    
     if (config && window && !window.isDestroyed()) {
       config.items.push(item);
+      console.log(`  ✅ Item added! New count: ${config.items.length}`);
       
       // Notify renderer
       window.webContents.send('shelf:item-added', item);
       this.emit('shelf-item-added', shelfId, item);
+      
+      // Make sure shelf is visible and won't auto-hide
+      if (!config.isVisible) {
+        console.log(`  👁️ Making shelf visible`);
+        this.showShelf(shelfId);
+      }
+      
+      // Mark as pinned since it has content
+      if (!config.isPinned && config.items.length > 0) {
+        console.log(`  📌 Pinning shelf with content`);
+        config.isPinned = true;
+      }
+      
       return true;
     }
     
+    console.log(`  ❌ FAILED to add item!`);
     return false;
   }
 
@@ -558,11 +608,19 @@ export class ShelfManager extends EventEmitter {
    * Destroy shelf
    */
   public destroyShelf(shelfId: string): boolean {
+    return this.destroyShelfInternal(shelfId, false);
+  }
+
+  public forceDestroyShelf(shelfId: string): boolean {
+    return this.destroyShelfInternal(shelfId, true);
+  }
+
+  private destroyShelfInternal(shelfId: string, forceDestroy: boolean = false): boolean {
     const window = this.shelves.get(shelfId);
     const config = this.shelfConfigs.get(shelfId);
     
     if (window || config) {
-      console.log(`💥 DESTROYING SHELF: ${shelfId} (items: ${config?.items.length || 0}, pinned: ${config?.isPinned || false})`);
+      console.log(`💥 ${forceDestroy ? 'FORCE ' : ''}DESTROYING SHELF: ${shelfId} (items: ${config?.items.length || 0}, pinned: ${config?.isPinned || false})`);
       console.trace('Destroy shelf called from:');
       
       // Undock if needed
@@ -570,9 +628,15 @@ export class ShelfManager extends EventEmitter {
         this.undockShelf(shelfId);
       }
 
-      // Return window to pool or destroy
+      // Handle window cleanup
       if (window && !window.isDestroyed()) {
-        this.releaseWindow(window);
+        if (forceDestroy) {
+          // Force immediate destruction for user-initiated close
+          window.destroy();
+        } else {
+          // Use pool for performance optimization
+          this.releaseWindow(window);
+        }
       }
 
       // Clean up tracking

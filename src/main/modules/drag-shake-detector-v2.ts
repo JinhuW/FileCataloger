@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 import { AdvancedShakeDetector } from './shake-detector';
 import { createLogger, Logger } from './logger';
 import { MousePosition } from '../../shared/types';
-import { MacDragMonitor, createDragMonitor } from '../../native/drag-monitor/loader';
+import { MacDragMonitor, createDragMonitor } from '../../native/drag-monitor/index';
 
 export interface DraggedItem {
   name: string;
@@ -38,7 +38,7 @@ export class DragShakeDetector extends EventEmitter {
   private isDragging: boolean = false;
   private draggedItems: DraggedItem[] = [];
   private lastDragShakeTime: number = 0;
-  private dragShakeDebounce: number = 100; // ms
+  private dragShakeDebounce: number = 400; // ms - much longer to prevent multiple shelves
   
   constructor() {
     super();
@@ -47,10 +47,10 @@ export class DragShakeDetector extends EventEmitter {
     // Initialize shake detector with very easy sensitivity for testing
     this.shakeDetector = new AdvancedShakeDetector();
     this.shakeDetector.configure({
-      minDirectionChanges: 1,     // Very easy - just 1 direction change
-      timeWindow: 800,            // 800ms to complete shake
-      minDistance: 3,             // Very low minimum movement
-      debounceTime: 100           // Fast debounce
+      minDirectionChanges: 2,     // Require at least 2 direction changes 
+      timeWindow: 600,            // 600ms to complete shake
+      minDistance: 10,            // Minimum movement to avoid accidental triggers
+      debounceTime: 300           // Longer debounce to prevent spam
     });
     
     this.initializeNativeDragMonitor();
@@ -81,7 +81,7 @@ export class DragShakeDetector extends EventEmitter {
   private setupEventHandlers(): void {
     // Handle shake events - only process during active drag
     this.shakeDetector.on('shake', (event) => {
-      console.log('🌟 SHAKE EVENT DETECTED!', {
+      this.logger.debug('🌟 Shake event detected', {
         isDragging: this.isDragging,
         intensity: event.intensity,
         directionChanges: event.directionChanges
@@ -95,7 +95,7 @@ export class DragShakeDetector extends EventEmitter {
         this.handleDragShake(event);
       } else {
         this.logger.info('⏸️ Shake ignored - not dragging');
-        console.log('⏸️ Shake ignored - not dragging');
+        this.logger.debug('⏸️ Shake ignored - not dragging');
       }
     });
     
@@ -152,8 +152,9 @@ export class DragShakeDetector extends EventEmitter {
     const now = Date.now();
     
     // Debounce rapid shakes
-    if (now - this.lastDragShakeTime < this.dragShakeDebounce) {
-      this.logger.debug('Shake debounced - too rapid');
+    const timeSinceLastShake = now - this.lastDragShakeTime;
+    if (timeSinceLastShake < this.dragShakeDebounce) {
+      this.logger.info(`🛡️ Shake DEBOUNCED: ${timeSinceLastShake}ms < ${this.dragShakeDebounce}ms`);
       return;
     }
     
@@ -232,21 +233,13 @@ export class DragShakeDetector extends EventEmitter {
   }
   
   public processPosition(position: MousePosition): void {
-    // Debug logging to trace position structure
-    if (Math.random() < 0.01) { // 1% chance to avoid spam
-      console.log('📍 DragShakeDetector received position:', {
+    // Debug logging to trace position structure (very minimal)
+    if (Math.random() < 0.001) { // 0.1% chance to avoid spam
+      this.logger.debug('📍 Position received:', {
         x: position.x,
         y: position.y,
-        timestamp: position.timestamp,
-        leftButtonDown: position.leftButtonDown,
-        typeOfX: typeof position.x,
-        typeOfY: typeof position.y
+        isDragging: this.isDragging
       });
-    }
-    
-    // Only log during drag to avoid spam
-    if (this.isDragging && Math.random() < 0.1) { // 10% chance during drag
-      console.log('🎯 DragShakeDetector: Processing position during drag', position);
     }
     this.shakeDetector.processPosition(position);
   }

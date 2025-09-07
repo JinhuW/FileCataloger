@@ -17,12 +17,20 @@ const ShelfWindow: React.FC = () => {
     isVisible: true,
     opacity: 0.95
   });
+  
+  // Debug window API
+  console.log('🌐 Window API debug on mount:');
+  console.log('  - window.api:', window.api);
+  console.log('  - window.electronAPI:', window.electronAPI);
+  console.log('  - typeof window.api:', typeof window.api);
+  console.log('  - typeof window.electronAPI:', typeof window.electronAPI);
 
   useEffect(() => {
     // Listen for configuration updates from main process
     if (window.api) {
       window.api.on('shelf:config', (...args: unknown[]) => {
         const newConfig = args[0] as ShelfConfig;
+        console.log('🆔 Received shelf config:', newConfig.id, 'with', newConfig.items.length, 'items');
         setConfig(newConfig);
       });
 
@@ -63,15 +71,41 @@ const ShelfWindow: React.FC = () => {
   };
 
   const handleItemAdd = (item: ShelfItem) => {
-    setConfig(prev => ({
-      ...prev,
-      items: [...prev.items, item]
-    }));
+    console.log('🔔 handleItemAdd called for shelf', config.id, 'with item:', item);
+    
+    // Update local state first
+    setConfig(prev => {
+      const newConfig = {
+        ...prev,
+        items: [...prev.items, item]
+      };
+      console.log('📊 Updated local config, now has', newConfig.items.length, 'items');
+      
+      // Immediately notify backend that shelf has items
+      if (window.api && prev.items.length === 0 && newConfig.items.length > 0) {
+        console.log('🔔 First item added! Notifying backend to persist shelf');
+        // Send a simple message that shelf now has content
+        window.api.send('shelf:files-dropped', { 
+          shelfId: prev.id, 
+          files: [item.name] // Just send something to trigger persistence
+        });
+      }
+      
+      return newConfig;
+    });
     
     // Notify main process
     if (window.api) {
+      console.log('📡 Sending shelf:add-item IPC call for shelf', config.id);
       window.api.invoke('shelf:add-item', config.id, item)
-        .catch(err => console.error('❌ Failed to add item:', err));
+        .then(result => {
+          console.log('✅ IPC shelf:add-item succeeded:', result);
+        })
+        .catch(err => {
+          console.error('❌ Failed to add item via IPC:', err);
+          console.error('Shelf ID:', config.id);
+          console.error('Item:', item);
+        });
     } else {
       console.error('❌ window.api is not available!');
     }

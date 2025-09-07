@@ -49,7 +49,11 @@ export const Shelf = React.memo<ShelfProps>(({
 
   // Handle drop events
   const handleDrop = useCallback((items: ShelfItem[]) => {
-    items.forEach(item => onItemAdd(item));
+    console.log('🎯 handleDrop called with', items.length, 'items');
+    items.forEach((item, index) => {
+      console.log(`📤 Adding item ${index + 1}/${items.length}:`, item);
+      onItemAdd(item);
+    });
     setIsDragOver(false);
   }, [onItemAdd]);
 
@@ -129,17 +133,35 @@ export const Shelf = React.memo<ShelfProps>(({
           
           if (x < rect.left || x >= rect.right || y < rect.top || y >= rect.bottom) {
             setIsDragOver(false);
+            
+            // Notify main process that drop operation ended
+            if (window.api) {
+              window.api.send('shelf:drop-end', config.id);
+              console.log('🎣 Drop operation ended on shelf:', config.id);
+            }
           }
         }}
         onDragEnter={(e) => {
           e.preventDefault();
           e.stopPropagation();
           setIsDragOver(true);
+          
+          // Notify main process that drop operation started
+          if (window.api) {
+            window.api.send('shelf:drop-start', config.id);
+            console.log('🎯 Drop operation started on shelf:', config.id);
+          }
         }}
         onDrop={(e) => {
           e.preventDefault();
           e.stopPropagation();
           setIsDragOver(false);
+          
+          // Notify main process that drop is being processed
+          if (window.api) {
+            window.api.send('shelf:drop-end', config.id);
+            console.log('📦 Processing drop on shelf:', config.id);
+          }
           
           // Handle drop event
           
@@ -208,7 +230,35 @@ export const Shelf = React.memo<ShelfProps>(({
             
             // Add the items to the shelf
             if (items.length > 0) {
+              console.log('📦 Dropping', items.length, 'items on shelf', config.id);
+              console.log('Items:', items);
+              
+              // Immediately notify main process about dropped files
+              console.log('🔍 Checking window.api:', !!window.api);
+              console.log('🤔 Window properties:', Object.keys(window).filter(k => k.includes('api') || k.includes('electron')));
+              console.log('💻 Full window.api:', window.api);
+              console.log('🆔 Current shelf ID:', config.id);
+              
+              if (window.api && items.length > 0) {
+                const filePaths = items
+                  .filter(item => item.type === 'file' && item.path)
+                  .map(item => item.path as string);
+                
+                console.log('📝 Found', filePaths.length, 'file paths:', filePaths);
+                
+                if (filePaths.length > 0) {
+                  console.log('📡 Notifying main process about', filePaths.length, 'dropped files');
+                  window.api.send('shelf:files-dropped', { shelfId: config.id, files: filePaths });
+                } else {
+                  console.warn('⚠️ No file paths found in dropped items');
+                }
+              } else {
+                console.error('❌ Cannot notify main process: window.api =', !!window.api, ', items =', items.length);
+              }
+              
               handleDrop(items);
+            } else {
+              console.warn('⚠️ No items to drop');
             }
           }
         }}

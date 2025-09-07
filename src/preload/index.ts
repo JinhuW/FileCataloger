@@ -1,5 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+// Debug log to verify preload is running
+console.log('🔌 Preload script starting...');
+
 // Define valid IPC channels - expand this as needed
 const validChannels = [
   'app:ready',
@@ -19,6 +22,7 @@ const validChannels = [
   'shelf:show-menu',
   'shelf:drop-start',
   'shelf:drop-end',
+  'shelf:files-dropped',
   'shelf:add-item',
   'shelf:remove-item',
   'shelf:update-config',
@@ -117,6 +121,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   }
 });
+
+console.log('🎉 Preload script completed - window.api and window.electronAPI should be available');
 
 // Type definitions for the exposed API
 export interface IElectronAPI {

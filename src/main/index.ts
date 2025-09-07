@@ -334,6 +334,11 @@ class DropoverApp {
       this.applicationController.handleFilesDropped(data.shelfId, data.files);
     });
 
+    ipcMain.on('shelf:files-dropped', (event, data) => {
+      console.log('📡 Received shelf:files-dropped IPC:', data);
+      this.applicationController.handleFilesDropped(data.shelfId, data.files);
+    });
+
     // Handle shelf close
     ipcMain.handle('shelf:close', async (event, shelfId) => {
       return await this.applicationController.destroyShelf(shelfId);

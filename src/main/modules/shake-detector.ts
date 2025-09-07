@@ -88,10 +88,9 @@ export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector
       return;
     }
 
-    // Log every 100th position to verify active processing
-    if (this.bufferIndex % 100 === 0) {
-      this.logger.debug('Processing position (active):', position, 'buffer index:', this.bufferIndex);
-      console.log(`🔍 ShakeDetector processing position: x=${position.x}, y=${position.y}, buffer=${this.bufferIndex}`);
+    // Log every 1000th position to verify active processing (minimal)
+    if (this.bufferIndex % 1000 === 0) {
+      this.logger.debug('Processing position (active), buffer index:', this.bufferIndex);
     }
 
     // Process all shake events - drag detection is handled separately
@@ -116,14 +115,7 @@ export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector
       leftButtonDown: position.leftButtonDown || false
     };
     
-    if (this.bufferIndex % 50 === 0) {
-      console.log(`📌 Storing position in buffer[${this.bufferIndex}]:`, {
-        x: positionToStore.x,
-        y: positionToStore.y,
-        timestamp: positionToStore.timestamp,
-        timestampAge: Date.now() - positionToStore.timestamp
-      });
-    }
+    // Removed excessive position buffer logging
     
     this.positionBuffer[this.bufferIndex] = positionToStore;
     this.bufferIndex = (this.bufferIndex + 1) % this.BUFFER_SIZE;
@@ -170,7 +162,7 @@ export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector
     
     // More aggressive logging for debugging
     if (this.bufferIndex % 20 === 0 && positions.length > 0) {
-      console.log(`📊 Analyzing ${positions.length} positions, need >= 4 for shake detection`);
+      this.logger.debug(`📊 Analyzing ${positions.length} positions for shake detection`);
     }
     
     if (positions.length < 4) {
@@ -274,16 +266,16 @@ export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector
     // Check if shake pattern detected with velocity-based criteria
     if (directionChanges >= this.config.minDirectionChanges && hasValidVelocity) {
       this.logger.info(`✅ Velocity-based shake detected! Changes: ${directionChanges}, Distance: ${totalDistance}, Avg Velocity: ${avgVelocity.toFixed(2)}, Acceleration Changes: ${accelerationChanges}`);
-      console.log(`🎉 SHAKE DETECTED! Direction changes: ${directionChanges}, Total distance: ${totalDistance.toFixed(2)}`);
+      this.logger.debug(`🎉 Velocity-based shake: ${directionChanges} changes, ${totalDistance.toFixed(2)} distance`);
       this.handleShakeDetected(directionChanges, totalDistance, avgVelocity * velocityFactor);
     } else if (directionChanges >= this.config.minDirectionChanges + 1 && hasAccelerationPattern) {
       // Alternative detection: more direction changes with acceleration pattern
       this.logger.info(`✅ Acceleration-based shake detected! Changes: ${directionChanges}, Acceleration Changes: ${accelerationChanges}`);
-      console.log(`🎊 SHAKE DETECTED (acceleration)! Direction changes: ${directionChanges}`);
+      this.logger.debug(`🎊 Acceleration-based shake: ${directionChanges} changes`);
       this.handleShakeDetected(directionChanges, totalDistance, maxVelocity);
     } else if (directionChanges >= this.config.minDirectionChanges) {
       // Even easier detection for testing
-      console.log(`🎈 SHAKE DETECTED (simple)! Direction changes: ${directionChanges}, Total distance: ${totalDistance.toFixed(2)}`);
+      this.logger.debug(`🎈 Simple shake: ${directionChanges} changes, ${totalDistance.toFixed(2)} distance`);
       this.handleShakeDetected(directionChanges, totalDistance, 1.0);
     }
   }
@@ -310,7 +302,7 @@ export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector
     
     // Check debounce time
     if (timeSinceLastShake < this.config.debounceTime) {
-      console.log(`🔄 Shake detected but debounced (${timeSinceLastShake}ms < ${this.config.debounceTime}ms)`);
+      this.logger.debug(`🔄 Shake debounced: ${timeSinceLastShake}ms < ${this.config.debounceTime}ms`);
       return;
     }
 

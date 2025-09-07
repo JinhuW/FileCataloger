@@ -1,5 +1,4 @@
 import { EventEmitter } from 'events';
-import { screen } from 'electron';
 import { createMouseTracker } from '../../native/mouse-tracker';
 import { DragShakeDetector } from './drag-shake-detector-v2';
 import { ShelfManager } from './shelf-manager';
@@ -31,6 +30,7 @@ export class ApplicationController extends EventEmitter {
   private isDragging: boolean = false; // Track current drag state
   private activeEmptyShelfId: string | null = null; // Track the single active empty shelf
   private hasCreatedShelfInSession: boolean = false; // Track if shelf was created in this drag session
+  private shelfCreationInProgress: boolean = false; // Prevent race conditions in shelf creation
   private preferencesManager: PreferencesManager;
   
   
@@ -41,7 +41,7 @@ export class ApplicationController extends EventEmitter {
     enableShakeGesture: true, // Enable shake detection for manual shelf creation
     enableDragDetection: true, // Enable to check for files when shake happens
     useNativeDragMonitor: true, // Use native macOS drag monitoring if available
-    emptyShelfTimeout: 30000 // Auto-hide empty shelves after 30 seconds (plenty of time to drop files)
+    emptyShelfTimeout: 5000 // Auto-hide empty shelves after 5 seconds
   };
 
   constructor() {
@@ -212,7 +212,9 @@ export class ApplicationController extends EventEmitter {
       // Detect left button release (disabled in fallback mode since button is always "pressed")
       // In production with native tracking, this would clear shelves on button release
       if (wasLeftButtonDown && !position.leftButtonDown) {
-        this.logger.info('🖱️ Left button released - clearing empty shelves');
+        this.logger.info('🖱️ Left button released - will check for empty shelves after delay');
+        // Check immediately after button release
+        this.logger.info('⏰ Checking for empty shelves after button release');
         this.clearEmptyShelves();
       }
       
@@ -234,11 +236,22 @@ export class ApplicationController extends EventEmitter {
     // Enhanced drag detector events
     this.dragShakeDetector.on('drag-start', () => {
       this.logger.info('🎯 Drag operation started (optimistic)');
+      this.isDragging = true;
       this.emit('drag-started');
     });
     
     this.dragShakeDetector.on('drag-end', () => {
       this.logger.info('🛑 Drag operation ended');
+      this.isDragging = false;
+      
+      // Remove all shelves from active drop operations after a delay
+      setTimeout(() => {
+        if (this.activeDropOperations.size > 0) {
+          this.logger.info(`🧹 Clearing ${this.activeDropOperations.size} shelves from drop operations`);
+          this.activeDropOperations.clear();
+        }
+      }, 1000); // 1 second delay to ensure drops are processed
+      
       this.emit('drag-ended');
     });
     
@@ -262,6 +275,19 @@ export class ApplicationController extends EventEmitter {
       // Cancel auto-hide timer when items are added
       this.cancelShelfAutoHide(shelfId);
       this.logger.info(`📦 Item added to shelf ${shelfId}, auto-hide cancelled`);
+      
+      // Remove from empty shelf tracking
+      if (this.activeEmptyShelfId === shelfId) {
+        this.logger.info(`🎆 Shelf ${shelfId} is no longer empty - removing from empty tracking`);
+        this.activeEmptyShelfId = null;
+      }
+      
+      // Remove from active drop operations if it was there
+      if (this.activeDropOperations.has(shelfId)) {
+        this.logger.info(`🎯 Removing ${shelfId} from active drop operations`);
+        this.activeDropOperations.delete(shelfId);
+      }
+      
       this.emit('shelf-item-added', shelfId, item);
     });
 
@@ -290,6 +316,12 @@ export class ApplicationController extends EventEmitter {
         return;
       }
       
+      // Prevent race condition: if shelf creation is already in progress, ignore
+      if (this.shelfCreationInProgress) {
+        this.logger.info('⏳ RACE CONDITION PREVENTED: Shelf creation already in progress - ignoring duplicate event');
+        return;
+      }
+      
       // Check if we already have ANY active shelf to prevent duplicates
       if (this.activeShelves.size > 0 || this.activeEmptyShelfId) {
         const existingShelfId = this.activeEmptyShelfId || Array.from(this.activeShelves)[0];
@@ -300,6 +332,10 @@ export class ApplicationController extends EventEmitter {
           return;
         }
       }
+      
+      // Set flag to prevent concurrent shelf creation
+      this.shelfCreationInProgress = true;
+      this.logger.info('🚩 FLAG SET: Shelf creation in progress');
       
       // Create a new shelf only if we don't have any active ones
       this.logger.info('📦 Creating new shelf at cursor position');
@@ -315,7 +351,7 @@ export class ApplicationController extends EventEmitter {
         // Clear any existing shelves from tracking to ensure only one
         this.activeShelves.clear();
         this.activeEmptyShelfId = shelfId;
-        this.activeShelves.add(shelfId);
+        // Note: shelf will be added to activeShelves by the 'shelf-created' event handler
         this.logger.info(`✅ Single shelf created: ${shelfId}`);
         
         // Schedule auto-hide for empty shelf
@@ -328,61 +364,13 @@ export class ApplicationController extends EventEmitter {
       }
     } catch (error) {
       this.logger.error('Error handling drag-shake event:', error);
+    } finally {
+      // Always clear the flag when done
+      this.shelfCreationInProgress = false;
+      this.logger.info('🏁 FLAG CLEARED: Shelf creation complete');
     }
   }
 
-  /**
-   * Handle shake gesture (legacy compatibility)
-   */
-  private async handleShakeGesture(shakeData: {
-    directionChanges: number;
-    distance: number;
-    velocity: number;
-    intensity: number;
-    timestamp: number;
-  }): Promise<void> {
-    try {
-      this.logger.info('🎯 Shake gesture received in ApplicationController:', shakeData);
-      
-      // IMPORTANT: Only create shelf if we're in drag mode (drag + shake)
-      // The drag-shake detector should have already set drag mode if files are being dragged
-      if (!this.isDragging) {
-        this.logger.info('⚠️ Shake detected but NOT dragging files - ignoring (need drag + shake)');
-        return;
-      }
-      
-      // Check if we already have an active shelf to prevent duplicates
-      if (this.activeShelves.size > 0) {
-        const existingShelfId = Array.from(this.activeShelves)[0];
-        const shelfConfig = this.shelfManager.getShelfConfig(existingShelfId);
-        if (shelfConfig && shelfConfig.isVisible) {
-          this.logger.info(`♻️ Reusing existing shelf: ${existingShelfId} (preventing duplicate)`);
-          return;
-        }
-      }
-      
-      // Create shelf for drag + shake
-      this.logger.info('✅ DRAG + SHAKE detected - creating shelf');
-      const mousePos = screen.getCursorScreenPoint();
-      const shelfId = await this.shelfManager.createShelf({
-        position: { x: mousePos.x, y: mousePos.y }
-      });
-      
-      if (shelfId) {
-        // Clear any existing shelves from tracking to ensure only one
-        this.activeShelves.clear();
-        this.activeShelves.add(shelfId);
-        this.logger.info(`✅ SHELF CREATED for drag+shake: ${shelfId} at position (${mousePos.x}, ${mousePos.y})`);
-        this.hasCreatedShelfInSession = true;
-        
-        // Schedule auto-hide for empty shelf
-        this.scheduleEmptyShelfAutoHide(shelfId);
-      }
-
-    } catch (error) {
-      this.logger.error('Error handling shake gesture:', error);
-    }
-  }
 
 
   /**
@@ -394,6 +382,13 @@ export class ApplicationController extends EventEmitter {
     
     // Schedule new timer
     const timer = setTimeout(() => {
+      // Don't auto-hide shelves that are receiving drops
+      if (this.activeDropOperations.has(shelfId)) {
+        this.logger.info(`⏸️ Shelf ${shelfId} is receiving drops - rescheduling auto-hide`);
+        this.scheduleEmptyShelfAutoHide(shelfId); // Reschedule
+        return;
+      }
+      
       const shelfConfig = this.shelfManager.getShelfConfig(shelfId);
       if (shelfConfig && shelfConfig.items.length === 0) {
         this.logger.info(`⏰ Auto-hiding empty shelf after ${this.config.emptyShelfTimeout}ms: ${shelfId}`);
@@ -401,6 +396,12 @@ export class ApplicationController extends EventEmitter {
         
         // Destroy the shelf after a short delay if still empty
         setTimeout(() => {
+          // Final check - don't destroy if it has items or is receiving drops
+          if (this.activeDropOperations.has(shelfId)) {
+            this.logger.info(`⏸️ Shelf ${shelfId} is now receiving drops - cancelling destroy`);
+            return;
+          }
+          
           const updatedConfig = this.shelfManager.getShelfConfig(shelfId);
           if (updatedConfig && updatedConfig.items.length === 0) {
             this.shelfManager.destroyShelf(shelfId);
@@ -409,6 +410,9 @@ export class ApplicationController extends EventEmitter {
             if (this.activeEmptyShelfId === shelfId) {
               this.activeEmptyShelfId = null;
             }
+          } else if (updatedConfig && updatedConfig.items.length > 0) {
+            this.logger.info(`📦 Shelf ${shelfId} now has ${updatedConfig.items.length} items - keeping it visible`);
+            this.shelfManager.showShelf(shelfId); // Make sure it's visible
           }
         }, 1000);
       } else {
@@ -421,6 +425,7 @@ export class ApplicationController extends EventEmitter {
     
     // Store timer reference
     this.shelfAutoHideTimers.set(shelfId, timer);
+    this.logger.info(`⏰ Scheduled auto-hide for shelf ${shelfId} in ${this.config.emptyShelfTimeout}ms`);
   }
   
   /**
@@ -439,19 +444,41 @@ export class ApplicationController extends EventEmitter {
    * Clear all empty shelves when left button is released
    */
   private clearEmptyShelves(): void {
+    // Don't clear shelves that are actively receiving drops
+    if (this.activeDropOperations.size > 0) {
+      this.logger.info('⏸️ Skipping shelf cleanup - drop operations in progress');
+      return;
+    }
+    
+    // Don't clear shelves during active drag operation
+    if (this.isDragging) {
+      this.logger.info('📎 Skipping shelf cleanup - drag still in progress');
+      return;
+    }
+    
     if (this.activeEmptyShelfId) {
+      // Double check the shelf is still empty and not receiving drops
       const shelfConfig = this.shelfManager.getShelfConfig(this.activeEmptyShelfId);
-      if (shelfConfig && (!shelfConfig.items || shelfConfig.items.length === 0)) {
+      if (shelfConfig && 
+          (!shelfConfig.items || shelfConfig.items.length === 0) && 
+          !this.activeDropOperations.has(this.activeEmptyShelfId)) {
         this.logger.info(`🗑️ Clearing empty shelf on button release: ${this.activeEmptyShelfId}`);
         this.shelfManager.destroyShelf(this.activeEmptyShelfId);
         this.activeShelves.delete(this.activeEmptyShelfId);
         this.cancelShelfAutoHide(this.activeEmptyShelfId);
         this.activeEmptyShelfId = null;
+      } else if (shelfConfig && shelfConfig.items.length > 0) {
+        this.logger.info(`📦 Shelf ${this.activeEmptyShelfId} has ${shelfConfig.items.length} items - keeping it`);
+        this.activeEmptyShelfId = null; // Clear reference since it's no longer empty
       }
     }
     
     // Also clear any other empty shelves
     for (const shelfId of this.activeShelves) {
+      if (this.activeDropOperations.has(shelfId)) {
+        continue; // Skip shelves receiving drops
+      }
+      
       const shelfConfig = this.shelfManager.getShelfConfig(shelfId);
       if (shelfConfig && (!shelfConfig.items || shelfConfig.items.length === 0)) {
         this.logger.info(`🗑️ Clearing additional empty shelf: ${shelfId}`);
@@ -473,7 +500,7 @@ export class ApplicationController extends EventEmitter {
    * Destroy a shelf
    */
   public async destroyShelf(shelfId: string): Promise<boolean> {
-    return this.shelfManager.destroyShelf(shelfId);
+    return this.shelfManager.forceDestroyShelf(shelfId);
   }
 
   /**
@@ -517,16 +544,35 @@ export class ApplicationController extends EventEmitter {
    * Handle drop start event from shelf
    */
   public handleDropStart(shelfId: string): void {
-    this.logger.debug(`Preventing auto-hide for shelf: ${shelfId}`);
+    this.logger.info(`🎯 DROP START on shelf: ${shelfId}`);
     this.activeDropOperations.add(shelfId);
+    
+    // Cancel any auto-hide timer while dropping
+    this.cancelShelfAutoHide(shelfId);
+    
+    // Make sure shelf stays visible during drop
+    const config = this.shelfManager.getShelfConfig(shelfId);
+    if (config && !config.isVisible) {
+      this.logger.info(`👁️ Making shelf visible during drop: ${shelfId}`);
+      this.shelfManager.showShelf(shelfId);
+    }
   }
 
   /**
    * Handle drop end event from shelf
    */
   public handleDropEnd(shelfId: string): void {
-    this.logger.debug(`Re-enabling auto-hide for shelf: ${shelfId}`);
+    this.logger.info(`🎣 DROP END on shelf: ${shelfId}`);
     this.activeDropOperations.delete(shelfId);
+    
+    // Check if shelf is still empty after drop
+    const config = this.shelfManager.getShelfConfig(shelfId);
+    if (config && config.items.length === 0 && !config.isPinned) {
+      this.logger.info(`🕒 Shelf ${shelfId} still empty after drop - rescheduling auto-hide`);
+      this.scheduleEmptyShelfAutoHide(shelfId);
+    } else if (config && config.items.length > 0) {
+      this.logger.info(`📦 Shelf ${shelfId} has ${config.items.length} items after drop - keeping visible`);
+    }
   }
 
   /**
