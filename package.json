@@ -4,23 +4,18 @@
   "main": "dist/main/index.js",
   "license": "MIT",
   "scripts": {
-    "dev": "yarn build:new && electron ./dist/main/index.js",
-    "build:main:tsc": "tsc -p tsconfig.main.json",
-    "build:main:script": "node scripts/build-main.js",
+    "dev": "yarn build && electron ./dist/main/index.js",
+    "build": "yarn build:renderer && yarn build:preload && yarn build:main",
+    "build:main": "node scripts/build-main.js",
     "build:renderer": "webpack --config webpack.renderer.config.js",
     "build:preload": "webpack --config webpack.preload.config.js",
-    "build:new": "yarn build:renderer && yarn build:preload && yarn build:main:script",
-    "rebuild:native": "cd src/native/drag-monitor && npx electron-rebuild -v 37.4.0 && cd ../../..",
+    "rebuild:native": "electron-rebuild",
     "clean": "rimraf dist out",
     "start": "electron ./dist/main/index.js",
-    "start:new": "yarn build:new && electron ./dist/main/index.js",
-    "tsc": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/**/*.{ts,tsx}",
-    "test": "echo 'No tests configured yet'",
     "package": "electron-forge package",
-    "make": "electron-forge make",
-    "rebuild": "yarn clean && yarn rebuild:native && yarn build:new"
+    "make": "electron-forge make"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.8.3",
@@ -37,7 +32,6 @@
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "autoprefixer": "^10.4.21",
-    "concurrently": "^8.2.2",
     "copy-webpack-plugin": "^13.0.1",
     "css-loader": "^7.1.2",
     "electron": "^37.4.0",
@@ -47,9 +41,7 @@
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-react": "^7.37.2",
     "eslint-plugin-react-hooks": "^4.6.2",
-    "file-loader": "^6.2.0",
     "framer-motion": "^12.23.12",
-    "fs-extra": "^11.3.1",
     "html-webpack-plugin": "^5.6.4",
     "node-addon-api": "^8.5.0",
     "node-gyp": "^11.4.2",
@@ -68,7 +60,6 @@
     "zustand": "^5.0.8"
   },
   "dependencies": {
-    "@emotion/is-prop-valid": "^1.3.1",
     "electron-squirrel-startup": "^1.0.1",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"

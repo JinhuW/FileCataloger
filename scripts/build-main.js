@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const { execSync } = require('child_process');
-const fs = require('fs-extra');
+const fs = require('fs');
 const path = require('path');
 
 console.log('🔨 Building main process...');
@@ -9,10 +9,10 @@ console.log('🔨 Building main process...');
 // Clean dist directory (main process parts)
 const distPath = path.join(__dirname, '..', 'dist');
 // Only remove main process directories, keep renderer
-fs.removeSync(path.join(distPath, 'main'));
-fs.removeSync(path.join(distPath, 'native'));
-fs.removeSync(path.join(distPath, 'shared'));
-fs.ensureDirSync(distPath);
+fs.rmSync(path.join(distPath, 'main'), { recursive: true, force: true });
+fs.rmSync(path.join(distPath, 'native'), { recursive: true, force: true });
+fs.rmSync(path.join(distPath, 'shared'), { recursive: true, force: true });
+fs.mkdirSync(distPath, { recursive: true });
 
 // Compile TypeScript
 console.log('📦 Compiling TypeScript...');
@@ -36,8 +36,8 @@ for (const module of nativeModules) {
   const destPath = path.join(__dirname, '..', module.to);
   
   if (fs.existsSync(sourcePath)) {
-    fs.ensureDirSync(path.dirname(destPath));
-    fs.copySync(sourcePath, destPath);
+    fs.mkdirSync(path.dirname(destPath), { recursive: true });
+    fs.copyFileSync(sourcePath, destPath);
     console.log(`✅ Copied ${path.basename(sourcePath)}`);
   } else {
     console.warn(`⚠️  Native module not found: ${sourcePath}`);
@@ -54,10 +54,9 @@ const mainPackageJson = {
   dependencies: packageJson.dependencies
 };
 
-fs.writeJsonSync(
+fs.writeFileSync(
   path.join(distPath, 'main', 'package.json'),
-  mainPackageJson,
-  { spaces: 2 }
+  JSON.stringify(mainPackageJson, null, 2)
 );
 
 console.log('✅ Main process build complete!');

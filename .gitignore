@@ -81,3 +81,13 @@ src/native/*/node_modules/
 # Cache directories
 .cache/
 .parcel-cache/
+
+# Build artifacts
+*.js.map
+src/**/*.js
+src/**/*.js.map
+!scripts/*.js
+!webpack.*.js
+# OS files
+*.swp
+*.swo
