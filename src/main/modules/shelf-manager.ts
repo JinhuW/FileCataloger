@@ -1,4 +1,4 @@
-import { BrowserWindow, screen, ipcMain } from 'electron';
+import { BrowserWindow, screen, ipcMain, app } from 'electron';
 import { EventEmitter } from 'events';
 import * as path from 'path';
 import { ShelfConfig, DockPosition, Vector2D, ShelfItem } from '../../shared/types';
@@ -172,8 +172,13 @@ export class ShelfManager extends EventEmitter {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true, // Enable sandboxing for security
-        // __dirname is dist/main/modules, so go up to main, then up to dist, then into preload
-        preload: path.join(__dirname, '../../preload/index.js'),
+        // Construct preload path based on app structure
+        preload: (() => {
+          const appPath = app.getAppPath();
+          const isInDist = appPath.endsWith(path.join('dist', 'main'));
+          const basePath = isInDist ? path.join(appPath, '..') : path.join(appPath, 'dist');
+          return path.join(basePath, 'preload', 'index.js');
+        })(),
         webSecurity: false // Temporarily disable for development to avoid CSP issues with webpack eval
       }
     });
@@ -281,14 +286,18 @@ export class ShelfManager extends EventEmitter {
    */
   private async loadShelfContent(window: BrowserWindow, config: ShelfConfig): Promise<void> {
     // Load the React shelf renderer HTML
-    // __dirname is dist/main/modules, so go up twice to get to dist/, then into renderer/
-    const rendererPath = path.join(__dirname, '../../renderer/shelf.html');
+    // app.getAppPath() returns dist/main in dev, so we need to go up to get to dist
+    const appPath = app.getAppPath();
+    const isInDist = appPath.endsWith(path.join('dist', 'main'));
+    const basePath = isInDist ? path.join(appPath, '..') : appPath;
+    const rendererPath = path.join(basePath, 'renderer', 'shelf.html');
     
     try {
       console.log(`📂 Loading shelf window from: ${rendererPath}`);
-      const preloadPath = path.join(__dirname, '../../preload/index.js');
+      const preloadPath = path.join(basePath, 'preload', 'index.js');
       console.log(`🔌 Preload script path: ${preloadPath}`);
-      console.log(`🔌 __dirname is: ${__dirname}`);
+      console.log(`🔌 App path is: ${appPath}`);
+      console.log(`🔌 Base path is: ${basePath}`);
       console.log(`🔍 Preload exists: ${require('fs').existsSync(preloadPath)}`);
       
       // Load the file first

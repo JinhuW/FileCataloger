@@ -88,7 +88,7 @@ export class ErrorHandler extends EventEmitter {
         fs.mkdirSync(this.options.logPath, { recursive: true });
       }
 
-      const logFileName = `dropover-${new Date().toISOString().split('T')[0]}.log`;
+      const logFileName = `filecataloger-${new Date().toISOString().split('T')[0]}.log`;
       const logFilePath = path.join(this.options.logPath, logFileName);
 
       // Create or append to log file
@@ -128,7 +128,7 @@ export class ErrorHandler extends EventEmitter {
       const maxAge = this.options.retentionDays * 24 * 60 * 60 * 1000;
 
       files.forEach(file => {
-        if (file.startsWith('dropover-') && file.endsWith('.log')) {
+        if (file.startsWith('filecataloger-') && file.endsWith('.log')) {
           const filePath = path.join(this.options.logPath, file);
           const stats = fs.statSync(filePath);
           
@@ -262,7 +262,7 @@ export class ErrorHandler extends EventEmitter {
       dialog.showMessageBox({
         type: 'warning',
         title: 'Permission Required',
-        message: 'Dropover needs accessibility permission to track mouse movements.',
+        message: 'FileCataloger needs accessibility permission to track mouse movements.',
         detail: 'Please grant permission in System Preferences > Security & Privacy > Privacy > Accessibility',
         buttons: ['Open System Preferences', 'Later']
       }).then(result => {
@@ -320,7 +320,7 @@ export class ErrorHandler extends EventEmitter {
       });
     } else if (error.severity === ErrorSeverity.CRITICAL) {
       // Show system dialog for critical errors when no window is focused
-      dialog.showErrorBox('Dropover Error', this.getUserFriendlyMessage(error));
+      dialog.showErrorBox('FileCataloger Error', this.getUserFriendlyMessage(error));
     }
   }
 

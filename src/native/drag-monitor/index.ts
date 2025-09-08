@@ -1,9 +1,5 @@
 import { EventEmitter } from 'events';
 import * as path from 'path';
-import * as fs from 'fs';
-
-// Declare webpack's special require function
-declare const __non_webpack_require__: NodeRequire | undefined;
 
 export interface DraggedItem {
   path: string;
@@ -21,44 +17,14 @@ export interface DragEvent {
   items: DraggedItem[];
 }
 
-// Try to load the native module directly
+// Direct require for the native module - webpack will handle this as an external
 let nativeModule: any = null;
 
 try {
-  // First try: Direct require of the node file that webpack copies
-  // Webpack should copy drag_monitor_darwin.node to dist/main/
+  // This path is handled by webpack's externals configuration
   nativeModule = require('./drag_monitor_darwin.node');
-  console.log('✅ Loaded native drag monitor via direct require');
-} catch (e1) {
-  console.log('Direct require failed, trying alternate paths...');
-  
-  try {
-    // Second try: Load from build directory
-    nativeModule = require('./build/Release/drag_monitor_darwin.node');
-    console.log('✅ Loaded native drag monitor from build directory');
-  } catch (e2) {
-    try {
-      // Third try: Use absolute path
-      const modulePath = path.join(process.cwd(), 'dist', 'main', 'drag_monitor_darwin.node');
-      if (fs.existsSync(modulePath)) {
-        nativeModule = require(modulePath);
-        console.log('✅ Loaded native drag monitor from absolute path:', modulePath);
-      }
-    } catch (e3) {
-      console.error('❌ Could not load native drag monitor module');
-    }
-  }
-}
-
-// Log the module load result
-if (nativeModule) {
-  console.log('🔍 Native module load result:', {
-    hasModule: true,
-    hasDarwinDragMonitor: !!(nativeModule.DarwinDragMonitor),
-    moduleKeys: Object.keys(nativeModule)
-  });
-} else {
-  console.log('🔍 Native module load result: Module not loaded');
+} catch (error) {
+  // Native module not available - will be handled gracefully
 }
 
 export class MacDragMonitor extends EventEmitter {

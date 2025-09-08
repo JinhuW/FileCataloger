@@ -205,7 +205,7 @@ export class Logger {
                        (process.platform === 'darwin' ? process.env.HOME + '/Library/Application Support' : 
                        process.env.HOME + '/.local/share');
     
-    return path.join(userDataDir || './logs', 'dropover_clone', 'logs');
+    return path.join(userDataDir || './logs', 'filecataloger', 'logs');
   }
 
   /**

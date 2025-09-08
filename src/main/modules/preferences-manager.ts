@@ -350,7 +350,7 @@ export class PreferencesManager extends EventEmitter {
     this.preferencesWindow = new BrowserWindow({
       width: 700,
       height: 600,
-      title: 'Dropover Preferences',
+      title: 'FileCataloger Preferences',
       resizable: false,
       minimizable: false,
       maximizable: false,
@@ -405,7 +405,7 @@ export class PreferencesManager extends EventEmitter {
             </style>
           </head>
           <body>
-            <h1>Dropover Preferences</h1>
+            <h1>FileCataloger Preferences</h1>
             <div class="section">
               <h2>General</h2>
               <label>

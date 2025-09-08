@@ -3,6 +3,7 @@ import { AdvancedShakeDetector } from './shake-detector';
 import { createLogger, Logger } from './logger';
 import { MousePosition } from '../../shared/types';
 import { MacDragMonitor, createDragMonitor } from '../../native/drag-monitor/index';
+import { MouseEventBatcher } from './mouse-event-batcher';
 
 export interface DraggedItem {
   name: string;
@@ -34,6 +35,7 @@ export class DragShakeDetector extends EventEmitter {
   private logger: Logger;
   private shakeDetector: AdvancedShakeDetector;
   private dragMonitor: MacDragMonitor | null = null;
+  private mouseBatcher: MouseEventBatcher;
   
   private isDragging: boolean = false;
   private draggedItems: DraggedItem[] = [];
@@ -43,6 +45,9 @@ export class DragShakeDetector extends EventEmitter {
   constructor() {
     super();
     this.logger = createLogger('DragShakeDetector');
+    
+    // Initialize mouse event batcher to reduce CPU usage
+    this.mouseBatcher = new MouseEventBatcher(10, 33); // Batch 10 events or every 33ms (~30fps)
     
     // Initialize shake detector with very easy sensitivity for testing
     this.shakeDetector = new AdvancedShakeDetector();
@@ -79,6 +84,20 @@ export class DragShakeDetector extends EventEmitter {
   }
   
   private setupEventHandlers(): void {
+    // Set up mouse batcher handlers
+    this.mouseBatcher.on('batch', (batchedEvent: any) => {
+      // Process batched positions for shake detection
+      batchedEvent.positions.forEach((pos: MousePosition) => {
+        this.shakeDetector.processPosition(pos);
+      });
+    });
+    
+    // Handle immediate position updates for critical events
+    this.mouseBatcher.on('position', (position: MousePosition) => {
+      // Still emit position for other components that need real-time updates
+      this.emit('position', position);
+    });
+    
     // Handle shake events - only process during active drag
     this.shakeDetector.on('shake', (event) => {
       this.logger.debug('🌟 Shake event detected', {
@@ -189,7 +208,10 @@ export class DragShakeDetector extends EventEmitter {
   
   public async start(): Promise<void> {
     this.logger.info('Starting native drag-shake detector');
-    console.log('🚀 DragShakeDetector.start() called');
+    
+    // Start mouse batcher
+    this.mouseBatcher.start();
+    this.logger.info('✅ Mouse event batcher started');
     
     // Start shake detector
     this.shakeDetector.start();
@@ -197,7 +219,6 @@ export class DragShakeDetector extends EventEmitter {
     
     // Start native drag monitor
     if (this.dragMonitor) {
-      console.log('🔧 Starting native drag monitor...');
       const success = this.dragMonitor.start();
       if (success) {
         this.logger.info('✅ System ready');
@@ -205,13 +226,11 @@ export class DragShakeDetector extends EventEmitter {
         this.logger.info('   1. Drag files from Finder');
         this.logger.info('   2. Shake mouse while dragging');
         this.logger.info('   3. Drop files on shelf');
-        console.log('✅ DragShakeDetector fully started and listening for events');
       } else {
         this.logger.error('❌ Failed to start native drag monitor');
-        console.error('❌ Failed to start native drag monitor');
       }
     } else {
-      console.error('❌ No drag monitor available!');
+      this.logger.error('❌ No drag monitor available!');
     }
     
     this.emit('started');
@@ -220,6 +239,7 @@ export class DragShakeDetector extends EventEmitter {
   public stop(): void {
     this.logger.info('Stopping drag-shake detector');
     
+    this.mouseBatcher.stop();
     this.shakeDetector.stop();
     
     if (this.dragMonitor) {
@@ -241,12 +261,14 @@ export class DragShakeDetector extends EventEmitter {
         isDragging: this.isDragging
       });
     }
-    this.shakeDetector.processPosition(position);
+    // Use batcher instead of direct processing to reduce CPU usage
+    this.mouseBatcher.addPosition(position);
   }
   
   public destroy(): void {
     this.stop();
     
+    this.mouseBatcher.destroy();
     this.shakeDetector.destroy();
     
     if (this.dragMonitor) {

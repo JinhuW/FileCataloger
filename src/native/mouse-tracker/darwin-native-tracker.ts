@@ -1,6 +1,14 @@
 import { BaseMouseTracker } from './base-tracker';
 import { MousePosition } from '@shared/types';
-import * as path from 'path';
+
+// Direct require for the native module - webpack will handle this as an external
+let nativeModule: any;
+try {
+  // This path is handled by webpack's externals configuration
+  nativeModule = require('./mouse_tracker_darwin.node');
+} catch (error) {
+  throw new Error('Failed to load native mouse tracker module');
+}
 
 /**
  * Native macOS mouse tracker using Core Graphics
@@ -12,43 +20,7 @@ export class DarwinNativeTracker extends BaseMouseTracker {
   constructor() {
     super();
     
-    // Load the native module - try multiple paths
-    // When running from dist, we need to look in the src directory
-    const possiblePaths = [
-      // Direct path from project root (most reliable)
-      path.join(process.cwd(), 'src', 'native', 'mouse-tracker', 'darwin', 'build', 'Release', 'mouse_tracker_darwin.node'),
-      // Look for the copied module in dist/main
-      path.join(process.cwd(), 'dist', 'main', 'mouse_tracker_darwin.node'),
-      // Webpack may bundle it with a hash
-      path.join(__dirname, '..', '4ea58c2179beb80aedba968829348ba5.node'),
-      // Relative to dist directory
-      path.join(__dirname, '..', '..', '..', '..', 'src', 'native', 'mouse-tracker', 'darwin', 'build', 'Release', 'mouse_tracker_darwin.node'),
-      // Development path
-      path.join(__dirname, 'build', 'Release', 'mouse_tracker_darwin.node')
-    ];
-    
-    let nativeModule: any = null;
-    let loadedPath: string = '';
-    
-    for (const modulePath of possiblePaths) {
-      try {
-        nativeModule = require(modulePath);
-        loadedPath = modulePath;
-        console.log('✅ Successfully loaded native macOS tracker from:', loadedPath);
-        break;
-      } catch (err) {
-        // Log which path failed for debugging
-        console.debug(`Tried loading from: ${modulePath} - not found`);
-        continue;
-      }
-    }
-    
-    if (!nativeModule) {
-      throw new Error(`Failed to load native module from any of: ${possiblePaths.join(', ')}`);
-    }
-    
     try {
-      
       // Create the tracker instance
       this.nativeTracker = new nativeModule.MacOSMouseTracker();
       console.log('Created MacOSMouseTracker instance');
@@ -161,11 +133,9 @@ export class DarwinNativeTracker extends BaseMouseTracker {
    * Start fallback polling for position updates
    */
   private startPolling(): void {
-    // Poll every 16ms (60 FPS) as a fallback
-    this.pollingInterval = setInterval(() => {
-      // The native module callbacks should handle updates
-      // This is just a safety mechanism
-    }, 16);
+    // Disabled: Polling creates unnecessary CPU usage
+    // Native event tap should handle all updates
+    // If native tracking fails, better to show error than consume CPU
   }
 
   /**

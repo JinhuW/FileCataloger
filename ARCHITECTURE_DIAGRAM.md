@@ -1,4 +1,4 @@
-# Dropover Clone Architecture Diagram
+# FileCataloger Architecture Diagram
 
 ## System Overview
 

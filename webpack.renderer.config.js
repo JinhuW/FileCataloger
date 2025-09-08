@@ -1,6 +1,6 @@
 const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
-const CopyWebpackPlugin = require('copy-webpack-plugin');
+const webpack = require('webpack');
 
 module.exports = {
   mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
@@ -64,6 +64,11 @@ module.exports = {
   },
   target: 'electron-renderer',
   plugins: [
+    // Ignore the optional @emotion/is-prop-valid dependency from framer-motion
+    new webpack.IgnorePlugin({
+      resourceRegExp: /^@emotion\/is-prop-valid$/,
+      contextRegExp: /framer-motion/
+    }),
     new HtmlWebpackPlugin({
       template: './src/renderer/index.html',
       filename: 'index.html',

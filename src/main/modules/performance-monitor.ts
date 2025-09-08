@@ -47,7 +47,10 @@ export class PerformanceMonitor extends EventEmitter {
   private monitorInterval: NodeJS.Timeout | null = null;
   private metricsHistory: PerformanceMetrics[] = [];
   private maxHistorySize: number = 100;
-  private updateInterval: number = 1000; // 1 second
+  private updateInterval: number = 10000; // 10 seconds - reduced from 1 second
+  private adaptiveInterval: boolean = true;
+  private minInterval: number = 5000; // 5 seconds minimum
+  private maxInterval: number = 30000; // 30 seconds maximum
   
   private thresholds: PerformanceThresholds = {
     cpuWarning: 70,
@@ -125,12 +128,50 @@ export class PerformanceMonitor extends EventEmitter {
       // Emit metrics
       this.emit('metrics', metrics);
       
+      // Adaptive interval adjustment
+      if (this.adaptiveInterval) {
+        this.adjustInterval(metrics);
+      }
+      
     } catch (error) {
       errorHandler.handleError(error as Error, {
         severity: ErrorSeverity.LOW,
         category: ErrorCategory.PERFORMANCE,
         context: { module: 'performance-monitor' }
       });
+    }
+  }
+
+  private adjustInterval(metrics: PerformanceMetrics): void {
+    // If CPU or memory usage is high, monitor more frequently
+    const isHighUsage = metrics.cpu.usage > 50 || metrics.memory.percentage > 70;
+    const isCritical = metrics.cpu.usage > this.thresholds.cpuWarning || 
+                       metrics.memory.percentage > this.thresholds.memoryWarning;
+    
+    let newInterval = this.updateInterval;
+    
+    if (isCritical) {
+      // Critical: Monitor every 5 seconds
+      newInterval = this.minInterval;
+    } else if (isHighUsage) {
+      // High usage: Monitor every 10 seconds
+      newInterval = 10000;
+    } else {
+      // Low usage: Monitor every 30 seconds
+      newInterval = this.maxInterval;
+    }
+    
+    // Only restart if interval changed significantly
+    if (Math.abs(newInterval - this.updateInterval) > 1000) {
+      this.updateInterval = newInterval;
+      
+      // Restart monitoring with new interval
+      if (this.monitorInterval) {
+        clearInterval(this.monitorInterval);
+        this.monitorInterval = setInterval(() => {
+          this.collectMetrics();
+        }, this.updateInterval);
+      }
     }
   }
 

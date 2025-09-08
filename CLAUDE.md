@@ -2,152 +2,117 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## CRITICAL FEATURE REQUIREMENTS - DO NOT CHANGE
+## Development Commands
 
-### Drag + Shake Detection Feature
-**IMPORTANT**: The core feature is **drag + shake detection**. The shelf should ONLY appear when:
-1. User is actively dragging files/folders from Finder or other apps
-2. AND shakes the mouse while dragging
-
-**DO NOT**:
-- Create shelves on shake alone (without drag)
-- Change this core behavior without explicit user request
-- Assume shake-only triggering is acceptable
-
-**Status**: ✅ **WORKING** - Native modules fixed and drag + shake detection fully functional
-
-## Essential Commands
-
-### Development
+### Core Development
 ```bash
 # Install dependencies
 yarn install
 
-# Build native modules (required for mouse tracking)
-cd src/native/mouse-tracker/darwin && node-gyp rebuild && cd ../../../..
-cd src/native/drag-monitor && node-gyp rebuild && cd ../..
+# Build native modules (required after install)
+cd src/native/mouse-tracker/darwin
+node-gyp rebuild
+cd ../../../..
 
-# Run development server
+# Run in development mode
 yarn dev
 
-# Type checking - MUST RUN before committing
-yarn tsc
-# or
-yarn typecheck
-```
-
-### Build & Production
-```bash
-# Build all components
+# Build all modules
 yarn build
 
-# Build individual components
-yarn build:main      # Main process
-yarn build:renderer   # React UI
-yarn build:preload   # Preload scripts
+# Type checking (ALWAYS run before committing)
+yarn typecheck
 
-# Start built application
-yarn start
+# Linting (ALWAYS run before committing)
+yarn lint
 
-# Package for distribution
-yarn package
-yarn make
+# Clean build artifacts
+yarn clean
+```
+
+### Building and Packaging
+```bash
+# Build for macOS (DMG)
+yarn make:dmg
+
+# Build for specific architecture
+yarn dist:mac:arm64  # Apple Silicon
+yarn dist:mac:x64    # Intel Macs
+
+# Full distribution build
+yarn dist
 ```
 
 ## Architecture Overview
 
-This is an Electron desktop application that replicates Dropover's functionality with native macOS integration.
+This is a **FileCataloger** - an Electron-based desktop application that creates floating "shelf" windows for temporary file storage during drag operations. The application uses native macOS APIs for mouse tracking and drag detection.
 
 ### Core Components
 
 1. **Main Process** (`src/main/`)
-   - `ApplicationController`: Central coordinator for all modules
-   - `ShelfManager`: Manages multiple shelf windows
-   - `DragShakeDetector`: Combines drag detection with shake gestures
-   - `PerformanceMonitor`: CPU/memory tracking with auto-cleanup
-   - `PreferencesManager`: User settings with ElectronStore
-   - `KeyboardManager`: Global shortcuts
-   - `ErrorHandler`: Multi-level error system with categorization
-   - `Logger`: File-based logging with rotation
+   - `ApplicationController`: Central orchestrator managing all modules
+   - `ShelfManager`: Manages creation, positioning, and lifecycle of shelf windows
+   - `DragShakeDetector`: Detects mouse shake gestures to trigger shelf creation
+   - `PreferencesManager`: Handles user preferences with Electron Store
+   - Native mouse tracking via CGEventTap (macOS)
 
-2. **Native Modules** (`src/native/`)
-   - `mouse-tracker`: CGEventTap-based mouse tracking for macOS
-   - `drag-monitor`: Native drag detection module
-   - Built with node-gyp, requires rebuild after node_modules changes
-
-3. **Renderer Process** (`src/renderer/`)
-   - React 19 with TypeScript
+2. **Renderer Process** (`src/renderer/`)
+   - React 19 + TypeScript for UI
    - Tailwind CSS for styling
    - Framer Motion for animations
    - Zustand for state management
 
-4. **IPC Communication**
-   - Typed IPC channels defined in `src/shared/types.ts`
-   - Contextual bridge exposed via preload script
+3. **Native Modules** (`src/native/`)
+   - `mouse-tracker`: Platform-specific mouse tracking (C++ for macOS)
+   - Requires `node-gyp` for building
 
-### Module Interactions
+### Key Patterns
 
-- **Shake Detection**: Mouse tracker → DragShakeDetector → ShelfManager → Creates shelf window
-- **Error Flow**: Any module → ErrorHandler → Logger → File system
-- **Preferences**: PreferencesManager ↔ All modules (singleton pattern)
-- **Performance**: PerformanceMonitor → Triggers GC on high memory → Logs warnings
+- **IPC Communication**: Strict schema-based IPC between main and renderer
+- **Error Handling**: Comprehensive error handling with severity levels
+- **Performance Monitoring**: Built-in CPU/memory monitoring
+- **Logging**: Structured logging with file rotation
+- **Security**: Context isolation, sandboxing, CSP headers
 
-## Critical Implementation Details
+### Shelf Creation Flow
+1. User shakes mouse (6+ direction changes in 500ms)
+2. `DragShakeDetector` detects pattern
+3. `ApplicationController` creates shelf via `ShelfManager`
+4. Shelf window appears at cursor position
+5. User drags files onto shelf
+6. Shelf auto-hides when empty (after 5s delay)
 
-### Native Module Requirements
-- **macOS Accessibility**: App requires accessibility permissions for mouse tracking
-- **Python**: Required for node-gyp to build native modules
-- **Build Order**: Native modules must be built before running the app
+## Important Notes
 
-### Window Management
-- Shelves are frameless, always-on-top BrowserWindows
-- Each shelf has unique ID tracked by ShelfManager
-- Windows persist position and state between sessions
+### Native Module Building
+- The application uses native C++ modules for mouse tracking
+- These MUST be rebuilt after `yarn install` or Node/Electron version changes
+- If you see errors about missing `.node` files, run the native build commands above
 
-### Error Handling Strategy
-- Four severity levels: LOW, MEDIUM, HIGH, CRITICAL
-- Seven categories: SYSTEM, NATIVE, USER_INPUT, FILE_OPERATION, WINDOW, IPC, PERFORMANCE
-- Automatic fallback to Node.js mouse tracking if native fails
-- User-friendly error messages with technical details in logs
+### macOS Permissions
+- Application requires Accessibility permissions for mouse tracking
+- Users will be prompted on first run
+- Test in production mode to verify permission handling
 
-### Performance Constraints
-- Memory limit: 500MB triggers GC
-- CPU limit: 80% triggers performance warning
-- Mouse tracking: Must maintain 60fps (16ms latency)
-- Empty shelf auto-hide: 5 seconds default
+### TypeScript Configuration
+- Strict mode is enabled - no implicit `any`
+- Path aliases configured (e.g., `@main/*`, `@renderer/*`)
+- Separate configs for main/renderer processes
 
-## TypeScript Configuration
+### Debugging
+- Development mode shows shelf windows immediately for testing
+- Check console logs for detailed operation traces
+- Performance issues logged to `~/Library/Application Support/FileCataloger/logs/`
 
-- **Strict mode enabled** - All strict checks active
-- Path aliases configured:
-  - `@main/*` → `src/main/*`
-  - `@renderer/*` → `src/renderer/*`
-  - `@native/*` → `src/native/*`
-  - `@shared/*` → `src/shared/*`
+### Common Issues
+1. **Native module errors**: Rebuild with `node-gyp rebuild` in native module directory
+2. **Shelf not appearing**: Check Accessibility permissions in macOS settings
+3. **Type errors**: Run `yarn typecheck` before committing
+4. **Build failures**: Ensure Python is installed for `node-gyp`
 
-## File Organization
-
-- Components follow PascalCase: `ShelfManager.ts`
-- Modules export singleton instances: `export const shelfManager = new ShelfManager()`
-- Shared types in `src/shared/types.ts`
-- Logger types in `src/shared/logger.ts`
-
-## Testing Approach
-
-No test framework is currently configured. To add tests:
-1. Install test framework (Jest/Vitest recommended)
-2. Add test scripts to package.json
-3. Create `__tests__` directories in respective modules
-
-## Known Issues & Workarounds
-
-1. **Native module build failures**: Ensure Python 3.x and Xcode Command Line Tools installed
-2. **Accessibility permissions**: Guide users through System Preferences → Security & Privacy → Accessibility
-3. **High memory usage**: PerformanceMonitor auto-triggers GC at 500MB threshold
-
-## Development Notes
-
-- Always run `yarn tsc` before committing to catch type errors
-- Native modules require rebuild after Node version changes
-- Preferences stored at `~/Library/Application Support/dropover_clone/`
-- Logs stored at `~/Library/Application Support/dropover_clone/logs/` with 7-day retention
+## Code Style
+- Use TypeScript for all new code
+- Follow existing patterns in the codebase
+- No console.log in production - use the Logger module
+- Prefer functional components with hooks in React
+- Use proper error boundaries and error handling

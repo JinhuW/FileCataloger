@@ -76,7 +76,7 @@ export const APP_CONSTANTS = {
   MAX_SIMULTANEOUS_SHELVES: 5,
   AUTO_SAVE_INTERVAL: 30000, // milliseconds
   LOG_RETENTION_DAYS: 7,
-  DEFAULT_WINDOW_TITLE: 'Dropover Clone',
+  DEFAULT_WINDOW_TITLE: 'FileCataloger',
   PRELOAD_SCRIPT_NAME: 'preload.js',
   RENDERER_ENTRY: 'renderer/index.html'
 } as const;

@@ -65,11 +65,8 @@ export class ApplicationController extends EventEmitter {
       this.logger.info('✓ Mouse tracker initialized successfully');
     } catch (error) {
       this.logger.error('❌ Failed to initialize mouse tracker:', error);
-      // For now, create the tracker anyway to avoid null reference issues
-      // We need to implement a proper fallback tracker
-      const NodeTracker = require('@native/mouse-tracker').NodeTracker;
-      this.mouseTracker = new NodeTracker();
-      this.logger.warn('⚠️ Using fallback NodeTracker for mouse tracking');
+      // Re-throw the error since mouse tracking is required
+      throw new Error(`Failed to initialize native mouse tracker: ${error}`);
     }
     
     // Initialize combined drag and shake detector
@@ -94,7 +91,7 @@ export class ApplicationController extends EventEmitter {
     }
 
     try {
-      this.logger.info('Starting Dropover application...');
+      this.logger.info('Starting FileCataloger application...');
       
       // Start mouse tracking
       this.logger.info('Starting mouse tracker...');
@@ -112,16 +109,10 @@ export class ApplicationController extends EventEmitter {
 
       // Shelves are created on demand via shake/drag gestures
 
-      // Keep enhanced drag detector for compatibility
-      if (this.config.enableDragDetection) {
-        this.dragShakeDetector.start();
-        this.logger.info('✓ Enhanced drag detector started (compatibility)');
-      }
-
       this.isRunning = true;
       this.emit('started');
       
-      this.logger.info('🚀 Dropover application started successfully!');
+      this.logger.info('🚀 FileCataloger application started successfully!');
     } catch (error) {
       this.logger.error('Failed to start application:', error);
       this.emit('error', error);

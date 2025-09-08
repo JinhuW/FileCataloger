@@ -1,12 +1,13 @@
 {
-  "name": "dropover_clone",
+  "name": "filecataloger",
+  "productName": "FileCataloger",
   "version": "1.0.0",
   "main": "dist/main/index.js",
   "license": "MIT",
   "scripts": {
     "dev": "yarn build && electron ./dist/main/index.js",
     "build": "yarn build:renderer && yarn build:preload && yarn build:main",
-    "build:main": "node scripts/build-main.js",
+    "build:main": "webpack --config webpack.main.config.js",
     "build:renderer": "webpack --config webpack.renderer.config.js",
     "build:preload": "webpack --config webpack.preload.config.js",
     "rebuild:native": "electron-rebuild",
@@ -15,7 +16,12 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src/**/*.{ts,tsx}",
     "package": "electron-forge package",
-    "make": "electron-forge make"
+    "make": "electron-forge make",
+    "make:dmg": "yarn build && electron-forge make --platform=darwin",
+    "dist": "yarn clean && yarn build && yarn make:dmg",
+    "dist:mac": "yarn dist",
+    "dist:mac:arm64": "yarn build && electron-forge make --platform=darwin --arch=arm64",
+    "dist:mac:x64": "yarn build && electron-forge make --platform=darwin --arch=x64"
   },
   "devDependencies": {
     "@electron-forge/cli": "^7.8.3",
@@ -32,6 +38,7 @@
     "@typescript-eslint/eslint-plugin": "^6.0.0",
     "@typescript-eslint/parser": "^6.0.0",
     "autoprefixer": "^10.4.21",
+    "clean-webpack-plugin": "^4.0.0",
     "copy-webpack-plugin": "^13.0.1",
     "css-loader": "^7.1.2",
     "electron": "^37.4.0",

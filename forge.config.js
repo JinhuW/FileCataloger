@@ -1,30 +1,28 @@
-const path = require('path');
-
 module.exports = {
   packagerConfig: {
     asar: true,
-    icon: './assets/icon',
-    appBundleId: 'com.example.dropover-clone',
+    appBundleId: 'com.example.filecataloger',
     appCopyright: 'Copyright © 2024',
-    // Code signing configuration (uncomment when ready for distribution)
-    // osxSign: {
-    //   identity: 'Developer ID Application: Your Name',
-    //   'hardened-runtime': true,
-    //   entitlements: './entitlements.plist',
-    //   'entitlements-inherit': './entitlements.plist',
-    //   'signature-flags': 'library'
-    // },
-    // osxNotarize: {
-    //   appleId: process.env.APPLE_ID,
-    //   appleIdPassword: process.env.APPLE_ID_PASSWORD
-    // }
+    name: 'FileCataloger',
+    executableName: 'FileCataloger',
+    // For local testing without Developer ID certificate
+    osxSign: {
+      identity: '-', // Use ad-hoc signing
+      entitlements: './entitlements.plist',
+      'entitlements-inherit': './entitlements.plist'
+    },
+    // Native modules need to be unpacked
+    asarUnpack: [
+      'dist/native/**/*.node',
+      'node_modules/**/build/Release/*.node'
+    ]
   },
   rebuildConfig: {},
   makers: [
     {
       name: '@electron-forge/maker-squirrel',
       config: {
-        name: 'dropover_clone'
+        name: 'filecataloger'
       }
     },
     {
@@ -38,7 +36,7 @@ module.exports = {
     {
       name: '@electron-forge/maker-dmg',
       config: {
-        name: 'Dropover Clone',
+        name: 'FileCataloger',
         format: 'UDZO'
       }
     }

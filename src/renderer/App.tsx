@@ -94,7 +94,7 @@ const App: React.FC = () => {
           transition={{ duration: 0.6 }}
         >
           <h1 className="text-5xl font-bold text-gray-800 mb-2">
-            🚀 Dropover Clone
+            🚀 FileCataloger
           </h1>
           <p className="text-gray-600 text-lg">
             Advanced temporary file shelf system with gesture controls
@@ -278,7 +278,7 @@ const App: React.FC = () => {
         >
           <h3 className="text-lg font-semibold text-blue-800 mb-3 flex items-center">
             <span className="mr-2">💡</span>
-            How to Use Dropover Clone
+            How to Use FileCataloger
           </h3>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-blue-700">

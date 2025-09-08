@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage } from 'electron';
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, systemPreferences, dialog } from 'electron';
 import * as path from 'path';
 import { ApplicationController } from './modules/application-controller';
 import { preferencesManager } from './modules/preferences-manager';
@@ -14,7 +14,7 @@ if (require('electron-squirrel-startup')) {
   app.quit();
 }
 
-class DropoverApp {
+class FileCatalogerApp {
   private mainWindow: BrowserWindow | null = null;
   private applicationController: ApplicationController;
   private tray: Tray | null = null;
@@ -49,29 +49,33 @@ class DropoverApp {
 
     // Handle app quit
     app.on('before-quit', async (event) => {
-      if (!this.isQuitting) {
-        event.preventDefault();
-        this.isQuitting = true;
-        
-        // Stop all services
-        try {
-          keyboardManager.stop();
-          performanceMonitor.stop();
-          await this.applicationController.destroy();
-          errorHandler.shutdown();
-          
-          // Clean up tray
-          if (this.tray) {
-            this.tray.destroy();
-            this.tray = null;
-          }
-        } catch (error) {
-          console.error('Error during cleanup:', error);
-        }
-        
-        // Force quit after cleanup
-        app.exit(0);
+      // If already quitting, let it proceed
+      if (this.isQuitting) {
+        return;
       }
+      
+      // Prevent quit to do cleanup first
+      event.preventDefault();
+      this.isQuitting = true;
+      
+      // Stop all services
+      try {
+        keyboardManager.stop();
+        performanceMonitor.stop();
+        await this.applicationController.destroy();
+        errorHandler.shutdown();
+        
+        // Clean up tray
+        if (this.tray) {
+          this.tray.destroy();
+          this.tray = null;
+        }
+      } catch (error) {
+        console.error('Error during cleanup:', error);
+      }
+      
+      // Now actually quit
+      app.quit();
     });
 
     // Security: Prevent new window creation
@@ -81,6 +85,43 @@ class DropoverApp {
         return { action: 'deny' };
       });
     });
+  }
+
+  private async checkAccessibilityPermissions(): Promise<boolean> {
+    // Only check on macOS
+    if (process.platform !== 'darwin') {
+      return true;
+    }
+    
+    // Check if we have accessibility permissions
+    const hasPermission = systemPreferences.isTrustedAccessibilityClient(false);
+    
+    if (!hasPermission) {
+      const result = await dialog.showMessageBox({
+        type: 'warning',
+        title: 'Accessibility Permission Required',
+        message: 'FileCataloger needs accessibility permission to detect mouse movements and file dragging.',
+        detail: 'Please grant permission in System Settings > Privacy & Security > Accessibility, then restart the app.',
+        buttons: ['Open System Settings', 'Continue Without Permission', 'Quit'],
+        defaultId: 0,
+        cancelId: 2
+      });
+      
+      if (result.response === 0) {
+        // Request permission (this will open system preferences)
+        systemPreferences.isTrustedAccessibilityClient(true);
+        // The app will need to be restarted after permission is granted
+        return false;
+      } else if (result.response === 2) {
+        // User chose to quit
+        app.quit();
+        return false;
+      }
+      // User chose to continue without permission
+      return false;
+    }
+    
+    return true;
   }
 
   private async onReady(): Promise<void> {
@@ -97,6 +138,12 @@ class DropoverApp {
     
     // Create system tray
     this.createSystemTray();
+    
+    // Check for accessibility permissions on macOS
+    const hasPermissions = await this.checkAccessibilityPermissions();
+    if (!hasPermissions) {
+      this.logger.warn('Starting without accessibility permissions - some features may not work');
+    }
     
     // Initialize and start the core application
     try {
@@ -132,7 +179,7 @@ class DropoverApp {
       console.log('✓ System tray created');
       
       // Set tray tooltip
-      this.tray.setToolTip('Dropover Clone - Drag files to create temporary shelves');
+      this.tray.setToolTip('FileCataloger - Drag files to create temporary shelves');
       
       // Create context menu
       const contextMenu = Menu.buildFromTemplate([
@@ -171,7 +218,7 @@ class DropoverApp {
         },
         { type: 'separator' },
         {
-          label: 'Quit Dropover',
+          label: 'Quit FileCataloger',
           accelerator: 'CommandOrControl+Q',
           click: () => {
             this.isQuitting = true;
@@ -181,16 +228,6 @@ class DropoverApp {
       ]);
       
       this.tray.setContextMenu(contextMenu);
-      
-      // Handle tray click (show context menu)
-      this.tray.on('click', () => {
-        this.tray?.popUpContextMenu();
-      });
-      
-      // Handle tray right-click (also show context menu)
-      this.tray.on('right-click', () => {
-        this.tray?.popUpContextMenu();
-      });
       
     } catch (error) {
       console.error('Failed to create system tray:', error);
@@ -380,7 +417,7 @@ class DropoverApp {
         sandbox: false // Set to false for now to avoid issues
       },
       show: false, // Don't show by default - only when requested
-      title: 'Dropover Clone - Status',
+      title: 'FileCataloger - Status',
       minimizable: true,
       closable: true,
       resizable: true,
@@ -477,6 +514,6 @@ class DropoverApp {
 }
 
 // Initialize the application
-const dropoverApp = new DropoverApp();
+const fileCatalogerApp = new FileCatalogerApp();
 
-export default dropoverApp;
+export default fileCatalogerApp;
