@@ -1,3 +1,33 @@
+/**
+ * @fileoverview Native drag monitoring for macOS
+ *
+ * This module provides system-wide drag operation detection using NSPasteboard.
+ * It monitors when files are being dragged from Finder or other applications.
+ *
+ * Architecture:
+ * - Wraps native C++ addon (drag_monitor_darwin.node)
+ * - Uses NSPasteboard to detect drag operations
+ * - Extracts file paths and metadata from drag data
+ * - Emits events for drag start/end
+ *
+ * Key features:
+ * - Real-time drag detection without accessibility permissions
+ * - File metadata extraction (path, name, type, size)
+ * - Support for multiple file selection
+ * - Automatic cleanup on drag end
+ *
+ * Events:
+ * - 'drag-start': Emitted when drag begins with file data
+ * - 'drag-end': Emitted when drag operation completes
+ * - 'error': Emitted on monitoring failures
+ *
+ * Requirements:
+ * - macOS 10.15+
+ * - Native module built with node-gyp
+ *
+ * @module drag-monitor
+ */
+
 import { EventEmitter } from 'events';
 import * as path from 'path';
 import { createLogger } from '@main/modules/utils/logger';

@@ -1,3 +1,31 @@
+/**
+ * @file ShelfDropZone.tsx
+ * @description Drop zone component displayed when a shelf is empty or when search results are empty.
+ * Provides visual feedback during drag operations and helpful tips for users.
+ *
+ * @props {boolean} isDragOver - Whether files are currently being dragged over the zone
+ * @props {function} onDrop - Callback function when items are dropped (currently unused)
+ * @props {boolean} isEmpty - Whether the shelf is completely empty
+ * @props {boolean} hasSearchQuery - Whether a search query is active with no results
+ *
+ * @features
+ * - Context-aware messaging based on shelf state (empty vs search results)
+ * - Animated icon and text that responds to drag state
+ * - Helpful tip for new users about cursor shake gesture
+ * - Smooth animations with Framer Motion
+ * - Accessibility-friendly design with clear visual hierarchy
+ *
+ * @usage
+ * ```tsx
+ * <ShelfDropZone
+ *   isDragOver={dragState}
+ *   onDrop={handleDrop}
+ *   isEmpty={items.length === 0}
+ *   hasSearchQuery={!!searchTerm}
+ * />
+ * ```
+ */
+
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ShelfItem } from '@shared/types';

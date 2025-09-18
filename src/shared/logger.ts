@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// @typescript-eslint/no-explicit-any
 /**
  * Shared logger interfaces and types for both main and renderer processes
  */

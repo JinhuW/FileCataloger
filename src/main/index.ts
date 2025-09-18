@@ -11,7 +11,7 @@ import {
 import * as path from 'path';
 import { ApplicationController } from './modules/core/application-controller';
 import { preferencesManager } from './modules/config/preferences-manager';
-import { keyboardManager } from './modules/input/keyboard-manager';
+import { keyboardManager } from './modules/input';
 import { performanceMonitor } from './modules/utils/performance-monitor';
 import { errorHandler, ErrorSeverity, ErrorCategory } from './modules/utils/error-handler';
 import { Logger, LogLevel } from './modules/utils/logger';

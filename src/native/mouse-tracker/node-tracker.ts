@@ -1,3 +1,30 @@
+/**
+ * @fileoverview Pure Node.js fallback mouse tracker
+ *
+ * This module provides a fallback implementation for mouse tracking when native
+ * modules are unavailable. It uses Electron's screen API for basic position tracking.
+ *
+ * ⚠️ LIMITATIONS:
+ * - Cannot detect mouse button states
+ * - Limited to 60fps polling rate
+ * - Only works when app has focus
+ * - Higher CPU usage than native implementation
+ *
+ * Features:
+ * - Basic position tracking via screen.getCursorScreenPoint()
+ * - Simulated movement for development/testing
+ * - Polling-based updates (16ms intervals)
+ *
+ * This tracker is NOT used in production - the app requires native modules
+ * for proper functionality. It exists primarily for:
+ * - Development when native modules aren't built
+ * - Testing tracker interfaces
+ * - Platform compatibility checks
+ *
+ * @deprecated Use platform-specific native trackers for production
+ * @module node-tracker
+ */
+
 import { BaseMouseTracker } from './base-tracker';
 import { screen } from 'electron';
 import { createLogger } from '@main/modules/utils/logger';

@@ -1,4 +1,31 @@
-// Type definitions for the window.api exposed by preload script
+/**
+ * @file window.d.ts
+ * @description TypeScript type definitions for the window.api interface.
+ * This file defines the API exposed by the preload script to the renderer process,
+ * providing type safety for IPC communication between renderer and main processes.
+ *
+ * @api-methods
+ * - send: Send one-way messages to main process
+ * - on: Listen for events from main process
+ * - removeAllListeners: Clean up event listeners
+ * - invoke: Send request and await response from main process
+ * - getShelfId: Get the current shelf window ID
+ * - showItemInFolder: Reveal file in system file explorer
+ * - openPath: Open file with default system application
+ * - getFilePath: Convert file path for platform compatibility
+ *
+ * @usage
+ * ```typescript
+ * // Send message
+ * window.api.send('shelf:close', shelfId);
+ *
+ * // Invoke with response
+ * const status = await window.api.invoke('app:get-status');
+ *
+ * // Listen for events
+ * window.api.on('shelf:config', (config) => { ... });
+ * ```
+ */
 
 import { ElectronAPI } from '@electron-toolkit/preload';
 

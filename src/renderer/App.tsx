@@ -1,3 +1,22 @@
+/**
+ * @file App.tsx
+ * @description Main dashboard component for FileCataloger.
+ * Displays real-time system status, analytics, and controls for the application.
+ * This component runs in the main application window (not shelf windows).
+ *
+ * @features
+ * - Real-time status monitoring of core modules
+ * - Live analytics dashboard with performance metrics
+ * - System information display
+ * - Manual shelf creation controls
+ * - Animated UI with Framer Motion
+ *
+ * @ipc-communication
+ * - app:get-status - Fetches current application status
+ * - app:status - Listens for status updates
+ * - app:create-shelf - Creates a new shelf manually
+ */
+
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { logger } from '@shared/logger';

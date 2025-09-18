@@ -1,19 +1,42 @@
+/**
+ * @file ShelfItemList.tsx
+ * @description Container component for managing and displaying lists of shelf items with performance
+ * optimizations. Automatically switches between regular and virtualized rendering based on item count.
+ *
+ * @props {ShelfItem[]} items - Array of shelf items to display
+ * @props {boolean} isCompact - Whether to render items in compact mode
+ * @props {function} onItemAction - Callback for item actions (open, copy, remove)
+ *
+ * @features
+ * - Automatic virtualization for large lists (>50 items) for optimal performance
+ * - Dynamic height calculation based on item count and display mode
+ * - Staggered animations for item entrance/exit
+ * - Compact and normal display mode support
+ * - Scrollbar visibility indicators
+ * - Item count display when scrolling is needed
+ * - Memory-efficient rendering with proper cleanup
+ *
+ * @usage
+ * ```tsx
+ * <ShelfItemList
+ *   items={shelfItems}
+ *   isCompact={itemCount > threshold}
+ *   onItemAction={handleItemAction}
+ * />
+ * ```
+ */
+
 import React, { useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShelfItem } from '@shared/types';
-import { ShelfItemComponent } from './ShelfItemComponent';
-import { VirtualizedList } from './VirtualizedList';
+import { ShelfItemComponent } from '../ShelfItemComponent';
+import { VirtualizedList } from '../VirtualizedList';
 
 export interface ShelfItemListProps {
   items: ShelfItem[];
   isCompact: boolean;
   onItemAction: (action: string, item: ShelfItem) => void;
 }
-
-/**
- * Virtualized list component for shelf items
- * Optimizes rendering for large numbers of items
- */
 export const ShelfItemList = React.memo<ShelfItemListProps>(
   ({ items, isCompact, onItemAction }) => {
     // Calculate item height based on display mode

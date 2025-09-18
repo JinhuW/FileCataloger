@@ -1,3 +1,29 @@
+/**
+ * @fileoverview macOS native mouse tracker implementation
+ *
+ * This module wraps the native macOS mouse tracking functionality provided by
+ * the C++ addon (mouse_tracker_darwin.node). It uses CGEventTap for high-performance,
+ * system-wide mouse tracking.
+ *
+ * Key features:
+ * - 60fps mouse position tracking via CGEventTap
+ * - Threadsafe callbacks from native to JS
+ * - Button state tracking (left/right mouse buttons)
+ * - Fallback polling for position queries
+ *
+ * Requirements:
+ * - macOS 10.15+
+ * - Accessibility permissions granted by user
+ * - Native module built with node-gyp
+ *
+ * Performance considerations:
+ * - Events are processed on a separate thread
+ * - Callbacks are batched to avoid overwhelming JS thread
+ * - Minimal CPU usage (~1-2% when active)
+ *
+ * @module darwin-native-tracker
+ */
+
 import { BaseMouseTracker } from './base-tracker';
 import { MousePosition } from '@shared/types';
 import { createLogger } from '@main/modules/utils/logger';

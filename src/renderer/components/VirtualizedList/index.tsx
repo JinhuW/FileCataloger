@@ -1,3 +1,34 @@
+/**
+ * @file VirtualizedList.tsx
+ * @description High-performance virtualized list component that only renders visible items
+ * to optimize memory usage and rendering performance for large datasets.
+ *
+ * @props {ShelfItem[]} items - Array of items to virtualize
+ * @props {number} itemHeight - Fixed height of each item in pixels
+ * @props {number} containerHeight - Height of the scrollable container
+ * @props {function} renderItem - Function to render each item (item, index) => ReactNode
+ * @props {number} overscan - Number of items to render outside visible area (default: 3)
+ *
+ * @features
+ * - Window-based virtualization for optimal performance
+ * - Configurable overscan buffer to prevent visual gaps during scrolling
+ * - Automatic visible range calculation based on scroll position
+ * - Memory-efficient rendering (only visible + buffer items in DOM)
+ * - Smooth scrolling with proper height calculation
+ * - Optimized for fixed-height items
+ *
+ * @usage
+ * ```tsx
+ * <VirtualizedList
+ *   items={largeItemArray}
+ *   itemHeight={60}
+ *   containerHeight={400}
+ *   renderItem={(item, index) => <ItemComponent key={item.id} item={item} />}
+ *   overscan={5}
+ * />
+ * ```
+ */
+
 import React, { useState, useMemo, useCallback } from 'react';
 import { ShelfItem } from '@shared/types';
 
@@ -8,11 +39,6 @@ export interface VirtualizedListProps {
   renderItem: (item: ShelfItem, index: number) => React.ReactNode;
   overscan?: number;
 }
-
-/**
- * Virtualized list component for performance optimization
- * Only renders visible items plus overscan buffer
- */
 export const VirtualizedList = React.memo<VirtualizedListProps>(
   ({ items, itemHeight, containerHeight, renderItem, overscan = 3 }) => {
     const [scrollTop, setScrollTop] = useState(0);

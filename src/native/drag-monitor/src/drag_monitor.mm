@@ -1,3 +1,37 @@
+/**
+ * @file drag_monitor.mm
+ * @brief macOS drag operation monitor using NSPasteboard
+ *
+ * This module monitors system-wide drag operations by polling the NSPasteboard
+ * for changes. It detects when files are being dragged from Finder or other
+ * applications and extracts file metadata.
+ *
+ * Implementation details:
+ * - Polls NSPasteboard.generalPasteboard for drag data
+ * - Detects NSFilenamesPboardType for file drag operations
+ * - Runs on separate thread to avoid blocking main thread
+ * - Uses N-API ThreadSafeFunction for async callbacks
+ *
+ * Key features:
+ * - No accessibility permissions required
+ * - Supports multiple file selection
+ * - Extracts file paths, names, and metadata
+ * - 100ms polling interval for responsiveness
+ *
+ * Limitations:
+ * - Cannot detect drag source application
+ * - Limited to file drag operations only
+ * - Polling-based detection (not event-driven)
+ *
+ * Thread model:
+ * - Monitor thread polls pasteboard
+ * - ThreadSafeFunction calls JS on main thread
+ * - Proper cleanup on destruction
+ *
+ * @author FileCataloger Team
+ * @date 2025
+ */
+
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <CoreGraphics/CoreGraphics.h>

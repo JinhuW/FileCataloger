@@ -1,3 +1,32 @@
+/**
+ * @file ShelfItemComponent.tsx
+ * @description Individual shelf item component with rich interaction features including hover states,
+ * context menus, and quick actions. Supports both compact and normal display modes.
+ *
+ * @props {ShelfItem} item - The shelf item data to display
+ * @props {boolean} isCompact - Whether to render in compact mode (smaller size)
+ * @props {function} onAction - Callback for item actions (open, copy, remove)
+ *
+ * @features
+ * - Context-aware file type icons based on file extension
+ * - Hover states with quick action buttons (copy, remove)
+ * - Right-click context menu with full action list
+ * - Compact and normal display modes with different layouts
+ * - File size formatting (B, KB, MB, GB)
+ * - Relative time formatting (just now, 5m ago, 2h ago, etc.)
+ * - Smooth animations and transitions
+ * - Optimized re-rendering with custom comparison function
+ *
+ * @usage
+ * ```tsx
+ * <ShelfItemComponent
+ *   item={shelfItem}
+ *   isCompact={items.length > threshold}
+ *   onAction={handleItemAction}
+ * />
+ * ```
+ */
+
 import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShelfItem } from '@shared/types';

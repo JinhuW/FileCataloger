@@ -1,3 +1,24 @@
+/**
+ * @fileoverview Preload script for FileCataloger Electron application
+ *
+ * This script acts as a secure bridge between the main process and renderer process,
+ * exposing a limited API via contextBridge to maintain security through context isolation.
+ *
+ * Key responsibilities:
+ * - Expose safe IPC communication methods (send, on, invoke, removeAllListeners)
+ * - Validate all IPC channels against a whitelist to prevent unauthorized access
+ * - Provide logging capabilities back to the main process
+ * - Maintain compatibility by exposing both window.api and window.electronAPI
+ *
+ * Security notes:
+ * - Only whitelisted channels in validChannels array can be used
+ * - No direct Node.js API access is exposed to the renderer
+ * - All errors are logged to the main process for debugging
+ *
+ * @see src/renderer/window.d.ts for TypeScript type definitions
+ * @see src/shared/ipc-schema.ts for IPC message schemas
+ */
+
 import { contextBridge, ipcRenderer } from 'electron';
 
 // Helper function to log messages via IPC

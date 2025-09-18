@@ -1,3 +1,29 @@
+/**
+ * @fileoverview Abstract base class for mouse tracker implementations
+ *
+ * This module provides the foundation for all mouse tracking implementations,
+ * handling common functionality like event emission, performance monitoring,
+ * and state management.
+ *
+ * Architecture:
+ * - Extends EventEmitter for position/error events
+ * - Tracks performance metrics (event frequency, memory usage)
+ * - Maintains last known mouse position
+ * - Provides common lifecycle methods (start/stop)
+ *
+ * Implementations must override:
+ * - start(): Begin tracking mouse movements
+ * - stop(): Stop tracking and cleanup resources
+ * - initializeTracking(): Setup platform-specific tracking
+ * - cleanupTracking(): Teardown platform-specific resources
+ *
+ * Events emitted:
+ * - 'position': MousePosition data with x, y, timestamp, and button states
+ * - 'error': Error objects from tracking failures
+ *
+ * @module base-tracker
+ */
+
 import { EventEmitter } from 'events';
 import { MouseTracker, MousePosition, PerformanceMetrics } from '@shared/types';
 import { createLogger } from '@main/modules/utils/logger';

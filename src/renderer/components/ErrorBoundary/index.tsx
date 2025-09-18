@@ -1,3 +1,26 @@
+/**
+ * @file ErrorBoundary.tsx
+ * @description React error boundary component that catches and gracefully handles JavaScript errors
+ * in component trees, providing a fallback UI and logging capabilities.
+ *
+ * @props {React.ReactNode} children - The component tree to wrap and protect
+ * @props {React.ComponentType} fallback - Optional custom fallback component to render on error
+ *
+ * @features
+ * - Catches JavaScript errors anywhere in the child component tree
+ * - Logs error details using the shared logger module
+ * - Provides retry functionality to attempt recovery
+ * - Shows development-friendly error details in dev mode
+ * - Customizable fallback UI through props
+ *
+ * @usage
+ * ```tsx
+ * <ErrorBoundary fallback={CustomErrorComponent}>
+ *   <MyComponent />
+ * </ErrorBoundary>
+ * ```
+ */
+
 import React, { Component, ErrorInfo } from 'react';
 import { logger } from '@shared/logger';
 
@@ -11,10 +34,6 @@ interface ErrorBoundaryProps {
   children: React.ReactNode;
   fallback?: React.ComponentType<{ error: Error; retry: () => void }>;
 }
-
-/**
- * Error boundary component to catch and handle React errors
- */
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);

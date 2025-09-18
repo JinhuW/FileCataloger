@@ -1,3 +1,22 @@
+# binding.gyp - Build configuration for macOS mouse tracker native module
+#
+# This file configures the compilation of the C++ mouse tracking module for macOS.
+# It uses node-gyp to build a native Node.js addon that interfaces with CGEventTap.
+#
+# Build command: node-gyp rebuild
+# Output: build/Release/mouse_tracker_darwin.node
+#
+# Requirements:
+# - Xcode Command Line Tools
+# - Python 3.x
+# - node-gyp installed globally
+#
+# Frameworks used:
+# - CoreGraphics: CGEventTap API for mouse tracking
+# - ApplicationServices: System-level event access
+# - Foundation: Objective-C runtime support
+# - Carbon: Additional event handling utilities
+
 {
   "targets": [
     {

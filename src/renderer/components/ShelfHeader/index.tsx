@@ -1,3 +1,34 @@
+/**
+ * @file ShelfHeader.tsx
+ * @description Header component for shelf windows providing title, item count, and control actions.
+ * Features a draggable area for window movement and animated status indicators.
+ *
+ * @props {ShelfConfig} config - Current shelf configuration including pin state
+ * @props {number} itemCount - Number of items currently in the shelf
+ * @props {function} onTogglePin - Callback to toggle shelf pin state
+ * @props {function} onClose - Callback to close the shelf
+ * @props {string} title - Optional custom title (defaults to "Shelf")
+ *
+ * @features
+ * - Draggable header area for window movement (WebkitAppRegion: 'drag')
+ * - Animated pin status indicator with pulsing effect when pinned
+ * - Real-time item count display with styled badge
+ * - Hover animations for interactive buttons
+ * - Pin and close actions with tooltips
+ * - Responsive layout with flex spacing
+ *
+ * @usage
+ * ```tsx
+ * <ShelfHeader
+ *   config={shelfConfig}
+ *   itemCount={items.length}
+ *   onTogglePin={handleTogglePin}
+ *   onClose={handleClose}
+ *   title="Custom Shelf"
+ * />
+ * ```
+ */
+
 import React from 'react';
 import { motion } from 'framer-motion';
 import { ShelfConfig } from '@shared/types';

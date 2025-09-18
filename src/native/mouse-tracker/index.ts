@@ -1,3 +1,24 @@
+/**
+ * @fileoverview Platform-agnostic mouse tracker factory
+ *
+ * This module provides a factory function to create the appropriate mouse tracker
+ * for the current operating system. Currently only macOS is supported via CGEventTap.
+ *
+ * Architecture:
+ * - Factory pattern for platform abstraction
+ * - Returns native tracker for macOS (DarwinNativeTracker)
+ * - Throws errors for unsupported platforms (Windows/Linux)
+ *
+ * Usage:
+ * ```typescript
+ * const tracker = createMouseTracker();
+ * tracker.start();
+ * tracker.onMouseMove((position) => console.log(position));
+ * ```
+ *
+ * @module mouse-tracker
+ */
+
 import { MouseTracker } from '@shared/types';
 // import { NodeMouseTracker } from './node-tracker'; // Not used currently
 import { DarwinNativeTracker } from './darwin-native-tracker';

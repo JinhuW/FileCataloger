@@ -1,3 +1,23 @@
+/**
+ * @file shelf.tsx
+ * @description Entry point for floating shelf windows in FileCataloger.
+ * This file bootstraps shelf windows that appear when users shake their mouse
+ * while dragging. It handles two modes: default shelf for file storage and
+ * rename shelf for batch file renaming.
+ *
+ * @features
+ * - Dual mode support (default shelf / rename shelf)
+ * - Real-time IPC communication with main process
+ * - State synchronization between renderer and main
+ * - Automatic mode switching based on config
+ *
+ * @ipc-channels
+ * - shelf:config - Receives complete shelf configuration
+ * - shelf:add-item - Adds item to shelf
+ * - shelf:remove-item - Removes item from shelf
+ * - shelf:close - Closes the shelf window
+ */
+
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { Shelf } from './components/Shelf';

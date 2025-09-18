@@ -1,3 +1,21 @@
+# binding.gyp - Build configuration for macOS drag monitor native module
+#
+# This file configures the compilation of the drag monitoring module for macOS.
+# It builds a native addon that monitors NSPasteboard for file drag operations.
+#
+# Build command: node-gyp rebuild
+# Output: build/Release/drag_monitor_darwin.node
+#
+# Requirements:
+# - Xcode Command Line Tools
+# - Python 3.x
+# - node-gyp installed globally
+#
+# Frameworks used:
+# - Foundation: NSPasteboard and file operations
+# - AppKit: macOS UI framework for drag operations
+# - CoreGraphics: Additional graphics support
+
 {
   "targets": [
     {

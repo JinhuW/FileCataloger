@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { createMouseTracker } from '@native/mouse-tracker';
-import { DragShakeDetector } from '../input/drag-shake-detector-v2';
+import { DragShakeDetector } from '../input';
 import { ShelfManager } from '../window/shelf-manager';
 import { errorHandler, ErrorSeverity, ErrorCategory } from '../utils/error-handler';
 import { PreferencesManager } from '../config/preferences-manager';

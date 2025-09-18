@@ -1,3 +1,29 @@
+/**
+ * @file Tooltip.tsx
+ * @description Accessible tooltip component with hover delay and positioning logic.
+ * Provides contextual information with smooth animations and automatic positioning.
+ *
+ * @props {React.ReactNode} children - The element to wrap with tooltip functionality
+ * @props {string} content - The text content to display in the tooltip
+ * @props {number} delay - Delay in milliseconds before showing tooltip (default: 500ms)
+ *
+ * @features
+ * - Hover delay to prevent tooltip spam
+ * - Automatic positioning based on target element
+ * - Smooth fade animations with Framer Motion
+ * - Text overflow handling with ellipsis
+ * - High z-index for proper layering
+ * - Backdrop blur effect for modern appearance
+ * - Pointer events disabled on tooltip for better UX
+ *
+ * @usage
+ * ```tsx
+ * <Tooltip content="This is helpful information" delay={300}>
+ *   <button>Hover me</button>
+ * </Tooltip>
+ * ```
+ */
+
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 

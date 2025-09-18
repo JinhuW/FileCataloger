@@ -1,10 +1,42 @@
+/**
+ * @file Shelf.tsx
+ * @description Main shelf component that provides a floating, draggable window for temporary file storage.
+ * Features dynamic height adjustment, drag-and-drop support, and multiple display modes.
+ *
+ * @props {ShelfConfig} config - Complete shelf configuration including items, visibility, and settings
+ * @props {function} onConfigChange - Callback for updating shelf configuration
+ * @props {function} onItemAdd - Callback when new items are added to the shelf
+ * @props {function} onItemRemove - Callback when items are removed from the shelf
+ * @props {function} onClose - Callback when shelf is closed
+ *
+ * @key-features
+ * - Dynamic height adjustment based on item count
+ * - Compact mode for large item collections (>COMPACT_MODE_THRESHOLD)
+ * - Drag-and-drop support for files, text, and URLs
+ * - Animated transitions and hover effects
+ * - IPC communication with main process for file operations
+ * - Real-time drag state management and visual feedback
+ * - Auto-scrolling content area with sticky header
+ *
+ * @usage
+ * ```tsx
+ * <Shelf
+ *   config={shelfConfig}
+ *   onConfigChange={handleConfigChange}
+ *   onItemAdd={handleItemAdd}
+ *   onItemRemove={handleItemRemove}
+ *   onClose={handleClose}
+ * />
+ * ```
+ */
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShelfConfig, ShelfItem } from '../../shared/types';
-import { ShelfHeader } from './ShelfHeader';
-import { ShelfItemList } from './ShelfItemList';
-import { ShelfDropZone } from './ShelfDropZone';
-import { ErrorBoundary } from './ErrorBoundary';
+import { ShelfHeader } from '../ShelfHeader';
+import { ShelfItemList } from '../ShelfItemList';
+import { ShelfDropZone } from '../ShelfDropZone';
+import { ErrorBoundary } from '../ErrorBoundary';
 import { SHELF_CONSTANTS, ANIMATION_CONSTANTS } from '../../shared/constants';
 import { logger } from '@shared/logger';
 
@@ -15,10 +47,6 @@ export interface ShelfProps {
   onItemRemove: (itemId: string) => void;
   onClose: () => void;
 }
-
-/**
- * Main shelf component with compound component pattern
- */
 export const Shelf = React.memo<ShelfProps>(
   ({ config, onConfigChange, onItemAdd, onItemRemove, onClose }) => {
     const [isDragOver, setIsDragOver] = useState(false);
