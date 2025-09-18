@@ -20,6 +20,7 @@ class FileCatalogerApp {
   private tray: Tray | null = null;
   private isQuitting: boolean = false;
   private logger: Logger;
+  private statusUpdateInterval: NodeJS.Timeout | null = null;
 
   constructor() {
     // Initialize logger first
@@ -53,34 +54,39 @@ class FileCatalogerApp {
       if (this.isQuitting) {
         return;
       }
-      
+
       // Prevent quit to do cleanup first
       event.preventDefault();
       this.isQuitting = true;
-      
-      // Stop all services
+
+      // Perform graceful cleanup with timeout
       try {
-        keyboardManager.stop();
-        performanceMonitor.stop();
-        await this.applicationController.destroy();
-        errorHandler.shutdown();
-        
-        // Clean up tray
-        if (this.tray) {
-          this.tray.destroy();
-          this.tray = null;
-        }
+        await this.performGracefulShutdown();
       } catch (error) {
-        console.error('Error during cleanup:', error);
+        console.error('Error during graceful shutdown:', error);
       }
-      
-      // Now actually quit
-      app.quit();
+
+      // Force quit after cleanup or timeout
+      setImmediate(() => {
+        app.exit(0);
+      });
+    });
+
+    // Ensure cleanup happens even if before-quit is skipped
+    app.on('will-quit', (event) => {
+      if (!this.isQuitting) {
+        event.preventDefault();
+        this.isQuitting = true;
+
+        // Force immediate exit if cleanup hasn't run
+        this.logger.warn('will-quit called without before-quit - forcing exit');
+        app.exit(0);
+      }
     });
 
     // Security: Prevent new window creation
     app.on('web-contents-created', (event, contents) => {
-      contents.setWindowOpenHandler(({ url }) => {
+      contents.setWindowOpenHandler(({ url: _url }) => {
         // Prevent opening new windows
         return { action: 'deny' };
       });
@@ -92,10 +98,10 @@ class FileCatalogerApp {
     if (process.platform !== 'darwin') {
       return true;
     }
-    
+
     // Check if we have accessibility permissions
     const hasPermission = systemPreferences.isTrustedAccessibilityClient(false);
-    
+
     if (!hasPermission) {
       const result = await dialog.showMessageBox({
         type: 'warning',
@@ -106,7 +112,7 @@ class FileCatalogerApp {
         defaultId: 0,
         cancelId: 2
       });
-      
+
       if (result.response === 0) {
         // Request permission (this will open system preferences)
         systemPreferences.isTrustedAccessibilityClient(true);
@@ -120,7 +126,7 @@ class FileCatalogerApp {
       // User chose to continue without permission
       return false;
     }
-    
+
     return true;
   }
 
@@ -132,28 +138,28 @@ class FileCatalogerApp {
         app.dock.hide();
       }
     }
-    
+
     // Initialize security configuration
     securityConfig.initialize();
-    
+
     // Create system tray
     this.createSystemTray();
-    
+
     // Check for accessibility permissions on macOS
     const hasPermissions = await this.checkAccessibilityPermissions();
     if (!hasPermissions) {
       this.logger.warn('Starting without accessibility permissions - some features may not work');
     }
-    
+
     // Initialize and start the core application
     try {
       await this.applicationController.start();
       // Start keyboard manager
       keyboardManager.start();
-      
+
       // Start performance monitoring (reduced frequency for better performance)
       performanceMonitor.start(30000); // Check every 30s instead of 5s
-      
+
       // Setup handlers
       this.setupKeyboardHandlers();
       this.setupPerformanceHandlers();
@@ -164,7 +170,7 @@ class FileCatalogerApp {
         category: ErrorCategory.SYSTEM
       });
     }
-    
+
     // Set up IPC handlers
     this.setupIpcHandlers();
   }
@@ -175,12 +181,12 @@ class FileCatalogerApp {
       // Create tray icon
       const trayIcon = this.createTrayIcon();
       this.tray = new Tray(trayIcon);
-      
+
       console.log('✓ System tray created');
-      
+
       // Set tray tooltip
       this.tray.setToolTip('FileCataloger - Drag files to create temporary shelves');
-      
+
       // Create context menu
       const contextMenu = Menu.buildFromTemplate([
         {
@@ -220,15 +226,25 @@ class FileCatalogerApp {
         {
           label: 'Quit FileCataloger',
           accelerator: 'CommandOrControl+Q',
-          click: () => {
+          click: async () => {
             this.isQuitting = true;
-            app.quit();
+            this.logger.info('🛑 Quit requested from tray menu');
+
+            // Perform graceful shutdown with timeout
+            try {
+              await this.performGracefulShutdown();
+            } catch (error) {
+              this.logger.error('Error during shutdown:', error);
+            }
+
+            // Force exit after cleanup
+            app.exit(0);
           }
         }
       ]);
-      
+
       this.tray.setContextMenu(contextMenu);
-      
+
     } catch (error) {
       console.error('Failed to create system tray:', error);
     }
@@ -237,60 +253,60 @@ class FileCatalogerApp {
   private createTrayIcon(): Electron.NativeImage {
     try {
       // Try multiple approaches to create a tray icon
-      
+
       // Approach 1: Use a simple geometric pattern
       const size = 16;
       const canvas = Buffer.alloc(size * size * 4, 0);
-      
+
       // Create a simple diamond/box pattern
       for (let y = 0; y < size; y++) {
         for (let x = 0; x < size; x++) {
           const index = (y * size + x) * 4;
-          
+
           // Create a diamond pattern in the center
           const centerX = size / 2;
           const centerY = size / 2;
           const distance = Math.abs(x - centerX) + Math.abs(y - centerY);
-          
+
           if (distance >= 3 && distance <= 5) {
             canvas[index] = 0;       // R
-            canvas[index + 1] = 0;   // G  
+            canvas[index + 1] = 0;   // G
             canvas[index + 2] = 0;   // B
             canvas[index + 3] = 200; // A
           }
         }
       }
-      
+
       const image = nativeImage.createFromBuffer(canvas, { width: size, height: size });
       image.setTemplateImage(true);
-      
+
       console.log('✓ Tray icon created successfully');
       return image;
-      
+
     } catch (error) {
       console.error('Failed to create custom tray icon:', error);
-      
+
       try {
         // Fallback: Try to create from a simple base64 PNG
         const simpleIcon = 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAFWSURBVDiNpZM9SwNBEIafgwQSCxsLwcJCG1sLG0uxsLGwsLGwsLBQsLGwsLGwsLGwsLGwsLBQsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLBQsLGwsLGwsLBQ';
         const buffer = Buffer.from(simpleIcon, 'base64');
         const fallbackImage = nativeImage.createFromBuffer(buffer);
         fallbackImage.setTemplateImage(true);
-        
+
         console.log('✓ Using fallback tray icon');
         return fallbackImage;
-        
+
       } catch (fallbackError) {
         console.error('Failed to create fallback tray icon:', fallbackError);
-        
+
         // Last resort: create a minimal 16x16 black dot
         const dotSize = 16;
         const dotCanvas = Buffer.alloc(dotSize * dotSize * 4, 0);
-        
+
         // Draw a simple dot in the center
         const centerX = Math.floor(dotSize / 2);
         const centerY = Math.floor(dotSize / 2);
-        
+
         for (let y = centerY - 2; y <= centerY + 2; y++) {
           for (let x = centerX - 2; x <= centerX + 2; x++) {
             if (x >= 0 && x < dotSize && y >= 0 && y < dotSize) {
@@ -302,10 +318,10 @@ class FileCatalogerApp {
             }
           }
         }
-        
+
         const dotImage = nativeImage.createFromBuffer(dotCanvas, { width: dotSize, height: dotSize });
         dotImage.setTemplateImage(true);
-        
+
         console.log('✓ Using minimal dot tray icon');
         return dotImage;
       }
@@ -316,14 +332,14 @@ class FileCatalogerApp {
     if (!this.mainWindow) {
       this.createMainWindow();
     }
-    
+
     if (this.mainWindow) {
       if (this.mainWindow.isMinimized()) {
         this.mainWindow.restore();
       }
       this.mainWindow.show();
       this.mainWindow.focus();
-      
+
       // Send status to renderer
       this.mainWindow.webContents.send('app:status', this.applicationController.getStatus());
     }
@@ -370,7 +386,7 @@ class FileCatalogerApp {
     });
 
     // Debug handler for renderer messages
-    ipcMain.on('shelf:debug', (event, data) => {
+    ipcMain.on('shelf:debug', (_event, _data) => {
       // Debug logging removed for production
     });
 
@@ -381,7 +397,7 @@ class FileCatalogerApp {
         const contextLogger = this.logger.createContextLogger(
           logEntry.context ? `renderer:${logEntry.context}` : 'renderer'
         );
-        
+
         // Log with appropriate level
         switch (logEntry.level) {
           case LogLevel.DEBUG:
@@ -410,6 +426,10 @@ class FileCatalogerApp {
     this.mainWindow = new BrowserWindow({
       height: 600,
       width: 900,
+      minHeight: 600,
+      minWidth: 900,
+      maxHeight: 600,
+      maxWidth: 900,
       webPreferences: {
         preload: path.join(__dirname, '../preload/index.js'),
         contextIsolation: true,
@@ -420,14 +440,15 @@ class FileCatalogerApp {
       title: 'FileCataloger - Status',
       minimizable: true,
       closable: true,
-      resizable: true,
-      skipTaskbar: false
+      resizable: false, // Fixed size window
+      skipTaskbar: false,
+      backgroundColor: '#ffffff' // Set white background
     });
 
     // Load the index.html of the app from the built renderer
     const rendererPath = path.join(__dirname, '../renderer/index.html');
     this.mainWindow.loadFile(rendererPath);
-    
+
     // Open DevTools in development for debugging
     if (!app.isPackaged) {
       this.mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -459,7 +480,7 @@ class FileCatalogerApp {
     }
 
     // Set up periodic status updates
-    setInterval(() => {
+    this.statusUpdateInterval = setInterval(() => {
       if (this.mainWindow && !this.mainWindow.isDestroyed()) {
         this.mainWindow.webContents.send('app:status', this.applicationController.getStatus());
       }
@@ -473,29 +494,29 @@ class FileCatalogerApp {
   public getApplicationController(): ApplicationController {
     return this.applicationController;
   }
-  
+
   private setupKeyboardHandlers(): void {
     keyboardManager.on('toggle-shelf', () => {
       // Toggle functionality to be implemented in ApplicationController
     });
-    
+
     keyboardManager.on('clear-shelf', () => {
       // Clear shelf functionality
     });
-    
+
     keyboardManager.on('hide-all-shelves', () => {
       // Hide all shelves functionality
     });
-    
+
     keyboardManager.on('new-shelf', async () => {
       await this.applicationController.createShelf({});
     });
   }
-  
+
   private setupPerformanceHandlers(): void {
     performanceMonitor.on('performance-warning', (warning) => {
       console.warn('Performance warning:', warning);
-      
+
       // Log to error handler
       errorHandler.handleError(
         `Performance warning: ${warning.type}`,
@@ -506,10 +527,86 @@ class FileCatalogerApp {
         }
       );
     });
-    
-    performanceMonitor.on('performance-warning-cleared', (data) => {
+
+    performanceMonitor.on('performance-warning-cleared', (_data) => {
       // Performance warning cleared
     });
+  }
+
+  /**
+   * Perform graceful shutdown with timeout
+   */
+  private async performGracefulShutdown(): Promise<void> {
+    this.logger.info('🔄 Starting graceful shutdown...');
+
+    // Create a timeout promise
+    const timeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Shutdown timeout')), 5000); // 5 second timeout
+    });
+
+    // Create cleanup promise
+    const cleanup = async () => {
+      try {
+        // Stop all intervals and timers first
+        if (this.statusUpdateInterval) {
+          clearInterval(this.statusUpdateInterval);
+          this.statusUpdateInterval = null;
+        }
+
+        // Stop keyboard manager
+        this.logger.info('Stopping keyboard manager...');
+        keyboardManager.stop();
+
+        // Stop performance monitor (stops intervals)
+        this.logger.info('Stopping performance monitor...');
+        performanceMonitor.stop();
+        performanceMonitor.destroy();
+
+        // Destroy application controller (cleans up timers and native module)
+        this.logger.info('Destroying application controller...');
+        await this.applicationController.destroy();
+
+        // Shutdown error handler
+        this.logger.info('Shutting down error handler...');
+        errorHandler.shutdown();
+
+        // Clean up tray
+        if (this.tray) {
+          this.logger.info('Destroying tray...');
+          this.tray.destroy();
+          this.tray = null;
+        }
+
+        // Close all windows
+        if (this.mainWindow && !this.mainWindow.isDestroyed()) {
+          this.logger.info('Closing main window...');
+          this.mainWindow.destroy();
+          this.mainWindow = null;
+        }
+
+        // Close any other windows
+        const windows = BrowserWindow.getAllWindows();
+        this.logger.info(`Closing ${windows.length} remaining windows...`);
+        windows.forEach(window => {
+          if (!window.isDestroyed()) {
+            window.destroy();
+          }
+        });
+
+        this.logger.info('✅ Graceful shutdown complete');
+      } catch (error) {
+        this.logger.error('Error during cleanup:', error);
+        throw error;
+      }
+    };
+
+    // Race between cleanup and timeout
+    try {
+      await Promise.race([cleanup(), timeout]);
+    } catch (error) {
+      this.logger.error('Shutdown error or timeout:', error);
+      // Continue with force quit
+    }
   }
 }
 

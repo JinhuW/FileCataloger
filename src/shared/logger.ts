@@ -154,20 +154,20 @@ export class RendererLogger implements ILogger {
   private logToConsole(entry: LogEntry): void {
     const styles = {
       [LogLevel.DEBUG]: 'color: #00BCD4',   // Cyan
-      [LogLevel.INFO]: 'color: #4CAF50',    // Green  
+      [LogLevel.INFO]: 'color: #4CAF50',    // Green
       [LogLevel.WARN]: 'color: #FF9800',    // Orange
       [LogLevel.ERROR]: 'color: #F44336',   // Red
       timestamp: 'color: #9E9E9E',          // Gray
       context: 'color: #9C27B0'             // Purple
     };
 
-    let parts = [`%c[${entry.timestamp}]`, styles.timestamp];
+    const parts = [`%c[${entry.timestamp}]`, styles.timestamp];
     parts.push(`%c[${entry.levelName}]`, styles[entry.level]);
-    
+
     if (entry.context) {
       parts.push(`%c[${entry.context}]`, styles.context);
     }
-    
+
     parts.push(`%c${entry.message}`, 'color: inherit');
 
     // Choose appropriate console method

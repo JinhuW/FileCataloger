@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { Shelf } from './components/Shelf';
+import { FileRenameShelf } from './components/FileRenameShelf';
 import { ShelfConfig, ShelfItem } from '@shared/types';
 import './styles/globals.css';
 
@@ -15,9 +16,10 @@ const ShelfWindow: React.FC = () => {
     isPinned: true,
     items: [],
     isVisible: true,
-    opacity: 0.95
+    opacity: 0.95,
+    mode: 'rename' // Set to 'rename' to use the new UI
   });
-  
+
   // Debug window API
   console.log('🌐 Window API debug on mount:');
   console.log('  - window.api:', window.api);
@@ -63,7 +65,7 @@ const ShelfWindow: React.FC = () => {
   const handleConfigChange = (changes: Partial<ShelfConfig>) => {
     const newConfig = { ...config, ...changes };
     setConfig(newConfig);
-    
+
     // Notify main process of configuration changes
     if (window.api) {
       window.api.invoke('shelf:update-config', config.id, changes);
@@ -72,7 +74,7 @@ const ShelfWindow: React.FC = () => {
 
   const handleItemAdd = (item: ShelfItem) => {
     console.log('🔔 handleItemAdd called for shelf', config.id, 'with item:', item);
-    
+
     // Update local state first
     setConfig(prev => {
       const newConfig = {
@@ -80,20 +82,20 @@ const ShelfWindow: React.FC = () => {
         items: [...prev.items, item]
       };
       console.log('📊 Updated local config, now has', newConfig.items.length, 'items');
-      
+
       // Immediately notify backend that shelf has items
       if (window.api && prev.items.length === 0 && newConfig.items.length > 0) {
         console.log('🔔 First item added! Notifying backend to persist shelf');
         // Send a simple message that shelf now has content
-        window.api.send('shelf:files-dropped', { 
-          shelfId: prev.id, 
+        window.api.send('shelf:files-dropped', {
+          shelfId: prev.id,
           files: [item.name] // Just send something to trigger persistence
         });
       }
-      
+
       return newConfig;
     });
-    
+
     // Notify main process
     if (window.api) {
       console.log('📡 Sending shelf:add-item IPC call for shelf', config.id);
@@ -116,7 +118,7 @@ const ShelfWindow: React.FC = () => {
       ...prev,
       items: prev.items.filter(item => item.id !== itemId)
     }));
-    
+
     // Notify main process
     if (window.api) {
       window.api.invoke('shelf:remove-item', config.id, itemId);
@@ -142,13 +144,23 @@ const ShelfWindow: React.FC = () => {
       alignItems: 'center',
       justifyContent: 'center'
     }}>
-      <Shelf
-        config={config}
-        onConfigChange={handleConfigChange}
-        onItemAdd={handleItemAdd}
-        onItemRemove={handleItemRemove}
-        onClose={handleClose}
-      />
+      {config.mode === 'rename' ? (
+        <FileRenameShelf
+          config={config}
+          onConfigChange={handleConfigChange}
+          onItemAdd={handleItemAdd}
+          onItemRemove={handleItemRemove}
+          onClose={handleClose}
+        />
+      ) : (
+        <Shelf
+          config={config}
+          onConfigChange={handleConfigChange}
+          onItemAdd={handleItemAdd}
+          onItemRemove={handleItemRemove}
+          onClose={handleClose}
+        />
+      )}
     </div>
   );
 };

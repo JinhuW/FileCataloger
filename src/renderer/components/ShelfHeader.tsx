@@ -7,13 +7,15 @@ export interface ShelfHeaderProps {
   itemCount: number;
   onTogglePin: () => void;
   onClose: () => void;
+  title?: string;
 }
 
 export const ShelfHeader = React.memo<ShelfHeaderProps>(({
   config,
   itemCount,
   onTogglePin,
-  onClose
+  onClose,
+  title = 'Shelf'
 }) => {
   return (
     <div 
@@ -61,7 +63,7 @@ export const ShelfHeader = React.memo<ShelfHeaderProps>(({
             repeat: config.isPinned ? Infinity : 0
           }}
         />
-        <span 
+        <span
           style={{
             color: 'white',
             fontSize: '14px',
@@ -69,7 +71,7 @@ export const ShelfHeader = React.memo<ShelfHeaderProps>(({
             opacity: 0.9
           }}
         >
-          Shelf
+          {title}
         </span>
         <span
           style={{

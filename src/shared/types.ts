@@ -80,6 +80,7 @@ export interface ShelfConfig {
   opacity: number;
   isDropZone?: boolean; // True if this is a temporary drop zone
   autoHide?: boolean; // True if shelf should auto-hide when drag ends
+  mode?: 'default' | 'rename'; // Shelf mode - default or rename
 }
 
 export interface PerformanceMetrics {
@@ -87,4 +88,23 @@ export interface PerformanceMetrics {
   memoryUsage: number; // bytes
   cpuUsage: number; // percentage
   lastUpdate: number; // timestamp
+}
+
+// File Rename Types
+export interface RenameComponent {
+  id: string;
+  type: 'date' | 'fileName' | 'counter' | 'text' | 'project';
+  value?: string;
+  format?: string; // For date components
+  placeholder?: string;
+}
+
+export interface RenamePattern {
+  components: RenameComponent[];
+}
+
+export interface FileRenamePreview {
+  originalName: string;
+  newName: string;
+  selected: boolean;
 }

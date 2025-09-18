@@ -28,7 +28,7 @@ module.exports = {
   optimization: {
     // Enable production optimizations
     minimize: process.env.NODE_ENV === 'production',
-    
+
     // Split chunks for better caching
     splitChunks: {
       chunks: 'all',
@@ -56,21 +56,21 @@ module.exports = {
         },
       },
     },
-    
+
     // Keep runtime chunk separate for long-term caching
     runtimeChunk: 'single',
-    
+
     // Use deterministic module ids for better caching
     moduleIds: 'deterministic',
   },
-  
+
   // Performance hints
   performance: {
     hints: process.env.NODE_ENV === 'production' ? 'warning' : false,
     maxEntrypointSize: 512000, // 500 KB
     maxAssetSize: 256000, // 250 KB
   },
-  
+
   // Production-specific optimizations
   ...(process.env.NODE_ENV === 'production' && {
     mode: 'production',

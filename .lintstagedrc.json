@@ -1,0 +1,27 @@
+{
+  "src/**/*.{ts,tsx}": [
+    "prettier --write",
+    "eslint --fix",
+    "bash -c 'yarn typecheck'"
+  ],
+  "src/**/*.{js,jsx}": [
+    "prettier --write",
+    "eslint --fix"
+  ],
+  "src/**/*.{json,css,scss,md}": [
+    "prettier --write"
+  ],
+  "package.json": [
+    "prettier --write",
+    "yarn deps:check"
+  ],
+  "src/main/**/*.ts": [
+    "bash -c 'node scripts/check-electron-main-security.js'"
+  ],
+  "src/native/**/*.{cpp,cc,h,hpp}": [
+    "bash -c 'node scripts/check-native-code.js'"
+  ],
+  "*.md": [
+    "prettier --write"
+  ]
+}

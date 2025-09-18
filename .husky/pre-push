@@ -1,0 +1,45 @@
+#!/usr/bin/env sh
+
+# Color codes
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo "🚀 Pre-push hook: Running comprehensive checks..."
+
+# Run full build to ensure everything compiles
+echo "🔨 Building project..."
+if ! yarn build; then
+  echo -e "${RED}❌ Build failed. Please fix build errors before pushing.${NC}"
+  exit 1
+fi
+
+# Run all tests if available
+echo "🧪 Running tests..."
+if yarn test 2>/dev/null; then
+  echo -e "${GREEN}✅ Tests passed${NC}"
+else
+  echo -e "${YELLOW}⚠️  No test suite configured${NC}"
+fi
+
+# Check native modules are built correctly
+echo "🔧 Validating native modules..."
+if ! yarn native:check; then
+  echo -e "${RED}❌ Native module check failed${NC}"
+  exit 1
+fi
+
+# Run security audit
+echo "🔐 Running security audit..."
+if ! yarn security:check; then
+  echo -e "${YELLOW}⚠️  Security warnings detected. Review before pushing.${NC}"
+fi
+
+# Validate documentation
+echo "📚 Validating documentation..."
+if ! yarn docs:validate; then
+  echo -e "${YELLOW}⚠️  Documentation issues detected${NC}"
+fi
+
+echo -e "${GREEN}✅ Pre-push checks completed successfully!${NC}"

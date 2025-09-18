@@ -4,10 +4,13 @@ import { MousePosition } from '@shared/types';
 // Direct require for the native module - webpack will handle this as an external
 let nativeModule: any;
 try {
-  // This path is handled by webpack's externals configuration
+  // Since webpack copies the module to dist/main, we can require it directly
+  // The webpack externals configuration will handle the correct path resolution
   nativeModule = require('./mouse_tracker_darwin.node');
-} catch (error) {
-  throw new Error('Failed to load native mouse tracker module');
+  console.log('Successfully loaded native mouse tracker module');
+} catch (error: any) {
+  console.error('Failed to load native mouse tracker module:', error);
+  throw new Error(`Failed to load native mouse tracker module: ${error?.message || 'Unknown error'}`);
 }
 
 /**

@@ -21,10 +21,13 @@ export interface DragEvent {
 let nativeModule: any = null;
 
 try {
-  // This path is handled by webpack's externals configuration
+  // Since webpack copies the module to dist/main, we can require it directly
+  // The webpack externals configuration will handle the correct path resolution
   nativeModule = require('./drag_monitor_darwin.node');
+  console.log('Successfully loaded drag monitor native module');
 } catch (error) {
   // Native module not available - will be handled gracefully
+  console.log('Drag monitor native module not available - using fallback');
 }
 
 export class MacDragMonitor extends EventEmitter {

@@ -95,13 +95,13 @@ export const IPC_CHANNELS = {
   SHELF_ADD_ITEM: 'shelf:add-item',
   SHELF_REMOVE_ITEM: 'shelf:remove-item',
   SHELF_UPDATE_CONFIG: 'shelf:update-config',
-  
+
   // Window events
   WINDOW_READY: 'window:ready',
   WINDOW_DROP_START: 'window:drop-start',
   WINDOW_DROP_END: 'window:drop-end',
   WINDOW_FILES_DROPPED: 'window:files-dropped',
-  
+
   // Application events
   APP_ERROR: 'app:error',
   APP_LOG: 'app:log',

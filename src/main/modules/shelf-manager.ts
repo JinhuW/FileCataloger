@@ -88,6 +88,15 @@ export class ShelfManager extends EventEmitter {
    * Create a new shelf window
    */
   public async createShelf(config: Partial<ShelfConfig> = {}): Promise<string> {
+    // Check if there's already an active shelf
+    if (this.activeShelves.size >= 1) {
+      console.log('⚠️ Shelf creation blocked: Only 1 shelf allowed at a time');
+      // Return the ID of the existing shelf and make it visible
+      const existingShelfId = Array.from(this.activeShelves)[0];
+      this.showShelf(existingShelfId);
+      return existingShelfId;
+    }
+
     const shelfId = this.generateShelfId();
     
     // Create shelf configuration
@@ -100,7 +109,8 @@ export class ShelfManager extends EventEmitter {
       isVisible: config.isVisible !== undefined ? config.isVisible : true,
       opacity: config.opacity || SHELF_CONSTANTS.OPACITY,
       isDropZone: config.isDropZone || false,
-      autoHide: config.autoHide || false
+      autoHide: config.autoHide || false,
+      mode: config.mode || 'rename' // Default to rename mode
     };
 
     // Get or create window
@@ -155,8 +165,8 @@ export class ShelfManager extends EventEmitter {
       width: this.DEFAULT_SHELF_SIZE.width,
       height: this.DEFAULT_SHELF_SIZE.height,
       frame: false,
-      transparent: true, // Enable transparency for blur effect
-      backgroundColor: '#00000000', // Fully transparent background
+      transparent: true, // Enable transparency
+      backgroundColor: undefined, // No background color to ensure full transparency
       alwaysOnTop: true, // Keep on top of other windows
       skipTaskbar: true,
       resizable: false, // Disable resizing for now
@@ -166,20 +176,18 @@ export class ShelfManager extends EventEmitter {
       focusable: true,
       show: false,
       movable: true, // Ensure window is movable
-      hasShadow: true, // Add shadow for better visibility
+      hasShadow: false, // Disable shadow to avoid dark background
       acceptFirstMouse: true, // Accept clicks/drops immediately
+      titleBarStyle: 'hidden', // Hide title bar but keep window controls
+      // vibrancy: 'under-window', // Disabled to avoid background effects
+      // visualEffectState: 'active', // Disabled to avoid background effects
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
         sandbox: true, // Enable sandboxing for security
-        // Construct preload path based on app structure
-        preload: (() => {
-          const appPath = app.getAppPath();
-          const isInDist = appPath.endsWith(path.join('dist', 'main'));
-          const basePath = isInDist ? path.join(appPath, '..') : path.join(appPath, 'dist');
-          return path.join(basePath, 'preload', 'index.js');
-        })(),
-        webSecurity: false // Temporarily disable for development to avoid CSP issues with webpack eval
+        // Use __dirname which is more reliable in packaged apps
+        preload: path.join(__dirname, '../preload/index.js'),
+        webSecurity: true // Enable web security to allow file drag and drop
       }
     });
 
@@ -196,10 +204,19 @@ export class ShelfManager extends EventEmitter {
    * Configure shelf window with specific settings
    */
   private configureShelfWindow(window: BrowserWindow, config: ShelfConfig): void {
+    // Set window size based on mode
+    if (config.mode === 'rename') {
+      // Larger size for rename UI
+      window.setSize(900, 600);
+    } else {
+      // Default shelf size
+      window.setSize(this.DEFAULT_SHELF_SIZE.width, this.DEFAULT_SHELF_SIZE.height);
+    }
+
     // Validate and set position
     const x = Math.round(config.position.x || 100);
     const y = Math.round(config.position.y || 100);
-    
+
     window.setPosition(x, y);
     
     // Set opacity
@@ -286,18 +303,14 @@ export class ShelfManager extends EventEmitter {
    */
   private async loadShelfContent(window: BrowserWindow, config: ShelfConfig): Promise<void> {
     // Load the React shelf renderer HTML
-    // app.getAppPath() returns dist/main in dev, so we need to go up to get to dist
-    const appPath = app.getAppPath();
-    const isInDist = appPath.endsWith(path.join('dist', 'main'));
-    const basePath = isInDist ? path.join(appPath, '..') : appPath;
-    const rendererPath = path.join(basePath, 'renderer', 'shelf.html');
+    // Use __dirname which is more reliable in packaged apps
+    const rendererPath = path.join(__dirname, '../renderer/shelf.html');
     
     try {
       console.log(`📂 Loading shelf window from: ${rendererPath}`);
-      const preloadPath = path.join(basePath, 'preload', 'index.js');
+      const preloadPath = path.join(__dirname, '../preload/index.js');
       console.log(`🔌 Preload script path: ${preloadPath}`);
-      console.log(`🔌 App path is: ${appPath}`);
-      console.log(`🔌 Base path is: ${basePath}`);
+      console.log(`🔍 Renderer exists: ${require('fs').existsSync(rendererPath)}`);
       console.log(`🔍 Preload exists: ${require('fs').existsSync(preloadPath)}`);
       
       // Load the file first

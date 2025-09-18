@@ -70,7 +70,7 @@ const App: React.FC = () => {
 
   const createShelf = async () => {
     try {
-      const shelfId = await window.api.invoke('app:create-shelf', {
+      await window.api.invoke('app:create-shelf', {
         position: { x: 200, y: 200 },
         isPinned: true,
         isVisible: true
@@ -84,10 +84,10 @@ const App: React.FC = () => {
   const getStatusText = (isActive: boolean) => isActive ? 'Active' : 'Inactive';
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-8">
+    <div className="min-h-screen bg-white p-8">
       <div className="max-w-5xl mx-auto">
         {/* Header */}
-        <motion.header 
+        <motion.header
           className="text-center mb-8"
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -114,7 +114,7 @@ const App: React.FC = () => {
         {/* Main Status Dashboard */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
           {/* Core Modules Status */}
-          <motion.div 
+          <motion.div
             className="bg-white rounded-lg shadow-lg p-6"
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -124,7 +124,7 @@ const App: React.FC = () => {
               <span className="mr-2">⚡</span>
               Core Modules
             </h2>
-            
+
             {isLoading ? (
               <div className="animate-pulse">
                 <div className="h-4 bg-gray-200 rounded mb-3"></div>
@@ -140,7 +140,7 @@ const App: React.FC = () => {
                   </div>
                   <span className="text-sm font-semibold text-gray-600">{getStatusText(isElectronReady)}</span>
                 </div>
-                
+
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className={`w-3 h-3 rounded-full mr-3 ${getStatusColor(appStatus?.modules.mouseTracker || false)}`}></div>
@@ -148,7 +148,7 @@ const App: React.FC = () => {
                   </div>
                   <span className="text-sm font-semibold text-gray-600">{getStatusText(appStatus?.modules.mouseTracker || false)}</span>
                 </div>
-                
+
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className={`w-3 h-3 rounded-full mr-3 ${getStatusColor(appStatus?.modules.shakeDetector || false)}`}></div>
@@ -156,7 +156,7 @@ const App: React.FC = () => {
                   </div>
                   <span className="text-sm font-semibold text-gray-600">{getStatusText(appStatus?.modules.shakeDetector || false)}</span>
                 </div>
-                
+
                 <div className="flex items-center justify-between">
                   <div className="flex items-center">
                     <div className={`w-3 h-3 rounded-full mr-3 ${getStatusColor(appStatus?.modules.dragDetector || false)}`}></div>
@@ -169,7 +169,7 @@ const App: React.FC = () => {
           </motion.div>
 
           {/* Analytics */}
-          <motion.div 
+          <motion.div
             className="bg-white rounded-lg shadow-lg p-6"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -179,27 +179,27 @@ const App: React.FC = () => {
               <span className="mr-2">📊</span>
               Live Analytics
             </h2>
-            
+
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-gray-700">Active Shelves</span>
                 <span className="text-2xl font-bold text-blue-600">{appStatus?.activeShelves || 0}</span>
               </div>
-              
+
               {appStatus?.analytics.shakeDetector && (
                 <div className="flex items-center justify-between">
                   <span className="text-gray-700">Total Shakes</span>
                   <span className="text-lg font-semibold text-green-600">{appStatus.analytics.shakeDetector.shakesDetected}</span>
                 </div>
               )}
-              
+
               {appStatus?.analytics.dragDetector && (
                 <div className="flex items-center justify-between">
                   <span className="text-gray-700">Total Drags</span>
                   <span className="text-lg font-semibold text-purple-600">{appStatus.analytics.dragDetector.dragsDetected}</span>
                 </div>
               )}
-              
+
               {appStatus?.analytics.mouseTracker && (
                 <div className="flex items-center justify-between">
                   <span className="text-gray-700">Mouse Events/sec</span>
@@ -213,7 +213,7 @@ const App: React.FC = () => {
         </div>
 
         {/* Controls */}
-        <motion.div 
+        <motion.div
           className="bg-white rounded-lg shadow-lg p-6 mb-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -223,7 +223,7 @@ const App: React.FC = () => {
             <span className="mr-2">🎮</span>
             Controls
           </h2>
-          
+
           <div className="flex flex-wrap gap-4">
             <button
               onClick={createShelf}
@@ -232,7 +232,7 @@ const App: React.FC = () => {
             >
               Create Test Shelf
             </button>
-            
+
             <button
               onClick={fetchAppStatus}
               className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
@@ -244,7 +244,7 @@ const App: React.FC = () => {
         </motion.div>
 
         {/* System Information */}
-        <motion.div 
+        <motion.div
           className="bg-white rounded-lg shadow-lg p-6 mb-8"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -254,7 +254,7 @@ const App: React.FC = () => {
             <span className="mr-2">💻</span>
             System Information
           </h2>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-600">
             <div>
               <p><strong>Platform:</strong> {process.platform}</p>
@@ -270,18 +270,18 @@ const App: React.FC = () => {
         </motion.div>
 
         {/* Usage Instructions */}
-        <motion.div 
-          className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6"
+        <motion.div
+          className="bg-gray-50 border border-gray-200 rounded-lg p-6"
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.5 }}
         >
-          <h3 className="text-lg font-semibold text-blue-800 mb-3 flex items-center">
+          <h3 className="text-lg font-semibold text-gray-800 mb-3 flex items-center">
             <span className="mr-2">💡</span>
             How to Use FileCataloger
           </h3>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-blue-700">
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-gray-700">
             <div>
               <h4 className="font-semibold mb-2">Gesture Controls</h4>
               <ul className="list-disc list-inside space-y-1 text-sm">
@@ -290,7 +290,7 @@ const App: React.FC = () => {
                 <li><strong>Pin shelves:</strong> Click pin icon to keep shelf visible</li>
               </ul>
             </div>
-            
+
             <div>
               <h4 className="font-semibold mb-2">Features</h4>
               <ul className="list-disc list-inside space-y-1 text-sm">

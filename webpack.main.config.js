@@ -1,8 +1,8 @@
 const path = require('path');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 const { CleanWebpackPlugin } = require('clean-webpack-plugin');
-const webpack = require('webpack');
 const fs = require('fs');
+const BuildInfoPlugin = require('./webpack-plugins/build-info-plugin');
 
 module.exports = {
   mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
@@ -46,8 +46,10 @@ module.exports = {
   externals: {
     // Native modules should be externalized
     './mouse_tracker_darwin.node': 'commonjs ./mouse_tracker_darwin.node',
-    './drag_monitor_darwin.node': 'commonjs ./drag_monitor_darwin.node'
+    './drag_monitor_darwin.node': 'commonjs ./drag_monitor_darwin.node',
+    'node-gyp-build': 'commonjs node-gyp-build'
   },
+  externalsType: 'commonjs',
   node: {
     __dirname: false,
     __filename: false
@@ -75,6 +77,10 @@ module.exports = {
           noErrorOnMissing: true
         }
       ]
+    }),
+    // Generate build info file
+    new BuildInfoPlugin({
+      filename: '../build-info.json' // Output to dist/build-info.json
     }),
     // Create package.json in dist/main for native module resolution
     {
