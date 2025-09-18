@@ -24,9 +24,10 @@
  * @module darwin-native-tracker
  */
 
-import { BaseMouseTracker } from './base-tracker';
+import { BaseMouseTracker } from './baseTracker';
 import { MousePosition } from '@shared/types';
 import { createLogger } from '@main/modules/utils/logger';
+import { NativeErrorCode, getNativeErrorDescription } from '@shared/nativeErrorCodes';
 
 const logger = createLogger('DarwinNativeTracker');
 
@@ -47,9 +48,21 @@ try {
 /**
  * Native macOS mouse tracker using Core Graphics
  */
+interface NativeError {
+  code: number;
+  message: string;
+}
+
+interface NativeMouseTracker {
+  start(): boolean;
+  stop(): void;
+  onMouseMove(callback: (position: any) => void): void;
+  onButtonStateChange(callback: (leftButton: boolean, rightButton: boolean) => void): void;
+  getLastError(): NativeError;
+}
+
 export class DarwinNativeTracker extends BaseMouseTracker {
-  private nativeTracker: any = null;
-  private pollingInterval: NodeJS.Timeout | null = null;
+  private nativeTracker: NativeMouseTracker | null = null;
 
   constructor() {
     super();
@@ -61,7 +74,7 @@ export class DarwinNativeTracker extends BaseMouseTracker {
 
       // Set up the mouse move callback
       // The native module passes a position object as the first parameter
-      this.nativeTracker.onMouseMove((...args: any[]) => {
+      this.nativeTracker?.onMouseMove((...args: any[]) => {
         const positionData = args[0];
         // Handle both old format (4 params) and new format (position object)
         let position: MousePosition;
@@ -97,7 +110,7 @@ export class DarwinNativeTracker extends BaseMouseTracker {
       });
 
       // Set up button state change callback
-      this.nativeTracker.onButtonStateChange((leftButton: boolean, rightButton: boolean) => {
+      this.nativeTracker?.onButtonStateChange((leftButton: boolean, rightButton: boolean) => {
         logger.debug(`🎯 Button state changed - Left: ${leftButton}, Right: ${rightButton}`);
 
         // Update current position with new button state
@@ -136,6 +149,9 @@ export class DarwinNativeTracker extends BaseMouseTracker {
     }
 
     try {
+      if (!this.nativeTracker) {
+        throw new Error('Native tracker not initialized');
+      }
       const success = this.nativeTracker.start();
       if (success) {
         this.isActive = true;
@@ -144,7 +160,20 @@ export class DarwinNativeTracker extends BaseMouseTracker {
         // Also start a fallback polling mechanism just in case
         this.startPolling();
       } else {
-        throw new Error('Failed to start native tracker - may need accessibility permissions');
+        // Get detailed error information
+        const error = this.nativeTracker?.getLastError() ?? {
+          code: NativeErrorCode.UNKNOWN_ERROR,
+          message: 'Unknown error',
+        };
+        const errorMessage = `Failed to start native tracker: ${error.message} (Code: ${error.code})`;
+
+        // Check for specific error codes
+        if (error.code === NativeErrorCode.ACCESSIBILITY_PERMISSION_DENIED) {
+          logger.error('⚠️ ACCESSIBILITY PERMISSION REQUIRED');
+          logger.error(getNativeErrorDescription(error.code));
+        }
+
+        throw new Error(errorMessage);
       }
     } catch (error) {
       logger.error('Failed to start DarwinNativeTracker:', error);
@@ -177,10 +206,7 @@ export class DarwinNativeTracker extends BaseMouseTracker {
    * Stop fallback polling
    */
   private stopPolling(): void {
-    if (this.pollingInterval) {
-      clearInterval(this.pollingInterval);
-      this.pollingInterval = null;
-    }
+    // Method kept for future use if polling is re-enabled
   }
 
   /**
@@ -196,7 +222,11 @@ export class DarwinNativeTracker extends BaseMouseTracker {
       this.stopPolling();
 
       if (this.nativeTracker) {
-        this.nativeTracker.stop();
+        try {
+          this.nativeTracker.stop();
+        } catch (stopError) {
+          logger.error('Error stopping native tracker:', stopError);
+        }
       }
 
       this.isActive = false;

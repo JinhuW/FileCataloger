@@ -20,31 +20,8 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { logger } from '@shared/logger';
-
-interface AppStatus {
-  isRunning: boolean;
-  activeShelves: number;
-  modules: {
-    mouseTracker: boolean;
-    shakeDetector: boolean;
-    dragDetector: boolean;
-  };
-  analytics: {
-    mouseTracker: {
-      eventsPerSecond: number;
-      cpuUsage: number;
-      memoryUsage: number;
-    };
-    shakeDetector: {
-      shakesDetected: number;
-      lastShakeTime: number;
-    };
-    dragDetector: {
-      dragsDetected: number;
-      filesDropped: number;
-    };
-  };
-}
+import { AppStatus } from '@shared/types';
+import { isAppStatus } from './utils/typeGuards';
 
 const App: React.FC = () => {
   const [isElectronReady, setIsElectronReady] = useState(false);
@@ -62,17 +39,22 @@ const App: React.FC = () => {
     }
 
     // Listen for status updates
+    let cleanup: (() => void) | undefined;
+
     if (window.api) {
-      window.api.on('app:status', (...args: unknown[]) => {
-        const status = args[0] as AppStatus;
-        setAppStatus(status);
-        setIsLoading(false);
+      cleanup = window.api.on('app:status', (status: unknown) => {
+        if (isAppStatus(status)) {
+          setAppStatus(status);
+          setIsLoading(false);
+        } else if (process.env.NODE_ENV === 'development') {
+          logger.warn('Received invalid app status:', status);
+        }
       });
     }
 
     return () => {
-      if (window.api) {
-        window.api.removeAllListeners('app:status');
+      if (cleanup) {
+        cleanup();
       }
     };
   }, []);
@@ -80,8 +62,12 @@ const App: React.FC = () => {
   const fetchAppStatus = async () => {
     try {
       const status = await window.api.invoke('app:get-status', null);
-      setAppStatus(status as AppStatus);
-      setIsLoading(false);
+      if (isAppStatus(status)) {
+        setAppStatus(status);
+        setIsLoading(false);
+      } else {
+        throw new Error('Invalid app status received');
+      }
     } catch (error) {
       logger.error('Failed to fetch app status:', error);
       setIsLoading(false);

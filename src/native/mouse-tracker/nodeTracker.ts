@@ -25,7 +25,7 @@
  * @module node-tracker
  */
 
-import { BaseMouseTracker } from './base-tracker';
+import { BaseMouseTracker } from './baseTracker';
 import { screen } from 'electron';
 import { createLogger } from '@main/modules/utils/logger';
 

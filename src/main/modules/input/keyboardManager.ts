@@ -1,7 +1,7 @@
 import { app, globalShortcut, BrowserWindow } from 'electron';
 import { EventEmitter } from 'events';
-import { preferencesManager } from '../config/preferences-manager';
-import { errorHandler, ErrorSeverity, ErrorCategory } from '../utils/error-handler';
+import { preferencesManager } from '../config/preferencesManager';
+import { errorHandler, ErrorSeverity, ErrorCategory } from '../utils/errorHandler';
 import { logger } from '../utils/logger';
 
 export interface KeyboardShortcut {
@@ -116,7 +116,7 @@ export class KeyboardManager extends EventEmitter {
   }
 
   private listenForPreferenceChanges(): void {
-    preferencesManager.on('shortcuts-changed', shortcuts => {
+    preferencesManager.on('shortcuts-changed', (shortcuts: any) => {
       this.updateShortcuts(shortcuts);
     });
   }

@@ -1,2 +1,2 @@
-export { PreferencesManager, preferencesManager } from './preferences-manager';
-export { SecurityConfig, securityConfig } from './security-config';
+export { PreferencesManager, preferencesManager } from './preferencesManager';
+export { SecurityConfig, securityConfig } from './securityConfig';

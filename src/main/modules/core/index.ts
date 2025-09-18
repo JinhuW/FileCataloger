@@ -1,1 +1,1 @@
-export { ApplicationController } from './application-controller';
+export { ApplicationController } from './applicationController';

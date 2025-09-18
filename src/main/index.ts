@@ -9,14 +9,14 @@ import {
   dialog,
 } from 'electron';
 import * as path from 'path';
-import { ApplicationController } from './modules/core/application-controller';
-import { preferencesManager } from './modules/config/preferences-manager';
+import { ApplicationController } from './modules/core';
+import { preferencesManager } from './modules/config';
 import { keyboardManager } from './modules/input';
-import { performanceMonitor } from './modules/utils/performance-monitor';
-import { errorHandler, ErrorSeverity, ErrorCategory } from './modules/utils/error-handler';
+import { performanceMonitor } from './modules/utils';
+import { errorHandler, ErrorSeverity, ErrorCategory } from './modules/utils';
 import { Logger, LogLevel } from './modules/utils/logger';
 import { LogEntry } from '@shared/logger';
-import { securityConfig } from './modules/config/security-config';
+import { securityConfig } from './modules/config';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {

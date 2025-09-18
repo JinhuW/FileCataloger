@@ -30,7 +30,9 @@ module.exports = merge(common, {
 
   output: {
     path: path.resolve(projectRoot, 'dist/preload'),
-    filename: 'index.js'
+    filename: 'index.js',
+    // Clean output directory before building
+    clean: true
   },
 
   module: {
@@ -40,8 +42,11 @@ module.exports = merge(common, {
         use: [{
           loader: 'ts-loader',
           options: {
-            configFile: path.resolve(projectRoot, 'tsconfig.json'),
-            transpileOnly: false
+            configFile: path.resolve(projectRoot, 'config/tsconfig.renderer.json'),
+            // Type checking should be done separately for better performance
+            transpileOnly: true,
+            // Disable project references to avoid ts-loader issues
+            projectReferences: false
           }
         }],
         exclude: /node_modules/
@@ -49,7 +54,20 @@ module.exports = merge(common, {
     ]
   },
 
+  // Optimize for preload script size
+  optimization: {
+    minimize: process.env.NODE_ENV === 'production',
+    // No need for runtime chunk in preload
+    runtimeChunk: false,
+    // No need to split chunks in preload
+    splitChunks: false
+  },
+
+  // Proper externals for electron preload
   externals: {
     electron: 'commonjs electron'
-  }
+  },
+
+  // Disable source maps in production for security
+  devtool: process.env.NODE_ENV === 'production' ? false : 'source-map'
 });

@@ -19,7 +19,7 @@
  * @see src/shared/ipc-schema.ts for IPC message schemas
  */
 
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
 // Helper function to log messages via IPC
 function logToMain(level: 'INFO' | 'WARN' | 'ERROR', message: string): void {
@@ -31,8 +31,9 @@ function logToMain(level: 'INFO' | 'WARN' | 'ERROR', message: string): void {
       timestamp: new Date().toISOString(),
       processType: 'preload',
     });
-  } catch {
+  } catch (error) {
     // If IPC fails, we can't do anything about it in preload
+    // Silently fail to avoid exposing errors to renderer
   }
 }
 
@@ -74,94 +75,128 @@ const validChannels = [
   'logger:set-level',
 ] as const;
 
-type ValidChannel = (typeof validChannels)[number];
+// Export the type for use in other files
+export type ValidChannel = (typeof validChannels)[number];
 
-// Expose protected methods that allow the renderer process to use
-// the ipcRenderer without exposing the entire object
-contextBridge.exposeInMainWorld('api', {
-  // Send message to main process
-  send: (channel: ValidChannel, data: unknown) => {
-    if (validChannels.includes(channel)) {
-      ipcRenderer.send(channel, data);
-    } else {
-      logToMain('ERROR', `Invalid IPC channel: ${channel}`);
-    }
-  },
+// Type for the cleanup function returned by 'on' method
+type CleanupFunction = () => void;
 
-  // Listen for messages from main process
-  on: (channel: ValidChannel, func: (...args: unknown[]) => void) => {
-    if (validChannels.includes(channel)) {
-      // Remove all listeners for this channel first
-      ipcRenderer.removeAllListeners(channel);
-      // Add the new listener
-      ipcRenderer.on(channel, (event, ...args) => func(...args));
-    } else {
-      logToMain('ERROR', `Invalid IPC channel: ${channel}`);
-    }
-  },
+// Create API implementation factory to avoid code duplication
+function createElectronAPI() {
+  // Track active listeners for cleanup
+  const activeListeners = new Map<
+    string,
+    Set<(event: IpcRendererEvent, ...args: unknown[]) => void>
+  >();
 
-  // Remove all listeners for a channel
-  removeAllListeners: (channel: ValidChannel) => {
-    if (validChannels.includes(channel)) {
-      ipcRenderer.removeAllListeners(channel);
-    } else {
-      logToMain('ERROR', `Invalid IPC channel: ${channel}`);
-    }
-  },
+  return {
+    // Send message to main process
+    send: (channel: ValidChannel, data: unknown): void => {
+      if (!validChannels.includes(channel)) {
+        logToMain('ERROR', `Invalid IPC channel: ${channel}`);
+        return;
+      }
 
-  // Invoke main process and wait for response
-  invoke: async (channel: ValidChannel, ...args: unknown[]) => {
-    if (validChannels.includes(channel)) {
-      return await ipcRenderer.invoke(channel, ...args);
-    } else {
-      logToMain('ERROR', `Invalid IPC channel: ${channel}`);
-      return null;
-    }
-  },
-});
+      try {
+        ipcRenderer.send(channel, data);
+      } catch (error) {
+        logToMain(
+          'ERROR',
+          `Failed to send on channel ${channel}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+    },
 
-// Also expose as electronAPI for compatibility with shelf.html
-contextBridge.exposeInMainWorld('electronAPI', {
-  // Send message to main process
-  send: (channel: ValidChannel, data: unknown) => {
-    if (validChannels.includes(channel)) {
-      ipcRenderer.send(channel, data);
-    } else {
-      logToMain('ERROR', `Invalid IPC channel: ${channel}`);
-    }
-  },
+    // Listen for messages from main process
+    on: (channel: ValidChannel, func: (...args: unknown[]) => void): CleanupFunction => {
+      if (!validChannels.includes(channel)) {
+        logToMain('ERROR', `Invalid IPC channel: ${channel}`);
+        return () => {}; // Return no-op cleanup function
+      }
 
-  // Listen for messages from main process
-  on: (channel: ValidChannel, func: (...args: unknown[]) => void) => {
-    if (validChannels.includes(channel)) {
-      // Remove all listeners for this channel first
-      ipcRenderer.removeAllListeners(channel);
-      // Add the new listener
-      ipcRenderer.on(channel, (event, ...args) => func(...args));
-    } else {
-      logToMain('ERROR', `Invalid IPC channel: ${channel}`);
-    }
-  },
+      // Wrap the function to remove the event parameter
+      const wrappedFunc = (event: IpcRendererEvent, ...args: unknown[]) => {
+        try {
+          func(...args);
+        } catch (error) {
+          logToMain(
+            'ERROR',
+            `Error in listener for ${channel}: ${error instanceof Error ? error.message : 'Unknown error'}`
+          );
+        }
+      };
 
-  // Remove all listeners for a channel
-  removeAllListeners: (channel: ValidChannel) => {
-    if (validChannels.includes(channel)) {
-      ipcRenderer.removeAllListeners(channel);
-    } else {
-      logToMain('ERROR', `Invalid IPC channel: ${channel}`);
-    }
-  },
+      // Track the listener
+      if (!activeListeners.has(channel)) {
+        activeListeners.set(channel, new Set());
+      }
+      const listeners = activeListeners.get(channel);
+      if (listeners) {
+        listeners.add(wrappedFunc);
+      }
 
-  // Invoke main process and wait for response
-  invoke: async (channel: ValidChannel, ...args: unknown[]) => {
-    if (validChannels.includes(channel)) {
-      return await ipcRenderer.invoke(channel, ...args);
-    } else {
-      logToMain('ERROR', `Invalid IPC channel: ${channel}`);
-      return null;
-    }
-  },
-});
+      // Add the listener
+      ipcRenderer.on(channel, wrappedFunc);
+
+      // Return cleanup function
+      return () => {
+        ipcRenderer.removeListener(channel, wrappedFunc);
+        const listeners = activeListeners.get(channel);
+        if (listeners) {
+          listeners.delete(wrappedFunc);
+          if (listeners.size === 0) {
+            activeListeners.delete(channel);
+          }
+        }
+      };
+    },
+
+    // Remove all listeners for a channel
+    removeAllListeners: (channel: ValidChannel): void => {
+      if (!validChannels.includes(channel)) {
+        logToMain('ERROR', `Invalid IPC channel: ${channel}`);
+        return;
+      }
+
+      try {
+        ipcRenderer.removeAllListeners(channel);
+        activeListeners.delete(channel);
+      } catch (error) {
+        logToMain(
+          'ERROR',
+          `Failed to remove listeners for ${channel}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+    },
+
+    // Invoke main process and wait for response
+    invoke: async (channel: ValidChannel, ...args: unknown[]): Promise<unknown> => {
+      if (!validChannels.includes(channel)) {
+        logToMain('ERROR', `Invalid IPC channel: ${channel}`);
+        throw new Error(`Invalid IPC channel: ${channel}`);
+      }
+
+      try {
+        return await ipcRenderer.invoke(channel, ...args);
+      } catch (error) {
+        logToMain(
+          'ERROR',
+          `Failed to invoke ${channel}: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+        throw error; // Re-throw to allow renderer to handle
+      }
+    },
+  };
+}
+
+// Create a single instance of the API
+const electronAPI = createElectronAPI();
+
+// Expose API to renderer process
+contextBridge.exposeInMainWorld('api', electronAPI);
+
+// Also expose as electronAPI for compatibility
+contextBridge.exposeInMainWorld('electronAPI', electronAPI);
 
 // Send completion log via IPC if in development
 if (process.env.NODE_ENV === 'development') {
@@ -176,9 +211,9 @@ if (process.env.NODE_ENV === 'development') {
 // Type definitions for the exposed API
 export interface IElectronAPI {
   send: (channel: ValidChannel, data: unknown) => void;
-  on: (channel: ValidChannel, func: (...args: unknown[]) => void) => void;
+  on: (channel: ValidChannel, func: (...args: unknown[]) => void) => CleanupFunction;
   removeAllListeners: (channel: ValidChannel) => void;
   invoke: (channel: ValidChannel, ...args: unknown[]) => Promise<unknown>;
 }
 
-// Type declarations moved to src/renderer/window.d.ts
+// Type declarations for window object are in src/renderer/window.d.ts

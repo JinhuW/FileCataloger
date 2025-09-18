@@ -22,11 +22,12 @@ module.exports = merge(common, {
       {
         test: /\.tsx?$/,
         include: /src/,
+        exclude: [/__tests__/, /\.test\.tsx?$/],
         use: [{
           loader: 'ts-loader',
           options: {
             configFile: path.resolve(projectRoot, 'config/tsconfig.renderer.json'),
-            transpileOnly: false
+            transpileOnly: true
           }
         }]
       },

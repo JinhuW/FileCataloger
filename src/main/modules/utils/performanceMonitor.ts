@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import * as os from 'os';
-import { errorHandler, ErrorSeverity, ErrorCategory } from './error-handler';
+import { errorHandler, ErrorSeverity, ErrorCategory } from './errorHandler';
 import { logger } from './logger';
 
 export interface PerformanceMetrics {

@@ -1,2 +1,2 @@
-export { ShelfManager } from './shelf-manager';
-export { OptimizedWindowPool } from './optimized-window-pool';
+export { ShelfManager } from './shelfManager';
+export { OptimizedWindowPool } from './optimizedWindowPool';

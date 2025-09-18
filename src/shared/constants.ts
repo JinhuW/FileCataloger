@@ -28,7 +28,7 @@ export const SHELF_CONSTANTS = {
   MIN_CONTENT_HEIGHT: 150,
   MAX_CONTENT_HEIGHT: 430,
   EMPTY_SHELF_HEIGHT: 250,
-  EXTRA_HEIGHT_PADDING: 20
+  EXTRA_HEIGHT_PADDING: 20,
 } as const;
 
 /**
@@ -40,7 +40,7 @@ export const ANIMATION_CONSTANTS = {
   SHELF_INITIAL_SCALE: 0.9,
   SHELF_INITIAL_OPACITY: 0,
   DRAG_OVER_SCALE: 1.05,
-  ITEM_STAGGER_DELAY: 50 // milliseconds
+  ITEM_STAGGER_DELAY: 50, // milliseconds
 } as const;
 
 /**
@@ -53,7 +53,7 @@ export const PERFORMANCE_CONSTANTS = {
   MOUSE_TRACKING_INTERVAL: 16, // milliseconds (60fps)
   POSITION_LOG_INTERVAL: 100, // Log every 100th position update
   PERFORMANCE_CHECK_INTERVAL: 5000, // milliseconds
-  GC_TRIGGER_THRESHOLD_MB: 500
+  GC_TRIGGER_THRESHOLD_MB: 500,
 } as const;
 
 /**
@@ -66,7 +66,7 @@ export const DRAG_SHAKE_CONSTANTS = {
   POSITION_HISTORY_SIZE: 10,
   MIN_SHAKE_MOVEMENTS: 3,
   DIRECTION_CHANGE_THRESHOLD: 0.5, // radians
-  MOUSE_POSITION_TIMEOUT: 100 // milliseconds
+  MOUSE_POSITION_TIMEOUT: 100, // milliseconds
 } as const;
 
 /**
@@ -78,7 +78,7 @@ export const APP_CONSTANTS = {
   LOG_RETENTION_DAYS: 7,
   DEFAULT_WINDOW_TITLE: 'FileCataloger',
   PRELOAD_SCRIPT_NAME: 'preload.js',
-  RENDERER_ENTRY: 'renderer/index.html'
+  RENDERER_ENTRY: 'renderer/index.html',
 } as const;
 
 /**
@@ -105,7 +105,7 @@ export const IPC_CHANNELS = {
   // Application events
   APP_ERROR: 'app:error',
   APP_LOG: 'app:log',
-  APP_PERFORMANCE_WARNING: 'app:performance-warning'
+  APP_PERFORMANCE_WARNING: 'app:performance-warning',
 } as const;
 
 /**
@@ -114,12 +114,22 @@ export const IPC_CHANNELS = {
 export const FILE_TYPE_CONSTANTS = {
   MAX_FILE_SIZE_MB: 100,
   ALLOWED_EXTENSIONS: [
-    '.txt', '.pdf', '.doc', '.docx',
-    '.jpg', '.jpeg', '.png', '.gif',
-    '.mp3', '.mp4', '.mov',
-    '.zip', '.rar', '.7z'
+    '.txt',
+    '.pdf',
+    '.doc',
+    '.docx',
+    '.jpg',
+    '.jpeg',
+    '.png',
+    '.gif',
+    '.mp3',
+    '.mp4',
+    '.mov',
+    '.zip',
+    '.rar',
+    '.7z',
   ],
-  PREVIEW_TIMEOUT: 3000 // milliseconds
+  PREVIEW_TIMEOUT: 3000, // milliseconds
 } as const;
 
 /**
@@ -129,7 +139,7 @@ export const ERROR_CONSTANTS = {
   RETRY_ATTEMPTS: 3,
   RETRY_DELAY: 1000, // milliseconds
   ERROR_LOG_CONTEXT_LINES: 10,
-  MAX_ERROR_STACK_DEPTH: 10
+  MAX_ERROR_STACK_DEPTH: 10,
 } as const;
 
 /**
@@ -139,7 +149,7 @@ export const NATIVE_MODULE_CONSTANTS = {
   FALLBACK_TIMEOUT: 5000, // milliseconds - timeout before falling back to JS implementation
   HEALTH_CHECK_INTERVAL: 30000, // milliseconds
   MAX_RECONNECT_ATTEMPTS: 3,
-  RECONNECT_DELAY: 2000 // milliseconds
+  RECONNECT_DELAY: 2000, // milliseconds
 } as const;
 
 /**
@@ -150,9 +160,9 @@ export const KEYBOARD_CONSTANTS = {
     CREATE_SHELF: 'CommandOrControl+Shift+D',
     HIDE_ALL_SHELVES: 'Escape',
     TOGGLE_SHELF: 'CommandOrControl+Shift+S',
-    CLEAR_ALL: 'CommandOrControl+Shift+C'
+    CLEAR_ALL: 'CommandOrControl+Shift+C',
   },
-  DEBOUNCE_DELAY: 300 // milliseconds
+  DEBOUNCE_DELAY: 300, // milliseconds
 } as const;
 
 /**
@@ -165,7 +175,7 @@ export const WINDOW_CONSTANTS = {
   DOCK_HEIGHT_ESTIMATE: 60,
   SCREEN_EDGE_MARGIN: 10,
   WINDOW_SHADOW_BLUR: 20,
-  WINDOW_BORDER_RADIUS: 10
+  WINDOW_BORDER_RADIUS: 10,
 } as const;
 
 /**
@@ -176,5 +186,5 @@ export const TIMER_CONSTANTS = {
   THROTTLE_DELAY: 100, // milliseconds
   UI_UPDATE_DELAY: 16, // milliseconds (60fps)
   LONG_PRESS_DURATION: 500, // milliseconds
-  DOUBLE_CLICK_INTERVAL: 300 // milliseconds
+  DOUBLE_CLICK_INTERVAL: 300, // milliseconds
 } as const;

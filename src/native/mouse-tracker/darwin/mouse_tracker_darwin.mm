@@ -38,6 +38,34 @@
 #include <iostream>
 #include <mutex>
 #include <queue>
+#include <memory>
+#include <chrono>
+
+// Error codes for better error reporting
+namespace FileCataloger {
+    enum class ErrorCode {
+        SUCCESS = 0,
+        UNKNOWN_ERROR = 1,
+        NOT_INITIALIZED = 3,
+        ALREADY_INITIALIZED = 4,
+        ACCESSIBILITY_PERMISSION_DENIED = 100,
+        EVENT_TAP_CREATE_FAILED = 200,
+        RUNLOOP_CREATE_FAILED = 201,
+        THREAD_CREATE_FAILED = 202,
+        MOUSE_TRACKER_START_FAILED = 300,
+        MOUSE_TRACKER_STOP_FAILED = 301,
+        CALLBACK_NOT_SET = 400,
+        THREADSAFE_FUNCTION_CREATE_FAILED = 402
+    };
+
+    struct ErrorInfo {
+        ErrorCode code;
+        std::string message;
+
+        ErrorInfo(ErrorCode c, const std::string& msg)
+            : code(c), message(msg) {}
+    };
+}
 
 class MacOSMouseTracker {
 private:
@@ -50,31 +78,50 @@ private:
     std::atomic<bool> running_;
     std::atomic<bool> left_button_down_;
     std::atomic<bool> right_button_down_;
-    
-    static MacOSMouseTracker* instance_;
+
+    // Error tracking
+    mutable std::mutex error_mutex_;
+    FileCataloger::ErrorInfo last_error_;
     
 public:
-    MacOSMouseTracker(napi_env env) 
-        : env_(env), 
+    MacOSMouseTracker(napi_env env)
+        : env_(env),
           tsfn_move_(nullptr),
           tsfn_button_(nullptr),
-          event_tap_(nullptr), 
+          event_tap_(nullptr),
           run_loop_source_(nullptr),
           running_(false),
           left_button_down_(false),
-          right_button_down_(false) {
-        instance_ = this;
+          right_button_down_(false),
+          last_error_(FileCataloger::ErrorCode::SUCCESS, "No error") {
     }
     
     ~MacOSMouseTracker() {
         Stop();
         if (tsfn_move_) {
             napi_release_threadsafe_function(tsfn_move_, napi_tsfn_release);
+            tsfn_move_ = nullptr;
         }
         if (tsfn_button_) {
             napi_release_threadsafe_function(tsfn_button_, napi_tsfn_release);
+            tsfn_button_ = nullptr;
         }
-        instance_ = nullptr;
+    }
+
+    // Error handling methods
+    void SetError(FileCataloger::ErrorCode code, const std::string& message) {
+        std::lock_guard<std::mutex> lock(error_mutex_);
+        last_error_ = FileCataloger::ErrorInfo(code, message);
+    }
+
+    FileCataloger::ErrorInfo GetLastError() const {
+        std::lock_guard<std::mutex> lock(error_mutex_);
+        return last_error_;
+    }
+
+    void ClearError() {
+        std::lock_guard<std::mutex> lock(error_mutex_);
+        last_error_ = FileCataloger::ErrorInfo(FileCataloger::ErrorCode::SUCCESS, "No error");
     }
     
     void SetMoveCallback(napi_value callback) {
@@ -131,27 +178,40 @@ public:
     
     bool Start() {
         if (running_.load()) {
+            SetError(FileCataloger::ErrorCode::ALREADY_INITIALIZED, "Mouse tracker is already running");
             return true;
         }
-        
+
+        // Clear any previous errors
+        ClearError();
+
         // Check for accessibility permissions
         if (!AXIsProcessTrusted()) {
             std::cerr << "Accessibility permission not granted. Please enable in System Preferences." << std::endl;
-            
+
             // Prompt user to grant permission
             NSDictionary* options = @{(__bridge id)kAXTrustedCheckOptionPrompt: @YES};
             AXIsProcessTrustedWithOptions((__bridge CFDictionaryRef)options);
-            
+
+            SetError(FileCataloger::ErrorCode::ACCESSIBILITY_PERMISSION_DENIED,
+                    "Accessibility permission required. Please grant permission in System Preferences > Security & Privacy > Accessibility");
             return false;
         }
-        
+
         running_ = true;
-        
+
         // Start event processing thread
-        event_thread_ = std::thread([this]() {
-            this->RunEventLoop();
-        });
-        
+        try {
+            event_thread_ = std::thread([this]() {
+                this->RunEventLoop();
+            });
+        } catch (const std::exception& e) {
+            running_ = false;
+            SetError(FileCataloger::ErrorCode::THREAD_CREATE_FAILED,
+                    std::string("Failed to create event processing thread: ") + e.what());
+            return false;
+        }
+
         return true;
     }
     
@@ -204,6 +264,8 @@ private:
         
         if (!event_tap_) {
             std::cerr << "Failed to create event tap" << std::endl;
+            SetError(FileCataloger::ErrorCode::EVENT_TAP_CREATE_FAILED,
+                    "Failed to create CGEventTap. This may be due to missing accessibility permissions.");
             running_ = false;
             return;
         }
@@ -353,8 +415,6 @@ private:
     }
 };
 
-MacOSMouseTracker* MacOSMouseTracker::instance_ = nullptr;
-
 // N-API wrapper functions
 static napi_value CreateTracker(napi_env env, napi_callback_info info) {
     size_t argc = 1;
@@ -460,6 +520,34 @@ static napi_value OnButtonStateChange(napi_env env, napi_callback_info info) {
     return result;
 }
 
+static napi_value GetLastError(napi_env env, napi_callback_info info) {
+    napi_value this_arg;
+    void* data;
+
+    napi_get_cb_info(env, info, nullptr, nullptr, &this_arg, &data);
+
+    MacOSMouseTracker* tracker;
+    napi_unwrap(env, this_arg, reinterpret_cast<void**>(&tracker));
+
+    FileCataloger::ErrorInfo error = tracker->GetLastError();
+
+    // Create error object
+    napi_value error_obj;
+    napi_create_object(env, &error_obj);
+
+    // Add error code
+    napi_value code_val;
+    napi_create_int32(env, static_cast<int>(error.code), &code_val);
+    napi_set_named_property(env, error_obj, "code", code_val);
+
+    // Add error message
+    napi_value msg_val;
+    napi_create_string_utf8(env, error.message.c_str(), NAPI_AUTO_LENGTH, &msg_val);
+    napi_set_named_property(env, error_obj, "message", msg_val);
+
+    return error_obj;
+}
+
 // Module initialization
 static napi_value Init(napi_env env, napi_value exports) {
     napi_value tracker_class;
@@ -468,11 +556,12 @@ static napi_value Init(napi_env env, napi_value exports) {
         { "start", nullptr, Start, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "stop", nullptr, Stop, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "onMouseMove", nullptr, OnMouseMove, nullptr, nullptr, nullptr, napi_default, nullptr },
-        { "onButtonStateChange", nullptr, OnButtonStateChange, nullptr, nullptr, nullptr, napi_default, nullptr }
+        { "onButtonStateChange", nullptr, OnButtonStateChange, nullptr, nullptr, nullptr, napi_default, nullptr },
+        { "getLastError", nullptr, GetLastError, nullptr, nullptr, nullptr, napi_default, nullptr }
     };
-    
+
     napi_define_class(env, "MacOSMouseTracker", NAPI_AUTO_LENGTH,
-                     CreateTracker, nullptr, 4, properties, &tracker_class);
+                     CreateTracker, nullptr, 5, properties, &tracker_class);
     
     napi_set_named_property(env, exports, "MacOSMouseTracker", tracker_class);
     

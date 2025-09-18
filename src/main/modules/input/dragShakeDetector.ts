@@ -1,9 +1,9 @@
 import { EventEmitter } from 'events';
-import { AdvancedShakeDetector } from './shake-detector';
+import { AdvancedShakeDetector } from './shakeDetector';
 import { createLogger, Logger } from '../utils/logger';
 import { MousePosition } from '@shared/types';
 import { MacDragMonitor, createDragMonitor } from '@native/drag-monitor/index';
-import { MouseEventBatcher } from './mouse-event-batcher';
+import { MouseEventBatcher } from './mouseEventBatcher';
 
 export interface DraggedItem {
   name: string;
@@ -99,7 +99,7 @@ export class DragShakeDetector extends EventEmitter {
     });
 
     // Handle shake events - only process during active drag
-    this.shakeDetector.on('shake', event => {
+    this.shakeDetector.on('shake', (event: any) => {
       this.logger.debug('🌟 Shake event detected', {
         isDragging: this.isDragging,
         intensity: event.intensity,

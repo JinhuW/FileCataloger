@@ -30,6 +30,9 @@
     "../node_modules",
     "../dist",
     "../src/main",
-    "../src/native"
+    "../src/native",
+    "../src/**/__tests__/**/*",
+    "../src/**/*.test.ts",
+    "../src/**/*.test.tsx"
   ]
 }

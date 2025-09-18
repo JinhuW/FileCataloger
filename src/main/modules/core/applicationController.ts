@@ -1,9 +1,9 @@
 import { EventEmitter } from 'events';
 import { createMouseTracker } from '@native/mouse-tracker';
 import { DragShakeDetector } from '../input';
-import { ShelfManager } from '../window/shelf-manager';
-import { errorHandler, ErrorSeverity, ErrorCategory } from '../utils/error-handler';
-import { PreferencesManager } from '../config/preferences-manager';
+import { ShelfManager } from '../window/shelfManager';
+import { errorHandler, ErrorSeverity, ErrorCategory } from '../utils/errorHandler';
+import { PreferencesManager } from '../config/preferencesManager';
 import { MouseTracker } from '@shared/types';
 import { Logger, createLogger } from '../utils/logger';
 import {
@@ -135,7 +135,6 @@ export class ApplicationController extends EventEmitter {
     try {
       // Stop all modules
       this.mouseTracker.stop();
-      this.dragShakeDetector.stop();
       this.dragShakeDetector.stop();
 
       // Close all shelves

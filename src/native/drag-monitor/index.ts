@@ -50,8 +50,29 @@ export interface DragEvent {
   items: DraggedItem[];
 }
 
+interface NativeDragMonitor {
+  start(): boolean;
+  stop(): boolean;
+  hasActiveDrag(): boolean;
+  getDraggedFiles(): Array<{
+    path: string;
+    name?: string;
+    type?: string;
+    isDirectory?: boolean;
+    isFile?: boolean;
+    size?: number;
+    extension?: string;
+    exists?: boolean;
+  }>;
+  isMonitoring(): boolean;
+}
+
+interface NativeDragModule {
+  DarwinDragMonitor: new () => NativeDragMonitor;
+}
+
 // Direct require for the native module - webpack will handle this as an external
-let nativeModule: any = null;
+let nativeModule: NativeDragModule | null = null;
 
 try {
   // Since webpack copies the module to dist/main, we can require it directly
@@ -64,8 +85,8 @@ try {
 }
 
 export class MacDragMonitor extends EventEmitter {
-  private nativeMonitor: any = null;
-  private isMonitoring: boolean = false;
+  private nativeMonitor: NativeDragMonitor | null = null;
+  private monitoring: boolean = false;
   private pollingInterval: ReturnType<typeof setInterval> | null = null;
   private wasActiveDrag: boolean = false;
   private pollCount: number = 0;
@@ -166,7 +187,7 @@ export class MacDragMonitor extends EventEmitter {
   }
 
   public start(): boolean {
-    if (this.isMonitoring) {
+    if (this.monitoring) {
       return false;
     }
 
@@ -177,7 +198,7 @@ export class MacDragMonitor extends EventEmitter {
     try {
       const result = this.nativeMonitor.start();
       if (result) {
-        this.isMonitoring = true;
+        this.monitoring = true;
         this.startPolling();
         this.emit('started');
         logger.info('✅ Native drag monitor started successfully with polling');
@@ -205,7 +226,7 @@ export class MacDragMonitor extends EventEmitter {
       this.stopPolling();
       const result = this.nativeMonitor.stop();
       if (result) {
-        this.isMonitoring = false;
+        this.monitoring = false;
         this.emit('stopped');
       }
       return result;
@@ -217,7 +238,11 @@ export class MacDragMonitor extends EventEmitter {
   }
 
   public isDragging(): boolean {
-    return this.nativeMonitor?.isMonitoring() || false;
+    return this.nativeMonitor?.hasActiveDrag() || false;
+  }
+
+  public isMonitoring(): boolean {
+    return this.monitoring;
   }
 
   public getDraggedItems(): DraggedItem[] {
@@ -225,7 +250,7 @@ export class MacDragMonitor extends EventEmitter {
   }
 
   public destroy(): void {
-    if (this.isMonitoring) {
+    if (this.monitoring) {
       this.stop();
     }
 

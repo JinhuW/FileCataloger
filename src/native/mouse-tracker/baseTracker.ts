@@ -68,6 +68,12 @@ export abstract class BaseMouseTracker extends EventEmitter implements MouseTrac
   }
 
   protected updatePosition(x: number, y: number, fullPosition?: MousePosition): void {
+    // Validate coordinates
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      logger.warn('Invalid mouse position received:', { x, y });
+      return;
+    }
+
     const timestamp = Date.now();
     // Use full position if provided (includes button state), otherwise just x, y, timestamp
     this.lastPosition = fullPosition || { x, y, timestamp };
@@ -93,8 +99,9 @@ export abstract class BaseMouseTracker extends EventEmitter implements MouseTrac
     const now = Date.now();
     const timeDelta = now - this.lastMetricsUpdate;
 
-    // Calculate events per second
-    this.performanceMetrics.mouseEventFrequency = (this.eventCount * 1000) / timeDelta;
+    // Calculate events per second (avoid division by zero)
+    this.performanceMetrics.mouseEventFrequency =
+      timeDelta > 0 ? (this.eventCount * 1000) / timeDelta : 0;
 
     // Get memory usage
     const memUsage = process.memoryUsage();

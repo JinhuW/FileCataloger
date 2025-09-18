@@ -1,9 +1,8 @@
 /**
  * @file shelf.tsx
- * @description Entry point for floating shelf windows in FileCataloger.
- * This file bootstraps shelf windows that appear when users shake their mouse
- * while dragging. It handles two modes: default shelf for file storage and
- * rename shelf for batch file renaming.
+ * @description Entry point for the file rename window in FileCataloger.
+ * This file bootstraps the rename window that appears when users shake their mouse
+ * while dragging files, allowing for batch file renaming operations.
  *
  * @features
  * - Dual mode support (default shelf / rename shelf)
@@ -20,10 +19,10 @@
 
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-import { Shelf } from './components/Shelf';
 import { FileRenameShelf } from './components/FileRenameShelf';
 import { ShelfConfig, ShelfItem } from '@shared/types';
 import { logger } from '@shared/logger';
+import { isShelfConfig, isShelfItem } from './utils/typeGuards';
 import './styles/globals.css';
 
 /**
@@ -38,54 +37,72 @@ const ShelfWindow: React.FC = () => {
     items: [],
     isVisible: true,
     opacity: 0.95,
-    mode: 'rename', // Set to 'rename' to use the new UI
+    mode: 'rename', // Always use rename mode
   });
 
-  // Debug window API
-  logger.debug('Window API debug on mount:');
-  logger.debug('  - window.api:', window.api);
-  logger.debug('  - window.electronAPI:', window.electronAPI);
-  logger.debug('  - typeof window.api:', typeof window.api);
-  logger.debug('  - typeof window.electronAPI:', typeof window.electronAPI);
+  // Debug window API in development only
+  if (process.env.NODE_ENV === 'development') {
+    logger.debug('Window API debug on mount:');
+    logger.debug('  - window.api:', window.api);
+    logger.debug('  - window.electronAPI:', window.electronAPI);
+    logger.debug('  - typeof window.api:', typeof window.api);
+    logger.debug('  - typeof window.electronAPI:', typeof window.electronAPI);
+  }
 
   useEffect(() => {
-    // Listen for configuration updates from main process
-    if (window.api) {
-      window.api.on('shelf:config', (...args: unknown[]) => {
-        const newConfig = args[0] as ShelfConfig;
-        logger.debug(
-          'Received shelf config:',
-          newConfig.id,
-          'with',
-          newConfig.items.length,
-          'items'
-        );
-        setConfig(newConfig);
-      });
+    if (!window.api) return;
 
-      window.api.on('shelf:add-item', (...args: unknown[]) => {
-        const item = args[0] as ShelfItem;
-        setConfig(prev => ({
-          ...prev,
-          items: [...prev.items, item],
-        }));
-      });
+    const cleanups: (() => void)[] = [];
 
-      window.api.on('shelf:remove-item', (...args: unknown[]) => {
-        const itemId = args[0] as string;
-        setConfig(prev => ({
-          ...prev,
-          items: prev.items.filter(item => item.id !== itemId),
-        }));
-      });
-    }
+    // Listen for configuration updates
+    cleanups.push(
+      window.api.on('shelf:config', (newConfig: unknown) => {
+        if (isShelfConfig(newConfig)) {
+          logger.debug(
+            'Received shelf config:',
+            newConfig.id,
+            'with',
+            newConfig.items.length,
+            'items'
+          );
+          setConfig(newConfig);
+        } else if (process.env.NODE_ENV === 'development') {
+          logger.warn('Received invalid shelf config:', newConfig);
+        }
+      })
+    );
 
+    // Listen for item additions
+    cleanups.push(
+      window.api.on('shelf:add-item', (item: unknown) => {
+        if (isShelfItem(item)) {
+          setConfig(prev => ({
+            ...prev,
+            items: [...prev.items, item],
+          }));
+        } else if (process.env.NODE_ENV === 'development') {
+          logger.warn('Received invalid shelf item:', item);
+        }
+      })
+    );
+
+    // Listen for item removals
+    cleanups.push(
+      window.api.on('shelf:remove-item', (itemId: unknown) => {
+        if (typeof itemId === 'string') {
+          setConfig(prev => ({
+            ...prev,
+            items: prev.items.filter(item => item.id !== itemId),
+          }));
+        } else if (process.env.NODE_ENV === 'development') {
+          logger.warn('Received invalid item ID:', itemId);
+        }
+      })
+    );
+
+    // Cleanup all listeners on unmount
     return () => {
-      if (window.api) {
-        window.api.removeAllListeners('shelf:config');
-        window.api.removeAllListeners('shelf:add-item');
-        window.api.removeAllListeners('shelf:remove-item');
-      }
+      cleanups.forEach(cleanup => cleanup());
     };
   }, []);
 
@@ -174,23 +191,13 @@ const ShelfWindow: React.FC = () => {
         justifyContent: 'center',
       }}
     >
-      {config.mode === 'rename' ? (
-        <FileRenameShelf
-          config={config}
-          onConfigChange={handleConfigChange}
-          onItemAdd={handleItemAdd}
-          onItemRemove={handleItemRemove}
-          onClose={handleClose}
-        />
-      ) : (
-        <Shelf
-          config={config}
-          onConfigChange={handleConfigChange}
-          onItemAdd={handleItemAdd}
-          onItemRemove={handleItemRemove}
-          onClose={handleClose}
-        />
-      )}
+      <FileRenameShelf
+        config={config}
+        onConfigChange={handleConfigChange}
+        onItemAdd={handleItemAdd}
+        onItemRemove={handleItemRemove}
+        onClose={handleClose}
+      />
     </div>
   );
 };

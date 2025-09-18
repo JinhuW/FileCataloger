@@ -105,3 +105,37 @@ export interface FileRenamePreview {
   newName: string;
   selected: boolean;
 }
+
+// Application status types
+export interface AppStatus {
+  isRunning: boolean;
+  activeShelves: number;
+  modules: {
+    mouseTracker: boolean;
+    shakeDetector: boolean;
+    dragDetector: boolean;
+  };
+  analytics: {
+    mouseTracker: {
+      eventsPerSecond: number;
+      cpuUsage: number;
+      memoryUsage: number;
+    };
+    shakeDetector: {
+      shakesDetected: number;
+      lastShakeTime: number;
+    };
+    dragDetector: {
+      dragsDetected: number;
+      filesDropped: number;
+    };
+  };
+}
+
+// File info for rename operations
+export interface FileInfo {
+  path: string;
+  name: string;
+  newName: string;
+  error?: string;
+}

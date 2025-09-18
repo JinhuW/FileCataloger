@@ -206,6 +206,7 @@ All IPC messages follow strict schemas defined in `src/shared/ipc-schema.ts`:
 ## Code Style
 
 - Use TypeScript for all new code
+- Use camelCase for all file names (e.g., `dragShakeDetector.ts`, not `drag-shake-detector.ts`)
 - Follow existing patterns in the codebase
 - No console.log in production - use the Logger module
 - Prefer functional components with hooks in React
