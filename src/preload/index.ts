@@ -1,7 +1,27 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
-// Debug log to verify preload is running
-console.log('🔌 Preload script starting...');
+// Helper function to log messages via IPC
+function logToMain(level: 'INFO' | 'WARN' | 'ERROR', message: string): void {
+  try {
+    ipcRenderer.send('logger:log', {
+      level: level === 'INFO' ? 1 : level === 'WARN' ? 2 : 3,
+      levelName: level,
+      message,
+      timestamp: new Date().toISOString(),
+      processType: 'preload',
+    });
+  } catch {
+    // If IPC fails, we can't do anything about it in preload
+  }
+}
+
+// Send startup log via IPC if in development
+if (process.env.NODE_ENV === 'development') {
+  // Defer sending until main process is ready
+  setTimeout(() => {
+    logToMain('INFO', '🔌 Preload script starting...');
+  }, 100);
+}
 
 // Define valid IPC channels - expand this as needed
 const validChannels = [
@@ -30,10 +50,10 @@ const validChannels = [
   'settings:get',
   'settings:set',
   'logger:log',
-  'logger:set-level'
+  'logger:set-level',
 ] as const;
 
-type ValidChannel = typeof validChannels[number];
+type ValidChannel = (typeof validChannels)[number];
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -43,7 +63,7 @@ contextBridge.exposeInMainWorld('api', {
     if (validChannels.includes(channel)) {
       ipcRenderer.send(channel, data);
     } else {
-      console.error(`Invalid IPC channel: ${channel}`);
+      logToMain('ERROR', `Invalid IPC channel: ${channel}`);
     }
   },
 
@@ -55,7 +75,7 @@ contextBridge.exposeInMainWorld('api', {
       // Add the new listener
       ipcRenderer.on(channel, (event, ...args) => func(...args));
     } else {
-      console.error(`Invalid IPC channel: ${channel}`);
+      logToMain('ERROR', `Invalid IPC channel: ${channel}`);
     }
   },
 
@@ -64,7 +84,7 @@ contextBridge.exposeInMainWorld('api', {
     if (validChannels.includes(channel)) {
       ipcRenderer.removeAllListeners(channel);
     } else {
-      console.error(`Invalid IPC channel: ${channel}`);
+      logToMain('ERROR', `Invalid IPC channel: ${channel}`);
     }
   },
 
@@ -73,10 +93,10 @@ contextBridge.exposeInMainWorld('api', {
     if (validChannels.includes(channel)) {
       return await ipcRenderer.invoke(channel, ...args);
     } else {
-      console.error(`Invalid IPC channel: ${channel}`);
+      logToMain('ERROR', `Invalid IPC channel: ${channel}`);
       return null;
     }
-  }
+  },
 });
 
 // Also expose as electronAPI for compatibility with shelf.html
@@ -86,7 +106,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     if (validChannels.includes(channel)) {
       ipcRenderer.send(channel, data);
     } else {
-      console.error(`Invalid IPC channel: ${channel}`);
+      logToMain('ERROR', `Invalid IPC channel: ${channel}`);
     }
   },
 
@@ -98,7 +118,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       // Add the new listener
       ipcRenderer.on(channel, (event, ...args) => func(...args));
     } else {
-      console.error(`Invalid IPC channel: ${channel}`);
+      logToMain('ERROR', `Invalid IPC channel: ${channel}`);
     }
   },
 
@@ -107,7 +127,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     if (validChannels.includes(channel)) {
       ipcRenderer.removeAllListeners(channel);
     } else {
-      console.error(`Invalid IPC channel: ${channel}`);
+      logToMain('ERROR', `Invalid IPC channel: ${channel}`);
     }
   },
 
@@ -116,13 +136,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     if (validChannels.includes(channel)) {
       return await ipcRenderer.invoke(channel, ...args);
     } else {
-      console.error(`Invalid IPC channel: ${channel}`);
+      logToMain('ERROR', `Invalid IPC channel: ${channel}`);
       return null;
     }
-  }
+  },
 });
 
-console.log('🎉 Preload script completed - window.api and window.electronAPI should be available');
+// Send completion log via IPC if in development
+if (process.env.NODE_ENV === 'development') {
+  setTimeout(() => {
+    logToMain(
+      'INFO',
+      '🎉 Preload script completed - window.api and window.electronAPI should be available'
+    );
+  }, 200);
+}
 
 // Type definitions for the exposed API
 export interface IElectronAPI {
@@ -132,9 +160,4 @@ export interface IElectronAPI {
   invoke: (channel: ValidChannel, ...args: unknown[]) => Promise<unknown>;
 }
 
-declare global {
-  interface Window {
-    api: IElectronAPI;
-    electronAPI: IElectronAPI;
-  }
-}
+// Type declarations moved to src/renderer/window.d.ts

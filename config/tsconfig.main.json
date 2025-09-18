@@ -1,0 +1,35 @@
+{
+  // TypeScript config for MAIN PROCESS (Electron backend)
+  // This process runs in Node.js and controls the application
+  //
+  // ⚠️ IMPORTANT: This config is used by webpack.main.config.js
+  // DO NOT merge this with tsconfig.json or tsconfig.renderer.json!
+  //
+  // What's different here:
+  // - NO DOM types (no window, document, etc.) - would be runtime errors
+  // - Has Electron main process APIs (app, BrowserWindow, etc.)
+  // - Full Node.js APIs (fs, path, etc.)
+  //
+  // If you see errors about missing DOM APIs in main process files, that's good!
+  // It means TypeScript is protecting you from runtime crashes.
+
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": ["node", "electron"],
+    "declaration": false,
+    "declarationMap": false,
+    "removeComments": true
+  },
+  "include": [
+    "../src/main/**/*",
+    "../src/shared/**/*",
+    "../src/native/**/*"
+  ],
+  "exclude": [
+    "../node_modules",
+    "../dist",
+    "../src/renderer",
+    "../src/preload"
+  ]
+}

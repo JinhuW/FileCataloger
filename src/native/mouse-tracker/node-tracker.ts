@@ -1,9 +1,12 @@
 import { BaseMouseTracker } from './base-tracker';
 import { screen } from 'electron';
+import { createLogger } from '@main/modules/utils/logger';
+
+const logger = createLogger('NodeMouseTracker');
 
 /**
  * Node.js fallback mouse tracker
- * 
+ *
  * This implementation provides basic mouse tracking functionality
  * for development and testing purposes. In production, platform-specific
  * native modules would provide more efficient tracking.
@@ -18,20 +21,20 @@ export class NodeMouseTracker extends BaseMouseTracker {
     super();
     this.setupButtonSimulation();
   }
-  
+
   private setupButtonSimulation(): void {
     // In fallback mode, we cannot detect real mouse buttons
     // Shelf creation will require actual drag operations
-    console.log('⚠️ Fallback mode: Mouse button detection not available');
-    console.log('📌 Shelf will only appear when dragging files');
-    
+    logger.warn('⚠️ Fallback mode: Mouse button detection not available');
+    logger.info('📌 Shelf will only appear when dragging files');
+
     // Default to false - no button simulation
     this.isLeftButtonDown = false;
   }
 
   start(): void {
     if (this.isActive) {
-      console.warn('NodeMouseTracker is already active');
+      logger.warn('NodeMouseTracker is already active');
       return;
     }
 
@@ -60,7 +63,7 @@ export class NodeMouseTracker extends BaseMouseTracker {
     // Get current cursor position using Electron's screen API
     // Note: This has limitations as it only works when the app has focus
     this.updateCurrentPosition();
-    
+
     // Start polling for position changes
     this.pollInterval = setInterval(() => {
       this.updateCurrentPosition();
@@ -78,14 +81,14 @@ export class NodeMouseTracker extends BaseMouseTracker {
     try {
       // Get cursor position from Electron's screen API
       const point = screen.getCursorScreenPoint();
-      
+
       // Only update if position has changed
       if (point.x !== this.lastPosition.x || point.y !== this.lastPosition.y) {
         this.updatePosition(point.x, point.y, {
           x: point.x,
           y: point.y,
           timestamp: Date.now(),
-          leftButtonDown: false // Cannot detect button state in fallback mode
+          leftButtonDown: false, // Cannot detect button state in fallback mode
         });
       }
     } catch (error) {
@@ -101,7 +104,7 @@ export class NodeMouseTracker extends BaseMouseTracker {
     const time = Date.now();
     const x = 400 + Math.sin(time / 1000) * 200;
     const y = 300 + Math.cos(time / 1500) * 150;
-    
+
     this.updatePosition(Math.round(x), Math.round(y));
   }
 

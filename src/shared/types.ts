@@ -15,10 +15,7 @@ export interface MouseTracker {
   stop(): void;
   getCurrentPosition(): MousePosition;
   isTracking(): boolean;
-  getPerformanceMetrics?(): {
-    mouseEventFrequency: number;
-    [key: string]: any;
-  } | null;
+  getPerformanceMetrics?(): PerformanceMetrics | null;
   on(event: 'position', listener: (position: MousePosition) => void): void;
   on(event: 'error', listener: (error: Error) => void): void;
   removeAllListeners(event?: string): void;

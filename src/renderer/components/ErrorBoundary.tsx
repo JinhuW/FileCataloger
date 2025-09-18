@@ -1,4 +1,5 @@
 import React, { Component, ErrorInfo } from 'react';
+import { logger } from '@shared/logger';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -17,27 +18,27 @@ interface ErrorBoundaryProps {
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    
+
     this.state = {
       hasError: false,
       error: null,
-      errorInfo: null
+      errorInfo: null,
     };
   }
 
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return {
       hasError: true,
-      error
+      error,
     };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
-    
+    logger.error('ErrorBoundary caught an error:', error, errorInfo);
+
     this.setState({
       error,
-      errorInfo
+      errorInfo,
     });
 
     // Log to analytics or error reporting service
@@ -48,14 +49,14 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     this.setState({
       hasError: false,
       error: null,
-      errorInfo: null
+      errorInfo: null,
     });
   };
 
   render(): React.ReactNode {
     if (this.state.hasError) {
       const { fallback: Fallback } = this.props;
-      
+
       if (Fallback && this.state.error) {
         return <Fallback error={this.state.error} retry={this.handleRetry} />;
       }
@@ -73,27 +74,31 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             border: '1px solid rgba(239, 68, 68, 0.3)',
             borderRadius: '8px',
             color: 'white',
-            textAlign: 'center'
+            textAlign: 'center',
           }}
         >
           <div style={{ fontSize: '24px', marginBottom: '16px' }}>⚠️</div>
-          
-          <h3 style={{ 
-            margin: '0 0 8px 0', 
-            fontSize: '16px', 
-            color: '#ef4444' 
-          }}>
+
+          <h3
+            style={{
+              margin: '0 0 8px 0',
+              fontSize: '16px',
+              color: '#ef4444',
+            }}
+          >
             Something went wrong
           </h3>
-          
-          <p style={{ 
-            margin: '0 0 16px 0', 
-            fontSize: '14px', 
-            opacity: 0.8 
-          }}>
+
+          <p
+            style={{
+              margin: '0 0 16px 0',
+              fontSize: '14px',
+              opacity: 0.8,
+            }}
+          >
             {this.state.error?.message || 'An unexpected error occurred'}
           </p>
-          
+
           <button
             onClick={this.handleRetry}
             style={{
@@ -103,31 +108,33 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               color: 'rgba(59, 130, 246, 0.9)',
               padding: '8px 16px',
               cursor: 'pointer',
-              fontSize: '14px'
+              fontSize: '14px',
             }}
           >
             Try again
           </button>
 
           {process.env.NODE_ENV === 'development' && this.state.errorInfo && (
-            <details style={{ 
-              marginTop: '16px', 
-              fontSize: '12px', 
-              opacity: 0.7,
-              maxWidth: '100%',
-              overflow: 'auto'
-            }}>
-              <summary style={{ cursor: 'pointer', marginBottom: '8px' }}>
-                Error details
-              </summary>
-              <pre style={{ 
-                whiteSpace: 'pre-wrap', 
-                wordWrap: 'break-word',
-                textAlign: 'left',
-                background: 'rgba(0, 0, 0, 0.3)',
-                padding: '8px',
-                borderRadius: '4px'
-              }}>
+            <details
+              style={{
+                marginTop: '16px',
+                fontSize: '12px',
+                opacity: 0.7,
+                maxWidth: '100%',
+                overflow: 'auto',
+              }}
+            >
+              <summary style={{ cursor: 'pointer', marginBottom: '8px' }}>Error details</summary>
+              <pre
+                style={{
+                  whiteSpace: 'pre-wrap',
+                  wordWrap: 'break-word',
+                  textAlign: 'left',
+                  background: 'rgba(0, 0, 0, 0.3)',
+                  padding: '8px',
+                  borderRadius: '4px',
+                }}
+              >
                 {this.state.error?.stack}
                 {this.state.errorInfo.componentStack}
               </pre>

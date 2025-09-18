@@ -1,0 +1,36 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["../src"],
+  "entryPointStrategy": "expand",
+  "out": "../docs/api",
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/build/**",
+    "**/*.test.ts",
+    "**/*.spec.ts"
+  ],
+  "theme": "default",
+  "name": "FileCataloger API Documentation",
+  "includeVersion": true,
+  "excludePrivate": true,
+  "excludeProtected": false,
+  "excludeInternal": true,
+  "readme": "../README.md",
+  "plugin": ["typedoc-plugin-missing-exports"],
+  "categorizeByGroup": true,
+  "navigation": {
+    "includeCategories": true,
+    "includeGroups": true
+  },
+  "hideGenerator": false,
+  "searchInComments": true,
+  "treatWarningsAsErrors": true,
+  "treatValidationWarningsAsErrors": true,
+  "visibilityFilters": {
+    "protected": true,
+    "private": false,
+    "inherited": true,
+    "external": false
+  }
+}

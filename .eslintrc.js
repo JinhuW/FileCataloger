@@ -5,12 +5,14 @@ module.exports = {
     '@typescript-eslint',
     'react',
     'react-hooks',
+    'electron',
   ],
   extends: [
     'eslint:recommended',
     'plugin:@typescript-eslint/recommended',
     'plugin:react/recommended',
     'plugin:react-hooks/recommended',
+    'plugin:electron/recommended',
     'prettier',
   ],
   env: {
@@ -37,11 +39,11 @@ module.exports = {
     '@typescript-eslint/explicit-function-return-type': 'off',
     '@typescript-eslint/explicit-module-boundary-types': 'off',
     '@typescript-eslint/no-non-null-assertion': 'warn',
-    
+
     // React specific rules
     'react/prop-types': 'off', // Using TypeScript for prop validation
     'react/react-in-jsx-scope': 'off', // React 17+ doesn't require React import
-    
+
     // General rules
     'no-console': 'warn',
     'prefer-const': 'error',
@@ -60,6 +62,13 @@ module.exports = {
       files: ['webpack.*.js', 'forge.config.js'],
       rules: {
         '@typescript-eslint/no-var-requires': 'off',
+        'no-console': 'off',
+      },
+    },
+    {
+      // Allow console statements in logger modules
+      files: ['**/logger.ts', '**/logger.js'],
+      rules: {
         'no-console': 'off',
       },
     },

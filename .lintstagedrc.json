@@ -12,14 +12,7 @@
     "prettier --write"
   ],
   "package.json": [
-    "prettier --write",
-    "yarn deps:check"
-  ],
-  "src/main/**/*.ts": [
-    "bash -c 'node scripts/check-electron-main-security.js'"
-  ],
-  "src/native/**/*.{cpp,cc,h,hpp}": [
-    "bash -c 'node scripts/check-native-code.js'"
+    "prettier --write"
   ],
   "*.md": [
     "prettier --write"

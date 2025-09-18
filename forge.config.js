@@ -1,10 +1,10 @@
 const now = new Date();
 // Short timestamp for DMG (to stay under 27 char limit)
 const shortTimestamp = now.toISOString().slice(0, 10); // YYYY-MM-DD format
-const buildDate = now.toLocaleDateString('en-US', { 
-  year: 'numeric', 
-  month: '2-digit', 
-  day: '2-digit' 
+const buildDate = now.toLocaleDateString('en-US', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit'
 }).replace(/\//g, '-');
 
 module.exports = {

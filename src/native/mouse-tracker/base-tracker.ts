@@ -1,5 +1,8 @@
 import { EventEmitter } from 'events';
 import { MouseTracker, MousePosition, PerformanceMetrics } from '@shared/types';
+import { createLogger } from '@main/modules/utils/logger';
+
+const logger = createLogger('BaseMouseTracker');
 
 /**
  * Base class for mouse tracking implementations
@@ -12,7 +15,7 @@ export abstract class BaseMouseTracker extends EventEmitter implements MouseTrac
     mouseEventFrequency: 0,
     memoryUsage: 0,
     cpuUsage: 0,
-    lastUpdate: Date.now()
+    lastUpdate: Date.now(),
   };
 
   // Performance monitoring
@@ -43,13 +46,13 @@ export abstract class BaseMouseTracker extends EventEmitter implements MouseTrac
     // Use full position if provided (includes button state), otherwise just x, y, timestamp
     this.lastPosition = fullPosition || { x, y, timestamp };
     this.eventCount++;
-    
+
     // Emit position event
     this.emit('position', this.lastPosition);
   }
 
   protected handleError(error: Error): void {
-    console.error('Mouse tracker error:', error);
+    logger.error('Mouse tracker error:', error);
     this.emit('error', error);
   }
 
@@ -63,19 +66,19 @@ export abstract class BaseMouseTracker extends EventEmitter implements MouseTrac
   private updatePerformanceMetrics(): void {
     const now = Date.now();
     const timeDelta = now - this.lastMetricsUpdate;
-    
+
     // Calculate events per second
     this.performanceMetrics.mouseEventFrequency = (this.eventCount * 1000) / timeDelta;
-    
+
     // Get memory usage
     const memUsage = process.memoryUsage();
     this.performanceMetrics.memoryUsage = memUsage.heapUsed;
-    
+
     // CPU usage would require additional implementation
     this.performanceMetrics.cpuUsage = 0; // TODO: Implement CPU monitoring
-    
+
     this.performanceMetrics.lastUpdate = now;
-    
+
     // Reset counters
     this.eventCount = 0;
     this.lastMetricsUpdate = now;
@@ -90,7 +93,7 @@ export abstract class BaseMouseTracker extends EventEmitter implements MouseTrac
       clearInterval(this.metricsInterval);
       this.metricsInterval = undefined;
     }
-    
+
     this.removeAllListeners();
     this.isActive = false;
   }

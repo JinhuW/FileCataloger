@@ -7,11 +7,7 @@ interface TooltipProps {
   delay?: number;
 }
 
-export const Tooltip: React.FC<TooltipProps> = ({
-  children,
-  content,
-  delay = 500
-}) => {
+export const Tooltip: React.FC<TooltipProps> = ({ children, content, delay = 500 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -21,7 +17,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
     const rect = e.currentTarget.getBoundingClientRect();
     setPosition({
       x: rect.left + rect.width / 2,
-      y: rect.top - 5
+      y: rect.top - 5,
     });
 
     timeoutRef.current = setTimeout(() => {
@@ -79,7 +75,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
               pointerEvents: 'none',
               maxWidth: '400px',
               overflow: 'hidden',
-              textOverflow: 'ellipsis'
+              textOverflow: 'ellipsis',
             }}
           >
             {content}

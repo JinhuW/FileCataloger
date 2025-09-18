@@ -1,13 +1,22 @@
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, systemPreferences, dialog } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  Tray,
+  Menu,
+  nativeImage,
+  systemPreferences,
+  dialog,
+} from 'electron';
 import * as path from 'path';
-import { ApplicationController } from './modules/application-controller';
-import { preferencesManager } from './modules/preferences-manager';
-import { keyboardManager } from './modules/keyboard-manager';
-import { performanceMonitor } from './modules/performance-monitor';
-import { errorHandler, ErrorSeverity, ErrorCategory } from './modules/error-handler';
-import { Logger, LogLevel } from './modules/logger';
-import { LogEntry } from '../shared/logger';
-import { securityConfig } from './modules/security-config';
+import { ApplicationController } from './modules/core/application-controller';
+import { preferencesManager } from './modules/config/preferences-manager';
+import { keyboardManager } from './modules/input/keyboard-manager';
+import { performanceMonitor } from './modules/utils/performance-monitor';
+import { errorHandler, ErrorSeverity, ErrorCategory } from './modules/utils/error-handler';
+import { Logger, LogLevel } from './modules/utils/logger';
+import { LogEntry } from '@shared/logger';
+import { securityConfig } from './modules/config/security-config';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -49,7 +58,7 @@ class FileCatalogerApp {
     });
 
     // Handle app quit
-    app.on('before-quit', async (event) => {
+    app.on('before-quit', async event => {
       // If already quitting, let it proceed
       if (this.isQuitting) {
         return;
@@ -63,7 +72,7 @@ class FileCatalogerApp {
       try {
         await this.performGracefulShutdown();
       } catch (error) {
-        console.error('Error during graceful shutdown:', error);
+        this.logger.error('Error during graceful shutdown:', error);
       }
 
       // Force quit after cleanup or timeout
@@ -73,7 +82,7 @@ class FileCatalogerApp {
     });
 
     // Ensure cleanup happens even if before-quit is skipped
-    app.on('will-quit', (event) => {
+    app.on('will-quit', event => {
       if (!this.isQuitting) {
         event.preventDefault();
         this.isQuitting = true;
@@ -106,11 +115,13 @@ class FileCatalogerApp {
       const result = await dialog.showMessageBox({
         type: 'warning',
         title: 'Accessibility Permission Required',
-        message: 'FileCataloger needs accessibility permission to detect mouse movements and file dragging.',
-        detail: 'Please grant permission in System Settings > Privacy & Security > Accessibility, then restart the app.',
+        message:
+          'FileCataloger needs accessibility permission to detect mouse movements and file dragging.',
+        detail:
+          'Please grant permission in System Settings > Privacy & Security > Accessibility, then restart the app.',
         buttons: ['Open System Settings', 'Continue Without Permission', 'Quit'],
         defaultId: 0,
-        cancelId: 2
+        cancelId: 2,
       });
 
       if (result.response === 0) {
@@ -164,10 +175,10 @@ class FileCatalogerApp {
       this.setupKeyboardHandlers();
       this.setupPerformanceHandlers();
     } catch (error) {
-      console.error('Failed to start application controller:', error);
+      this.logger.error('Failed to start application controller:', error);
       errorHandler.handleError(error as Error, {
         severity: ErrorSeverity.CRITICAL,
-        category: ErrorCategory.SYSTEM
+        category: ErrorCategory.SYSTEM,
       });
     }
 
@@ -175,14 +186,13 @@ class FileCatalogerApp {
     this.setupIpcHandlers();
   }
 
-
   private createSystemTray(): void {
     try {
       // Create tray icon
       const trayIcon = this.createTrayIcon();
       this.tray = new Tray(trayIcon);
 
-      console.log('✓ System tray created');
+      this.logger.info('✓ System tray created');
 
       // Set tray tooltip
       this.tray.setToolTip('FileCataloger - Drag files to create temporary shelves');
@@ -193,7 +203,7 @@ class FileCatalogerApp {
           label: 'Show Status',
           click: () => {
             this.showMainWindow();
-          }
+          },
         },
         { type: 'separator' },
         {
@@ -201,7 +211,7 @@ class FileCatalogerApp {
           accelerator: 'CommandOrControl+,',
           click: () => {
             preferencesManager.showPreferencesWindow();
-          }
+          },
         },
         {
           label: 'Performance',
@@ -213,14 +223,14 @@ class FileCatalogerApp {
                 const metrics = performanceMonitor.getMetrics();
                 if (metrics) {
                   const message = `CPU: ${metrics.cpu.usage.toFixed(1)}%\nMemory: ${metrics.memory.percentage.toFixed(1)}%\nHealth: ${status.healthy ? 'Good' : 'Issues detected'}`;
-                  console.log(message);
+                  this.logger.info(message);
                   if (status.issues.length > 0) {
-                    console.log('Issues:', status.issues.join('\n'));
+                    this.logger.info('Issues:', status.issues.join('\n'));
                   }
                 }
-              }
-            }
-          ]
+              },
+            },
+          ],
         },
         { type: 'separator' },
         {
@@ -239,14 +249,13 @@ class FileCatalogerApp {
 
             // Force exit after cleanup
             app.exit(0);
-          }
-        }
+          },
+        },
       ]);
 
       this.tray.setContextMenu(contextMenu);
-
     } catch (error) {
-      console.error('Failed to create system tray:', error);
+      this.logger.error('Failed to create system tray:', error);
     }
   }
 
@@ -269,9 +278,9 @@ class FileCatalogerApp {
           const distance = Math.abs(x - centerX) + Math.abs(y - centerY);
 
           if (distance >= 3 && distance <= 5) {
-            canvas[index] = 0;       // R
-            canvas[index + 1] = 0;   // G
-            canvas[index + 2] = 0;   // B
+            canvas[index] = 0; // R
+            canvas[index + 1] = 0; // G
+            canvas[index + 2] = 0; // B
             canvas[index + 3] = 200; // A
           }
         }
@@ -280,24 +289,23 @@ class FileCatalogerApp {
       const image = nativeImage.createFromBuffer(canvas, { width: size, height: size });
       image.setTemplateImage(true);
 
-      console.log('✓ Tray icon created successfully');
+      this.logger.info('✓ Tray icon created successfully');
       return image;
-
     } catch (error) {
-      console.error('Failed to create custom tray icon:', error);
+      this.logger.error('Failed to create custom tray icon:', error);
 
       try {
         // Fallback: Try to create from a simple base64 PNG
-        const simpleIcon = 'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAFWSURBVDiNpZM9SwNBEIafgwQSCxsLwcJCG1sLG0uxsLGwsLGwsLBQsLGwsLGwsLGwsLGwsLBQsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLBQsLGwsLGwsLBQ';
+        const simpleIcon =
+          'iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAABHNCSVQICAgIfAhkiAAAAAlwSFlzAAAAdgAAAHYBTnsmCAAAABl0RVh0U29mdHdhcmUAd3d3Lmlua3NjYXBlLm9yZ5vuPBoAAAFWSURBVDiNpZM9SwNBEIafgwQSCxsLwcJCG1sLG0uxsLGwsLGwsLBQsLGwsLGwsLGwsLGwsLBQsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLBQsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLGwsLBQsLGwsLGwsLBQ';
         const buffer = Buffer.from(simpleIcon, 'base64');
         const fallbackImage = nativeImage.createFromBuffer(buffer);
         fallbackImage.setTemplateImage(true);
 
-        console.log('✓ Using fallback tray icon');
+        this.logger.info('✓ Using fallback tray icon');
         return fallbackImage;
-
       } catch (fallbackError) {
-        console.error('Failed to create fallback tray icon:', fallbackError);
+        this.logger.error('Failed to create fallback tray icon:', fallbackError);
 
         // Last resort: create a minimal 16x16 black dot
         const dotSize = 16;
@@ -311,7 +319,7 @@ class FileCatalogerApp {
           for (let x = centerX - 2; x <= centerX + 2; x++) {
             if (x >= 0 && x < dotSize && y >= 0 && y < dotSize) {
               const index = (y * dotSize + x) * 4;
-              dotCanvas[index] = 0;     // R
+              dotCanvas[index] = 0; // R
               dotCanvas[index + 1] = 0; // G
               dotCanvas[index + 2] = 0; // B
               dotCanvas[index + 3] = 255; // A
@@ -319,10 +327,13 @@ class FileCatalogerApp {
           }
         }
 
-        const dotImage = nativeImage.createFromBuffer(dotCanvas, { width: dotSize, height: dotSize });
+        const dotImage = nativeImage.createFromBuffer(dotCanvas, {
+          width: dotSize,
+          height: dotSize,
+        });
         dotImage.setTemplateImage(true);
 
-        console.log('✓ Using minimal dot tray icon');
+        this.logger.info('✓ Using minimal dot tray icon');
         return dotImage;
       }
     }
@@ -376,7 +387,7 @@ class FileCatalogerApp {
     });
 
     ipcMain.on('shelf:files-dropped', (event, data) => {
-      console.log('📡 Received shelf:files-dropped IPC:', data);
+      this.logger.debug('📡 Received shelf:files-dropped IPC:', data);
       this.applicationController.handleFilesDropped(data.shelfId, data.files);
     });
 
@@ -434,7 +445,8 @@ class FileCatalogerApp {
         preload: path.join(__dirname, '../preload/index.js'),
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: false // Set to false for now to avoid issues
+        sandbox: false, // Set to false for now to avoid issues
+        webviewTag: false, // Explicitly set to false as per Electron security recommendations
       },
       show: false, // Don't show by default - only when requested
       title: 'FileCataloger - Status',
@@ -442,7 +454,7 @@ class FileCatalogerApp {
       closable: true,
       resizable: false, // Fixed size window
       skipTaskbar: false,
-      backgroundColor: '#ffffff' // Set white background
+      backgroundColor: '#ffffff', // Set white background
     });
 
     // Load the index.html of the app from the built renderer
@@ -462,7 +474,7 @@ class FileCatalogerApp {
     }
 
     // Emitted when the window is closed - hide instead of destroy for menu bar apps
-    this.mainWindow.on('close', (event) => {
+    this.mainWindow.on('close', event => {
       if (!this.isQuitting) {
         event.preventDefault();
         this.mainWindow?.hide();
@@ -514,21 +526,18 @@ class FileCatalogerApp {
   }
 
   private setupPerformanceHandlers(): void {
-    performanceMonitor.on('performance-warning', (warning) => {
-      console.warn('Performance warning:', warning);
+    performanceMonitor.on('performance-warning', warning => {
+      this.logger.warn('Performance warning:', warning);
 
       // Log to error handler
-      errorHandler.handleError(
-        `Performance warning: ${warning.type}`,
-        {
-          severity: warning.type.includes('critical') ? ErrorSeverity.HIGH : ErrorSeverity.MEDIUM,
-          category: ErrorCategory.PERFORMANCE,
-          context: warning
-        }
-      );
+      errorHandler.handleError(`Performance warning: ${warning.type}`, {
+        severity: warning.type.includes('critical') ? ErrorSeverity.HIGH : ErrorSeverity.MEDIUM,
+        category: ErrorCategory.PERFORMANCE,
+        context: warning,
+      });
     });
 
-    performanceMonitor.on('performance-warning-cleared', (_data) => {
+    performanceMonitor.on('performance-warning-cleared', _data => {
       // Performance warning cleared
     });
   }
