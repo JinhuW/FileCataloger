@@ -347,10 +347,13 @@ export class ApplicationController extends EventEmitter {
       this.logger.info('📦 Creating new shelf at cursor position');
       const currentPos = this.mouseTracker.getCurrentPosition();
 
+      const preferences = this.preferencesManager.getPreferences();
       const shelfId = await this.shelfManager.createShelf({
         position: { x: currentPos.x - 150, y: currentPos.y - 200 },
         isPinned: false,
         isVisible: true,
+        opacity: preferences.shelf.opacity,
+        mode: 'rename', // Always create rename mode shelves
         items: [], // Start with empty shelf - let user drop files
       });
 
@@ -523,7 +526,12 @@ export class ApplicationController extends EventEmitter {
    * Create a shelf manually
    */
   public async createShelf(config?: Partial<any>): Promise<string> {
-    return await this.shelfManager.createShelf(config);
+    const preferences = this.preferencesManager.getPreferences();
+    const finalConfig = {
+      opacity: preferences.shelf.opacity,
+      ...config,
+    };
+    return await this.shelfManager.createShelf(finalConfig);
   }
 
   /**
@@ -539,8 +547,10 @@ export class ApplicationController extends EventEmitter {
   private async createTestShelf(): Promise<void> {
     try {
       this.logger.info('🧪 Creating test shelf at center of screen');
+      const preferences = this.preferencesManager.getPreferences();
       const testShelfId = await this.shelfManager.createShelf({
         position: { x: 100, y: 100 },
+        opacity: preferences.shelf.opacity,
       });
       this.logger.info('🧪 Test shelf created with ID:', testShelfId);
       this.activeShelves.add(testShelfId);

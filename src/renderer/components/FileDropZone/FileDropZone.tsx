@@ -47,7 +47,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
 }) => {
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const handleDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
+    async (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
       e.stopPropagation();
       onDragOver(false);
@@ -56,13 +56,51 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
       const dataTransfer = e.dataTransfer;
 
       if (dataTransfer.files && dataTransfer.files.length > 0) {
+        // Collect paths for type checking
+        const pathsToCheck: string[] = [];
+        const fileMap: Map<string, { file: File; index: number }> = new Map();
+
         for (let i = 0; i < dataTransfer.files.length; i++) {
           const file = dataTransfer.files[i];
+          const filePath = (file as unknown as { path?: string }).path;
+          if (filePath) {
+            pathsToCheck.push(filePath);
+            fileMap.set(filePath, { file, index: i });
+          }
+        }
+
+        // Check path types if we have paths
+        let pathTypes: Record<string, 'file' | 'folder' | 'unknown'> = {};
+        if (pathsToCheck.length > 0) {
+          try {
+            pathTypes = await window.api.invoke('fs:check-path-type', pathsToCheck) as Record<string, 'file' | 'folder' | 'unknown'>;
+          } catch (error) {
+            console.error('Failed to check path types:', error);
+          }
+        }
+
+        for (let i = 0; i < dataTransfer.files.length; i++) {
+          const file = dataTransfer.files[i];
+          const filePath = (file as unknown as { path?: string }).path;
+
+          // Determine type based on file system check or fallback to heuristics
+          let type: ShelfItem['type'] = 'file';
+          if (filePath && pathTypes[filePath]) {
+            type = pathTypes[filePath] === 'folder' ? 'folder' :
+                   file.type.startsWith('image/') ? 'image' : 'file';
+          } else {
+            // Fallback to heuristic detection
+            const hasExtension = file.name.includes('.') && !file.name.endsWith('.app');
+            const isFolder = (!hasExtension && file.size === 0) ||
+                            (!file.type && !hasExtension);
+            type = isFolder ? 'folder' : (file.type.startsWith('image/') ? 'image' : 'file');
+          }
+
           const item: ShelfItem = {
             id: `file-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 11)}`,
-            type: file.type.startsWith('image/') ? 'image' : 'file',
+            type,
             name: file.name,
-            path: (file as unknown as { path?: string }).path || undefined,
+            path: filePath || undefined,
             size: file.size,
             createdAt: Date.now(),
           };
@@ -105,18 +143,57 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
   }, []);
 
   const handleFileSelect = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
       const files = e.target.files;
       if (!files || files.length === 0) return;
 
       const items: ShelfItem[] = [];
+
+      // Collect paths for type checking
+      const pathsToCheck: string[] = [];
+      const fileMap: Map<string, { file: File; index: number }> = new Map();
+
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
+        const filePath = (file as unknown as { path?: string }).path;
+        if (filePath) {
+          pathsToCheck.push(filePath);
+          fileMap.set(filePath, { file, index: i });
+        }
+      }
+
+      // Check path types if we have paths
+      let pathTypes: Record<string, 'file' | 'folder' | 'unknown'> = {};
+      if (pathsToCheck.length > 0) {
+        try {
+          pathTypes = await window.api.invoke('fs:check-path-type', pathsToCheck) as Record<string, 'file' | 'folder' | 'unknown'>;
+        } catch (error) {
+          console.error('Failed to check path types:', error);
+        }
+      }
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const filePath = (file as unknown as { path?: string }).path;
+
+        // Determine type based on file system check or fallback to heuristics
+        let type: ShelfItem['type'] = 'file';
+        if (filePath && pathTypes[filePath]) {
+          type = pathTypes[filePath] === 'folder' ? 'folder' :
+                 file.type.startsWith('image/') ? 'image' : 'file';
+        } else {
+          // Fallback to heuristic detection
+          const hasExtension = file.name.includes('.') && !file.name.endsWith('.app');
+          const isFolder = (!hasExtension && file.size === 0) ||
+                          (!file.type && !hasExtension);
+          type = isFolder ? 'folder' : (file.type.startsWith('image/') ? 'image' : 'file');
+        }
+
         const item: ShelfItem = {
           id: `file-${Date.now()}-${i}-${Math.random().toString(36).substring(2, 11)}`,
-          type: file.type.startsWith('image/') ? 'image' : 'file',
+          type,
           name: file.name,
-          path: (file as unknown as { path?: string }).path || undefined,
+          path: filePath || undefined,
           size: file.size,
           createdAt: Date.now(),
         };

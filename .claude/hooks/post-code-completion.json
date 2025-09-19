@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-hook.json",
+  "name": "post-code-completion",
+  "description": "Automatically rebuild FileCataloger after code changes",
+  "version": "1.0.0",
+  "enabled": true,
+  "triggers": [
+    "PostToolUse",
+    "SessionIdle",
+    "BatchComplete"
+  ],
+  "config": {
+    "projectRoot": "/Users/jinhu/Development/File_Cataloger_Project/FileCataloger",
+    "rebuildThreshold": 3,
+    "idleTimeout": 5000,
+    "autoRestart": true,
+    "smartRebuild": true
+  },
+  "scripts": {
+    "main": "./scripts/auto-rebuild.sh",
+    "analyzer": "./scripts/change-analyzer.js",
+    "reporter": "./scripts/build-reporter.js"
+  },
+  "patterns": {
+    "source": ["src/**/*.{ts,tsx,js,jsx}"],
+    "native": ["src/native/**/*.{cc,h,gyp}"],
+    "config": ["*.json", "config/**/*", "webpack.*.js"],
+    "styles": ["src/**/*.{css,scss,less}", "tailwind.config.js"],
+    "tests": ["src/**/*.{test,spec}.{ts,tsx,js,jsx}", "vitest.config.ts"]
+  }
+}

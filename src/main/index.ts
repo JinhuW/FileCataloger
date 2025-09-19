@@ -8,6 +8,7 @@ import {
   systemPreferences,
   dialog,
 } from 'electron';
+import * as fs from 'fs';
 import * as path from 'path';
 import { ApplicationController } from './modules/core';
 import { preferencesManager } from './modules/config';
@@ -261,9 +262,19 @@ class FileCatalogerApp {
 
   private createTrayIcon(): Electron.NativeImage {
     try {
-      // Try multiple approaches to create a tray icon
+      // Try to load icon from assets first
+      const iconPath = path.join(__dirname, '../../assets/tray-icon.png');
+      // const icon2xPath = path.join(__dirname, '../../assets/tray-icon@2x.png');
 
-      // Approach 1: Use a simple geometric pattern
+      // Check if icon files exist
+      if (fs.existsSync(iconPath)) {
+        const image = nativeImage.createFromPath(iconPath);
+        image.setTemplateImage(true);
+        this.logger.info('✓ Tray icon loaded from assets');
+        return image;
+      }
+
+      // Fallback: Use a simple geometric pattern
       const size = 16;
       const canvas = Buffer.alloc(size * size * 4, 0);
 
@@ -289,7 +300,7 @@ class FileCatalogerApp {
       const image = nativeImage.createFromBuffer(canvas, { width: size, height: size });
       image.setTemplateImage(true);
 
-      this.logger.info('✓ Tray icon created successfully');
+      this.logger.info('✓ Tray icon created programmatically');
       return image;
     } catch (error) {
       this.logger.error('Failed to create custom tray icon:', error);
@@ -429,6 +440,37 @@ class FileCatalogerApp {
 
     ipcMain.on('logger:set-level', (event, level: LogLevel) => {
       this.logger.setLogLevel(level);
+    });
+
+    // Handle folder selection dialog
+    ipcMain.handle('dialog:select-folder', async (event, defaultPath?: string) => {
+      const result = await dialog.showOpenDialog({
+        defaultPath: defaultPath || app.getPath('downloads'),
+        properties: ['openDirectory', 'createDirectory'],
+        title: 'Select Destination Folder',
+        buttonLabel: 'Select Folder',
+      });
+
+      if (!result.canceled && result.filePaths.length > 0) {
+        return result.filePaths[0];
+      }
+      return null;
+    });
+
+    // Check if path is a directory
+    ipcMain.handle('fs:check-path-type', async (event, paths: string[]) => {
+      const results: Record<string, 'file' | 'folder' | 'unknown'> = {};
+
+      for (const filePath of paths) {
+        try {
+          const stats = await fs.promises.stat(filePath);
+          results[filePath] = stats.isDirectory() ? 'folder' : 'file';
+        } catch (error) {
+          results[filePath] = 'unknown';
+        }
+      }
+
+      return results;
     });
   }
 

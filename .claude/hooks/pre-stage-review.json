@@ -1,0 +1,56 @@
+{
+  "name": "pre-stage-review",
+  "description": "Automated code review before staging files",
+  "trigger": "pre-stage",
+  "enabled": true,
+  "config": {
+    "agents": ["code-reviewer", "react-ui-reviewer"],
+    "filePatterns": [
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.js",
+      "**/*.jsx"
+    ],
+    "excludePatterns": [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/out/**",
+      "**/.next/**",
+      "**/coverage/**",
+      "**/*.test.ts",
+      "**/*.spec.ts",
+      "**/*.test.tsx",
+      "**/*.spec.tsx"
+    ],
+    "maxFilesPerReview": 10,
+    "cacheTimeout": 3600,
+    "severityThreshold": "warning",
+    "autoFix": false,
+    "reviewOptions": {
+      "checkSecurity": true,
+      "checkPerformance": true,
+      "checkAccessibility": true,
+      "checkTypeScript": true,
+      "checkElectronPatterns": true,
+      "checkNativeModules": true
+    }
+  },
+  "output": {
+    "format": "markdown",
+    "destination": ".claude/review-reports/",
+    "includeMetrics": true,
+    "includeSuggestions": true
+  },
+  "integration": {
+    "gitHooks": {
+      "pre-commit": false,
+      "pre-push": false,
+      "pre-stage": true
+    },
+    "ci": {
+      "enabled": false,
+      "failOnError": true,
+      "commentOnPR": true
+    }
+  }
+}

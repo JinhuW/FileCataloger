@@ -65,7 +65,12 @@ export function createShelfItem(
   const id = generateItemId(type, index);
 
   // Extract file path if available (Electron-specific)
-  const path = (file as any).path || (file as any).filepath;
+  interface ElectronFile extends File {
+    path?: string;
+    filepath?: string;
+  }
+  const electronFile = file as ElectronFile;
+  const path = electronFile.path || electronFile.filepath;
 
   const item: ShelfItem = {
     id,

@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FileCataloger Preferences</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+      padding: 20px;
+      user-select: none;
+    }
+
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 20px;
+      color: #222;
+    }
+
+    h2 {
+      font-size: 18px;
+      font-weight: 500;
+      margin-bottom: 15px;
+      color: #333;
+    }
+
+    .section {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 15px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
+
+    .preference-item {
+      margin-bottom: 20px;
+    }
+
+    .preference-item:last-child {
+      margin-bottom: 0;
+    }
+
+    label {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .checkbox-label {
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+    }
+
+    input[type="checkbox"] {
+      margin-right: 10px;
+      cursor: pointer;
+    }
+
+    .slider-container {
+      display: flex;
+      align-items: center;
+      gap: 15px;
+    }
+
+    input[type="range"] {
+      flex: 1;
+      -webkit-appearance: none;
+      height: 6px;
+      border-radius: 3px;
+      background: #ddd;
+      outline: none;
+      transition: background 0.3s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #007AFF;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    input[type="range"]::-webkit-slider-thumb:hover {
+      transform: scale(1.1);
+      box-shadow: 0 2px 8px rgba(0, 122, 255, 0.3);
+    }
+
+    input[type="range"]:focus {
+      background: #d0d0d0;
+    }
+
+    .value-display {
+      min-width: 50px;
+      text-align: right;
+      font-weight: 600;
+      color: #007AFF;
+      font-size: 14px;
+    }
+
+    .description {
+      font-size: 12px;
+      color: #666;
+      margin-top: 5px;
+      line-height: 1.4;
+    }
+
+    select {
+      padding: 8px 12px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      background: white;
+      font-size: 14px;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    select:focus {
+      border-color: #007AFF;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      justify-content: flex-end;
+      margin-top: 20px;
+    }
+
+    button {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .primary-button {
+      background: #007AFF;
+      color: white;
+    }
+
+    .primary-button:hover {
+      background: #0056b3;
+    }
+
+    .secondary-button {
+      background: #e0e0e0;
+      color: #333;
+    }
+
+    .secondary-button:hover {
+      background: #d0d0d0;
+    }
+
+    .status {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background: #28a745;
+      color: white;
+      padding: 12px 20px;
+      border-radius: 6px;
+      font-size: 14px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.3s;
+      pointer-events: none;
+    }
+
+    .status.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  </style>
+</head>
+<body>
+  <h1>FileCataloger Preferences</h1>
+
+  <div class="section">
+    <h2>General</h2>
+    <div class="preference-item">
+      <label class="checkbox-label">
+        <input type="checkbox" id="launchAtStartup">
+        <span>Launch FileCataloger at startup</span>
+      </label>
+    </div>
+    <div class="preference-item">
+      <label class="checkbox-label">
+        <input type="checkbox" id="showInDock">
+        <span>Show in dock</span>
+      </label>
+    </div>
+    <div class="preference-item">
+      <label class="checkbox-label">
+        <input type="checkbox" id="showInMenuBar">
+        <span>Show in menu bar</span>
+      </label>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Shelf Appearance</h2>
+    <div class="preference-item">
+      <label for="opacity">Window Opacity</label>
+      <div class="slider-container">
+        <input type="range" id="opacity" min="50" max="100" value="85" step="5">
+        <span class="value-display">85%</span>
+      </div>
+      <div class="description">Adjust how transparent the shelf windows appear. Lower values make shelves more see-through.</div>
+    </div>
+    <div class="preference-item">
+      <label for="animationSpeed">Animation Speed</label>
+      <select id="animationSpeed">
+        <option value="slow">Slow</option>
+        <option value="normal" selected>Normal</option>
+        <option value="fast">Fast</option>
+        <option value="instant">Instant</option>
+      </select>
+    </div>
+    <div class="preference-item">
+      <label for="theme">Theme</label>
+      <select id="theme">
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+        <option value="auto" selected>Auto (System)</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Shake Detection</h2>
+    <div class="preference-item">
+      <label class="checkbox-label">
+        <input type="checkbox" id="shakeEnabled" checked>
+        <span>Enable shake gesture to create shelves</span>
+      </label>
+    </div>
+    <div class="preference-item">
+      <label for="sensitivity">Shake Sensitivity</label>
+      <select id="sensitivity">
+        <option value="low">Low</option>
+        <option value="medium" selected>Medium</option>
+        <option value="high">High</option>
+      </select>
+      <div class="description">Higher sensitivity requires less movement to trigger shelf creation.</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Shelf Behavior</h2>
+    <div class="preference-item">
+      <label class="checkbox-label">
+        <input type="checkbox" id="autoHide" checked>
+        <span>Auto-hide empty shelves</span>
+      </label>
+    </div>
+    <div class="preference-item">
+      <label class="checkbox-label">
+        <input type="checkbox" id="enableScrollingText" checked>
+        <span>Enable scrolling text for long file names</span>
+      </label>
+      <div class="description">When enabled, long file names will scroll horizontally when you hover over them.</div>
+    </div>
+    <div class="preference-item">
+      <label for="autoHideDelay">Auto-hide delay</label>
+      <div class="slider-container">
+        <input type="range" id="autoHideDelay" min="1000" max="10000" value="5000" step="1000">
+        <span class="value-display">5s</span>
+      </div>
+    </div>
+    <div class="preference-item">
+      <label for="maxShelves">Maximum simultaneous shelves</label>
+      <div class="slider-container">
+        <input type="range" id="maxShelves" min="1" max="10" value="5" step="1">
+        <span class="value-display">5</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="button-group">
+    <button class="secondary-button" id="resetButton">Reset to Defaults</button>
+    <button class="primary-button" id="saveButton">Save Changes</button>
+  </div>
+
+  <div class="status" id="statusMessage">Preferences saved successfully!</div>
+</body>
+</html>

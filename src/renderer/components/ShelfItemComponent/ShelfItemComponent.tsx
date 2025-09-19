@@ -27,10 +27,11 @@
  * ```
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShelfItem } from '@shared/types';
 import { useShelfItemAccessibility } from '@renderer/hooks/useAccessibility';
+import { getFileIcon, getTypeIcon } from '@renderer/utils/fileTypeIcons';
 
 export interface ShelfItemComponentProps {
   item: ShelfItem;
@@ -69,52 +70,22 @@ export const ShelfItemComponent = React.memo<ShelfItemComponentProps>(
     const [isHovered, setIsHovered] = useState(false);
     const [showActions, setShowActions] = useState(false);
 
+    // Debug logging for hover state
+    useEffect(() => {
+      if (isHovered) {
+        console.log('[ShelfItemComponent] Item hovered:', item.name);
+      }
+    }, [isHovered, item.name]);
+
     // Get ARIA attributes for accessibility
     const itemAccessibility = useShelfItemAccessibility(item, index, totalCount);
 
     // Get item icon based on type
     const getItemIcon = useCallback((item: ShelfItem): string => {
-      switch (item.type) {
-        case 'file': {
-          const extension = item.path ? item.path.split('.').pop()?.toLowerCase() : '';
-          switch (extension) {
-            case 'jpg':
-            case 'jpeg':
-            case 'png':
-            case 'gif':
-            case 'bmp':
-            case 'webp':
-              return '🖼️';
-            case 'pdf':
-              return '📄';
-            case 'txt':
-            case 'md':
-              return '📝';
-            case 'zip':
-            case 'rar':
-            case '7z':
-              return '📦';
-            case 'mp4':
-            case 'mov':
-            case 'avi':
-              return '🎬';
-            case 'mp3':
-            case 'wav':
-            case 'flac':
-              return '🎵';
-            default:
-              return '📁';
-          }
-        }
-        case 'text':
-          return '📝';
-        case 'url':
-          return '🔗';
-        case 'image':
-          return '🖼️';
-        default:
-          return '❓';
+      if (item.type === 'file' && item.path) {
+        return getFileIcon(item.path);
       }
+      return getTypeIcon(item.type);
     }, []);
 
     // Format item size
@@ -206,12 +177,25 @@ export const ShelfItemComponent = React.memo<ShelfItemComponentProps>(
         {/* Item Icon */}
         <div
           style={{
-            fontSize: isCompact ? '16px' : '24px',
+            width: isCompact ? '16px' : '24px',
+            height: isCompact ? '16px' : '24px',
             marginRight: isCompact ? '8px' : '12px',
             flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
           }}
         >
-          {getItemIcon(item)}
+          <img
+            src={getItemIcon(item)}
+            alt={`${item.type} icon`}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              filter: 'brightness(0.9)',
+            }}
+          />
         </div>
 
         {/* Item Content */}
@@ -228,10 +212,10 @@ export const ShelfItemComponent = React.memo<ShelfItemComponentProps>(
               color: 'white',
               fontSize: isCompact ? '12px' : '14px',
               fontWeight: '500',
+              marginBottom: isCompact ? '0' : '2px',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
-              marginBottom: isCompact ? '0' : '2px',
             }}
             title={item.name}
           >

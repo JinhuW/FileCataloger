@@ -19,10 +19,10 @@
 
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
-import { FileRenameShelf } from './components/FileRenameShelf';
 import { ShelfConfig, ShelfItem } from '@shared/types';
 import { logger } from '@shared/logger';
 import { isShelfConfig, isShelfItem } from './utils/typeGuards';
+import { FileRenameShelf } from './components/FileRenameShelf';
 import './styles/globals.css';
 
 /**
@@ -119,29 +119,26 @@ const ShelfWindow: React.FC = () => {
   const handleItemAdd = (item: ShelfItem) => {
     logger.debug('handleItemAdd called for shelf', config.id, 'with item:', item);
 
+    // Check if this is the first item being added
+    const isFirstItem = config.items.length === 0;
+
     // Update local state first
-    setConfig(prev => {
-      const newConfig = {
-        ...prev,
-        items: [...prev.items, item],
-      };
-      logger.debug('Updated local config, now has', newConfig.items.length, 'items');
-
-      // Immediately notify backend that shelf has items
-      if (window.api && prev.items.length === 0 && newConfig.items.length > 0) {
-        logger.debug('First item added! Notifying backend to persist shelf');
-        // Send a simple message that shelf now has content
-        window.api.send('shelf:files-dropped', {
-          shelfId: prev.id,
-          files: [item.name], // Just send something to trigger persistence
-        });
-      }
-
-      return newConfig;
-    });
+    setConfig(prev => ({
+      ...prev,
+      items: [...prev.items, item],
+    }));
 
     // Notify main process
     if (window.api) {
+      // If this is the first item, notify backend to persist shelf
+      if (isFirstItem) {
+        logger.debug('First item added! Notifying backend to persist shelf');
+        window.api.send('shelf:files-dropped', {
+          shelfId: config.id,
+          files: [item.name],
+        });
+      }
+
       logger.debug('Sending shelf:add-item IPC call for shelf', config.id);
       window.api
         .invoke('shelf:add-item', config.id, item)

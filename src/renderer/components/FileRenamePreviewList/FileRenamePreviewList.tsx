@@ -28,7 +28,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FileRenamePreview } from '@shared/types';
-import { Tooltip } from '../Tooltip';
+import { getFileIcon, getTypeIcon } from '@renderer/utils/fileTypeIcons';
 
 export interface FileRenamePreviewListProps {
   previews: FileRenamePreview[];
@@ -44,7 +44,7 @@ export const FileRenamePreviewList: React.FC<FileRenamePreviewListProps> = ({
       style={{
         height: '100%',
         overflow: 'auto',
-        padding: '16px',
+        padding: '8px 12px',
       }}
     >
       <AnimatePresence mode="sync">
@@ -61,8 +61,8 @@ export const FileRenamePreviewList: React.FC<FileRenamePreviewListProps> = ({
                 '1px solid ' +
                 (preview.selected ? 'rgba(59, 130, 246, 0.3)' : 'rgba(255, 255, 255, 0.1)'),
               borderRadius: '8px',
-              padding: '12px',
-              marginBottom: '8px',
+              padding: '10px',
+              marginBottom: '6px',
               display: 'flex',
               alignItems: 'center',
               gap: '12px',
@@ -80,18 +80,6 @@ export const FileRenamePreviewList: React.FC<FileRenamePreviewListProps> = ({
                 : 'transparent';
             }}
           >
-            {/* Checkbox */}
-            <input
-              type="checkbox"
-              checked={preview.selected}
-              readOnly
-              style={{
-                width: '16px',
-                height: '16px',
-                cursor: 'pointer',
-              }}
-            />
-
             {/* File Icon */}
             <div
               style={{
@@ -105,17 +93,20 @@ export const FileRenamePreviewList: React.FC<FileRenamePreviewListProps> = ({
                 flexShrink: 0,
               }}
             >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="rgba(255, 255, 255, 0.6)"
-                strokeWidth="2"
-              >
-                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" />
-                <polyline points="13 2 13 9 20 9" />
-              </svg>
+              <img
+                src={
+                  preview.type === 'folder'
+                    ? getTypeIcon('folder')
+                    : getFileIcon(preview.originalName)
+                }
+                alt="file icon"
+                style={{
+                  width: '20px',
+                  height: '20px',
+                  objectFit: 'contain',
+                  filter: 'brightness(0.9)',
+                }}
+              />
             </div>
 
             {/* File Names */}
@@ -123,63 +114,49 @@ export const FileRenamePreviewList: React.FC<FileRenamePreviewListProps> = ({
               style={{
                 flex: 1,
                 minWidth: 0,
+                overflow: 'hidden',
               }}
             >
               <div
                 style={{
-                  color: 'rgba(255, 255, 255, 0.4)',
-                  fontSize: '11px',
-                  marginBottom: '2px',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
+                  color: 'rgba(255, 255, 255, 0.6)',
+                  fontSize: '13px',
+                  marginBottom: '4px',
+                  wordBreak: 'break-word',
+                  lineHeight: '1.4',
                 }}
               >
-                Current File Name
+                {preview.originalName}
               </div>
-              <Tooltip content={preview.originalName}>
-                <div
-                  style={{
-                    color: 'rgba(255, 255, 255, 0.6)',
-                    fontSize: '13px',
-                    marginBottom: '4px',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}
-                >
-                  {preview.originalName}
-                </div>
-              </Tooltip>
               <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '8px',
+                  overflow: 'hidden',
                 }}
               >
                 <span
                   style={{
                     color: 'rgba(255, 255, 255, 0.3)',
                     fontSize: '11px',
+                    flexShrink: 0,
                   }}
                 >
                   →
                 </span>
-                <Tooltip content={preview.newName}>
-                  <div
-                    style={{
-                      color: '#3b82f6',
-                      fontSize: '13px',
-                      fontWeight: 500,
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}
-                  >
-                    {preview.newName}
-                  </div>
-                </Tooltip>
+                <div
+                  style={{
+                    flex: 1,
+                    color: '#3b82f6',
+                    fontSize: '13px',
+                    fontWeight: 500,
+                    wordBreak: 'break-word',
+                    lineHeight: '1.4',
+                  }}
+                >
+                  {preview.newName}
+                </div>
               </div>
             </div>
 

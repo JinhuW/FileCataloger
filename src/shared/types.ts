@@ -58,7 +58,7 @@ export type DockPosition = 'top' | 'right' | 'bottom' | 'left';
 
 export interface ShelfItem {
   id: string;
-  type: 'file' | 'text' | 'url' | 'image';
+  type: 'file' | 'folder' | 'text' | 'url' | 'image';
   name: string;
   path?: string;
   content?: string;
@@ -100,10 +100,27 @@ export interface RenamePattern {
   components: RenameComponent[];
 }
 
+export interface SavedPattern {
+  id: string;
+  name: string;
+  components: RenameComponent[];
+  createdAt: number;
+  updatedAt: number;
+  isBuiltIn: boolean;
+  isDefault: boolean;
+  metadata?: {
+    description?: string;
+    usageCount?: number;
+    lastUsed?: number;
+    favorite?: boolean;
+  };
+}
+
 export interface FileRenamePreview {
   originalName: string;
   newName: string;
   selected: boolean;
+  type?: ShelfItem['type'];
 }
 
 // Application status types

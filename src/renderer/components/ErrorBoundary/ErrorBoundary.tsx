@@ -23,7 +23,6 @@
 
 import React, { Component, ErrorInfo } from 'react';
 import { logger } from '@shared/logger';
-import DOMPurify from 'dompurify';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -115,12 +114,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
               fontSize: '14px',
               opacity: 0.8,
             }}
-            dangerouslySetInnerHTML={{
-              __html: DOMPurify.sanitize(
-                this.state.error?.message || 'An unexpected error occurred'
-              ),
-            }}
-          />
+          >
+            {this.state.error?.message || 'An unexpected error occurred'}
+          </p>
 
           <button
             onClick={this.handleRetry}
@@ -157,12 +153,9 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
                   padding: '8px',
                   borderRadius: '4px',
                 }}
-                dangerouslySetInnerHTML={{
-                  __html: DOMPurify.sanitize(
-                    `${this.state.error?.stack || ''}\n${this.state.errorInfo.componentStack || ''}`
-                  ),
-                }}
-              />
+              >
+                {`${this.state.error?.stack || ''}\n${this.state.errorInfo.componentStack || ''}`}
+              </pre>
             </details>
           )}
         </div>

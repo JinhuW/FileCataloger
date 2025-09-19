@@ -1,0 +1,18 @@
+{
+  "filePath": "src/renderer/components/Shelf/Shelf.tsx",
+  "timestamp": 1758308385903,
+  "review": {
+    "filePath": "src/renderer/components/Shelf/Shelf.tsx",
+    "timestamp": 1758308385902,
+    "issues": {
+      "critical": [
+        "TypeScript compilation errors"
+      ],
+      "warnings": [],
+      "suggestions": [
+        "Some functions may be missing explicit return types"
+      ]
+    },
+    "passed": false
+  }
+}

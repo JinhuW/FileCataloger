@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-hook-config.json",
+  "autoRebuild": {
+    "enabled": true,
+    "description": "Automatically rebuild FileCataloger after code changes",
+    "settings": {
+      "rebuildThreshold": 3,
+      "idleTimeout": 5000,
+      "autoStartDev": true,
+      "stopDevOnEnd": false,
+      "verboseLogging": false
+    },
+    "triggers": {
+      "onEdit": true,
+      "onWrite": true,
+      "onBatchComplete": true,
+      "onSessionEnd": true
+    },
+    "buildStrategies": {
+      "full": {
+        "enabled": true,
+        "commands": ["clean", "rebuild:native", "build"]
+      },
+      "incremental": {
+        "enabled": true,
+        "commands": ["typecheck", "lint", "build"]
+      },
+      "minimal": {
+        "enabled": true,
+        "commands": ["typecheck", "lint"]
+      }
+    },
+    "qualityChecks": {
+      "typecheck": true,
+      "lint": true,
+      "format": false,
+      "tests": false
+    },
+    "performance": {
+      "maxConcurrentBuilds": 1,
+      "buildCache": true,
+      "cacheExpiry": 300,
+      "batchDelay": 3000
+    }
+  }
+}

@@ -3,6 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { EventEmitter } from 'events';
 import { logger } from '../utils/logger';
+import { SavedPattern } from '../../../shared/types';
 
 export interface AppPreferences {
   // General
@@ -30,6 +31,7 @@ export interface AppPreferences {
     animationSpeed: 'slow' | 'normal' | 'fast' | 'instant';
     theme: 'light' | 'dark' | 'auto';
     createOnlyOnFirstDragAndShake: boolean; // Only create shelf on first drag+shake action
+    enableScrollingText: boolean; // Enable scrolling text for long file names
   };
 
   // File Handling
@@ -63,6 +65,13 @@ export interface AppPreferences {
     checkForUpdates: boolean;
     sendCrashReports: boolean;
   };
+
+  // Naming Patterns
+  namingPatterns: {
+    savedPatterns: SavedPattern[];
+    defaultPatternId: string;
+    maxPatterns: number;
+  };
 }
 
 const DEFAULT_PREFERENCES: AppPreferences = {
@@ -81,13 +90,14 @@ const DEFAULT_PREFERENCES: AppPreferences = {
   shelf: {
     defaultPosition: 'cursor',
     defaultSize: { width: 300, height: 400 },
-    opacity: 0.95,
+    opacity: 0.9,
     autoHideEmpty: true,
     autoHideDelay: 5000,
     maxSimultaneous: 5,
     animationSpeed: 'normal',
     theme: 'auto',
     createOnlyOnFirstDragAndShake: true, // Default: only create on first drag+shake
+    enableScrollingText: true, // Default: enable scrolling for long file names
   },
 
   fileHandling: {
@@ -116,6 +126,12 @@ const DEFAULT_PREFERENCES: AppPreferences = {
     collectAnalytics: false,
     checkForUpdates: true,
     sendCrashReports: false,
+  },
+
+  namingPatterns: {
+    savedPatterns: [],
+    defaultPatternId: 'default-pattern',
+    maxPatterns: 20,
   },
 };
 
@@ -189,6 +205,10 @@ export class PreferencesManager extends EventEmitter {
 
     if (loaded.privacy) {
       merged.privacy = { ...merged.privacy, ...loaded.privacy };
+    }
+
+    if (loaded.namingPatterns) {
+      merged.namingPatterns = { ...merged.namingPatterns, ...loaded.namingPatterns };
     }
 
     return merged;
@@ -273,11 +293,8 @@ export class PreferencesManager extends EventEmitter {
   public updatePreferences(updates: Partial<AppPreferences>): void {
     const oldPreferences = { ...this.preferences };
 
-    // Update preferences
-    this.preferences = this.mergeWithDefaults({
-      ...this.preferences,
-      ...updates,
-    });
+    // Deep merge updates with current preferences
+    this.preferences = this.deepMergePreferences(this.preferences, updates);
 
     // Save to disk
     this.savePreferences();
@@ -287,6 +304,49 @@ export class PreferencesManager extends EventEmitter {
 
     // Notify about specific changes
     this.detectAndEmitChanges(oldPreferences, this.preferences);
+  }
+
+  private deepMergePreferences(
+    current: AppPreferences,
+    updates: Partial<AppPreferences>
+  ): AppPreferences {
+    const merged = { ...current };
+
+    // Handle top-level properties
+    if (updates.launchAtStartup !== undefined) merged.launchAtStartup = updates.launchAtStartup;
+    if (updates.showInDock !== undefined) merged.showInDock = updates.showInDock;
+    if (updates.showInMenuBar !== undefined) merged.showInMenuBar = updates.showInMenuBar;
+
+    // Deep merge nested objects
+    if (updates.shakeDetection) {
+      merged.shakeDetection = { ...current.shakeDetection, ...updates.shakeDetection };
+    }
+
+    if (updates.shelf) {
+      merged.shelf = { ...current.shelf, ...updates.shelf };
+    }
+
+    if (updates.fileHandling) {
+      merged.fileHandling = { ...current.fileHandling, ...updates.fileHandling };
+    }
+
+    if (updates.shortcuts) {
+      merged.shortcuts = { ...current.shortcuts, ...updates.shortcuts };
+    }
+
+    if (updates.performance) {
+      merged.performance = { ...current.performance, ...updates.performance };
+    }
+
+    if (updates.privacy) {
+      merged.privacy = { ...current.privacy, ...updates.privacy };
+    }
+
+    if (updates.namingPatterns) {
+      merged.namingPatterns = { ...current.namingPatterns, ...updates.namingPatterns };
+    }
+
+    return merged;
   }
 
   private detectAndEmitChanges(oldPrefs: AppPreferences, newPrefs: AppPreferences): void {
@@ -355,11 +415,17 @@ export class PreferencesManager extends EventEmitter {
       },
     });
 
-    // Load preferences UI
-    const preferencesPath = path.join(__dirname, '../../renderer/preferences.html');
+    // Load preferences UI - use __dirname which points to dist/main
+    const preferencesPath = path.join(__dirname, '../renderer/preferences.html');
+
+    logger.info('Loading preferences from:', preferencesPath);
+    logger.info('__dirname is:', __dirname);
+
+    // Check if file exists and load it
     if (fs.existsSync(preferencesPath)) {
       this.preferencesWindow.loadFile(preferencesPath);
     } else {
+      logger.error('Preferences HTML not found at:', preferencesPath);
       // Fallback to a simple HTML content
       this.preferencesWindow.loadURL(`data:text/html,
         <html>

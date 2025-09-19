@@ -213,3 +213,4 @@ All IPC messages follow strict schemas defined in `src/shared/ipc-schema.ts`:
 - Use proper error boundaries and error handling
 - Always handle async errors with try/catch
 - Use Zod for runtime validation of external data
+

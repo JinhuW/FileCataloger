@@ -27,6 +27,7 @@ const App: React.FC = () => {
   const [isElectronReady, setIsElectronReady] = useState(false);
   const [appStatus, setAppStatus] = useState<AppStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Check if we're running in Electron and API is available
@@ -61,28 +62,35 @@ const App: React.FC = () => {
 
   const fetchAppStatus = async () => {
     try {
+      setError(null);
+      setIsLoading(true);
       const status = await window.api.invoke('app:get-status', null);
       if (isAppStatus(status)) {
         setAppStatus(status);
-        setIsLoading(false);
       } else {
         throw new Error('Invalid app status received');
       }
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch app status';
       logger.error('Failed to fetch app status:', error);
+      setError(errorMessage);
+    } finally {
       setIsLoading(false);
     }
   };
 
   const createShelf = async () => {
     try {
+      setError(null);
       await window.api.invoke('app:create-shelf', {
         position: { x: 200, y: 200 },
         isPinned: true,
         isVisible: true,
       });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Failed to create shelf';
       logger.error('Failed to create shelf:', error);
+      setError(errorMessage);
     }
   };
 
@@ -114,6 +122,28 @@ const App: React.FC = () => {
             </motion.div>
           )}
         </motion.header>
+
+        {/* Error Display */}
+        {error && (
+          <motion.div
+            className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="flex items-center">
+              <span className="text-red-500 mr-2">⚠️</span>
+              <p className="text-red-700">{error}</p>
+              <button
+                onClick={() => setError(null)}
+                className="ml-auto text-red-500 hover:text-red-700"
+                aria-label="Dismiss error"
+              >
+                ✕
+              </button>
+            </div>
+          </motion.div>
+        )}
 
         {/* Main Status Dashboard */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">

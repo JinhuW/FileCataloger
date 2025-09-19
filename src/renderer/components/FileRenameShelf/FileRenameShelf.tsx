@@ -33,11 +33,14 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { ShelfConfig, ShelfItem, FileRenamePreview, RenameComponent } from '@shared/types';
+import { getTypeIcon } from '@renderer/utils/fileTypeIcons';
 import { ShelfHeader } from '../ShelfHeader';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { FileDropZone } from '../FileDropZone';
 import { RenamePatternBuilder } from '../RenamePatternBuilder';
 import { FileRenamePreviewList } from '../FileRenamePreviewList';
+import { WarningDialog } from '../WarningDialog';
+import { validateFileRenames, formatValidationWarning } from '@renderer/utils/fileValidation';
 
 export interface FileRenameShelfProps {
   config: ShelfConfig;
@@ -55,10 +58,16 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
       { id: 'fileName-1', type: 'fileName' },
     ]);
     const [isDragOver, setIsDragOver] = useState(false);
+    const [destinationPath, setDestinationPath] = useState('~/Downloads');
+    const [showWarningDialog, setShowWarningDialog] = useState(false);
+    const [validationWarning, setValidationWarning] = useState<{
+      message: string;
+      details: React.ReactNode;
+    } | null>(null);
 
     // Generate preview names based on current pattern
     const filePreview = useMemo((): FileRenamePreview[] => {
-      return selectedFiles.map(file => {
+      return selectedFiles.map((file, fileIndex) => {
         let newName = '';
 
         renameComponents.forEach((component, index) => {
@@ -82,7 +91,7 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
               newName += component.value || '';
               break;
             case 'counter':
-              newName += String(index + 1).padStart(3, '0');
+              newName += String(fileIndex + 1).padStart(3, '0');
               break;
             case 'project':
               newName += component.value || 'Project';
@@ -90,14 +99,17 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
           }
         });
 
-        // Add file extension
-        const ext = file.name.match(/\.[^/.]+$/);
-        if (ext) newName += ext[0];
+        // Add file extension (not for folders)
+        if (file.type !== 'folder') {
+          const ext = file.name.match(/\.[^/.]+$/);
+          if (ext) newName += ext[0];
+        }
 
         return {
           originalName: file.name,
           newName,
           selected: true,
+          type: file.type,
         };
       });
     }, [selectedFiles, renameComponents]);
@@ -125,6 +137,32 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
 
     // Handle rename action
     const handleRename = useCallback(() => {
+      // Create a map of file IDs to their new names
+      const newNamesMap = new Map<string, string>();
+      selectedFiles.forEach((file, index) => {
+        const preview = filePreview[index];
+        if (preview) {
+          newNamesMap.set(file.id, preview.newName);
+        }
+      });
+
+      // Validate the rename operations
+      const validation = validateFileRenames(selectedFiles, newNamesMap, destinationPath);
+
+      if (!validation.isValid) {
+        // Show warning dialog
+        const warning = formatValidationWarning(validation);
+        setValidationWarning(warning);
+        setShowWarningDialog(true);
+        return;
+      }
+
+      // Proceed with rename
+      performRename();
+    }, [selectedFiles, filePreview, destinationPath]);
+
+    // Perform the actual rename operation
+    const performRename = useCallback(() => {
       // TODO: Implement actual file renaming logic
 
       // For now, just clear the files after rename
@@ -191,7 +229,7 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
             >
               <div
                 style={{
-                  padding: '16px',
+                  padding: '12px',
                   borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
                 }}
               >
@@ -209,7 +247,7 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
                   style={{
                     color: 'rgba(255, 255, 255, 0.6)',
                     fontSize: '12px',
-                    margin: '4px 0 0',
+                    margin: '2px 0 0',
                   }}
                 >
                   {selectedFiles.length} files selected
@@ -270,10 +308,26 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
                 onChange={setRenameComponents}
                 onRename={handleRename}
                 hasFiles={selectedFiles.length > 0}
+                selectedFiles={selectedFiles}
+                onDestinationChange={setDestinationPath}
               />
             </div>
           </div>
         </motion.div>
+
+        {/* Warning Dialog */}
+        {validationWarning && (
+          <WarningDialog
+            isOpen={showWarningDialog}
+            onClose={() => setShowWarningDialog(false)}
+            title="File Path/Name Warning"
+            message={validationWarning.message}
+            details={validationWarning.details}
+            onConfirm={performRename}
+            confirmText="Continue Anyway"
+            cancelText="Cancel"
+          />
+        )}
       </ErrorBoundary>
     );
   }

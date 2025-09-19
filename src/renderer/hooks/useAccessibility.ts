@@ -67,7 +67,7 @@ export function useKeyboardNavigation<T extends HTMLElement>(
         setSelectedIndex(index);
       }
     }
-  }, []);
+  }, []); // Empty dependency array - stable reference
 
   const handleKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
@@ -150,7 +150,7 @@ export function useKeyboardNavigation<T extends HTMLElement>(
           break;
       }
     },
-    [selectedIndex, items, focusItem, onItemSelect, onItemRemove, onClose]
+    [selectedIndex, items.length, focusItem, onItemSelect, onItemRemove, onClose]
   );
 
   return {

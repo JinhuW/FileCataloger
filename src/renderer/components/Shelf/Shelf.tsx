@@ -168,7 +168,7 @@ export const Shelf = React.memo<ShelfProps>(
           }}
           transition={{ duration: SHELF_CONSTANTS.ANIMATION_DURATION_MS / 1000, ease: 'easeOut' }}
           style={{
-            background: 'rgba(0, 0, 0, 0.8)',
+            background: `rgba(0, 0, 0, ${config.opacity || 0.85})`,
             backdropFilter: 'blur(10px)',
             border: '1px solid rgba(255, 255, 255, 0.1)',
             borderRadius: '12px',

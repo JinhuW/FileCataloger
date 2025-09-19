@@ -171,12 +171,13 @@ export const Tooltip: React.FC<TooltipProps> = ({
               padding: '6px 12px',
               fontSize: '12px',
               color: 'rgba(255, 255, 255, 0.9)',
-              whiteSpace: 'nowrap',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
               zIndex: SHELF_CONSTANTS.Z_INDEX_TOOLTIP,
               pointerEvents: 'none',
-              maxWidth: '400px',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
+              width: '300px',
+              maxWidth: '300px',
+              minWidth: '100px',
             }}
           >
             {content}

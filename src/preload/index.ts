@@ -73,6 +73,13 @@ const validChannels = [
   'settings:set',
   'logger:log',
   'logger:set-level',
+  'preferences:get',
+  'preferences:update',
+  'preferences:reset',
+  'preferences:export',
+  'preferences:import',
+  'dialog:select-folder',
+  'fs:check-path-type',
 ] as const;
 
 // Export the type for use in other files
