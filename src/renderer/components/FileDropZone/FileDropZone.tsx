@@ -28,7 +28,7 @@
  * ```
  */
 
-import React, { useCallback } from 'react';
+import React, { useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { ShelfItem } from '@shared/types';
 import { logger } from '@shared/logger';
@@ -46,7 +46,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
   onDragOver,
   compact = false,
 }) => {
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const handleDrop = useCallback(
     async (e: React.DragEvent<HTMLDivElement>) => {
       e.preventDefault();
