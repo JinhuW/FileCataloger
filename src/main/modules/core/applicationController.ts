@@ -315,7 +315,7 @@ export class ApplicationController extends EventEmitter {
 
       // Only create shelf if user is dragging files
       // The drag-shake detector now properly checks for actual drag operations
-      if (!event.isDragging && event.items.length === 0) {
+      if (!event.isDragging || !event.items || event.items.length === 0) {
         this.logger.info('⚠️ Shake detected but no drag operation - ignoring');
         return;
       }
