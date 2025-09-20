@@ -44,6 +44,10 @@ module.exports = {
     'react/prop-types': 'off', // Using TypeScript for prop validation
     'react/react-in-jsx-scope': 'off', // React 17+ doesn't require React import
 
+    // React Hooks rules - stricter enforcement
+    'react-hooks/rules-of-hooks': 'error',
+    'react-hooks/exhaustive-deps': 'error', // Changed from 'warn' to 'error'
+
     // General rules
     'no-console': 'warn',
     'prefer-const': 'error',

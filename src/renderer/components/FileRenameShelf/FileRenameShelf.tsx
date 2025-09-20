@@ -134,6 +134,15 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
       [selectedFiles, onItemRemove]
     );
 
+    // Perform the actual rename operation
+    const performRename = useCallback(() => {
+      // TODO: Implement actual file renaming logic
+
+      // For now, just clear the files after rename
+      selectedFiles.forEach(file => onItemRemove(file.id));
+      setSelectedFiles([]);
+    }, [selectedFiles, onItemRemove]);
+
     // Handle rename action
     const handleRename = useCallback(() => {
       // Create a map of file IDs to their new names
@@ -159,15 +168,6 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
       // Proceed with rename
       performRename();
     }, [selectedFiles, filePreview, destinationPath, performRename]);
-
-    // Perform the actual rename operation
-    const performRename = useCallback(() => {
-      // TODO: Implement actual file renaming logic
-
-      // For now, just clear the files after rename
-      selectedFiles.forEach(file => onItemRemove(file.id));
-      setSelectedFiles([]);
-    }, [selectedFiles, onItemRemove]);
 
     return (
       <ErrorBoundary>

@@ -29,6 +29,8 @@ import './styles/globals.css';
  * Shelf window renderer entry point
  */
 const ShelfWindow: React.FC = () => {
+  logger.info('ShelfWindow component initializing');
+
   const [config, setConfig] = useState<ShelfConfig>({
     id: 'default',
     position: { x: 0, y: 0 },
@@ -39,6 +41,14 @@ const ShelfWindow: React.FC = () => {
     opacity: 0.95,
     mode: 'rename', // Always use rename mode
   });
+
+  // Log component lifecycle
+  useEffect(() => {
+    logger.info('ShelfWindow component mounted');
+    return () => {
+      logger.info('ShelfWindow component unmounting');
+    };
+  }, []);
 
   // Debug window API in development only
   if (process.env.NODE_ENV === 'development') {
@@ -173,6 +183,8 @@ const ShelfWindow: React.FC = () => {
     }
   };
 
+  logger.info('ShelfWindow rendering with config:', config);
+
   return (
     <div
       style={{
@@ -199,15 +211,50 @@ const ShelfWindow: React.FC = () => {
   );
 };
 
+// Add global error handler to catch rendering errors
+window.addEventListener('error', event => {
+  logger.error('Global error caught:', {
+    message: event.message,
+    filename: event.filename,
+    lineno: event.lineno,
+    colno: event.colno,
+    error: event.error?.stack,
+  });
+});
+
+window.addEventListener('unhandledrejection', event => {
+  logger.error('Unhandled promise rejection:', {
+    reason: event.reason,
+    promise: event.promise,
+  });
+});
+
+// Log when DOM is ready
+logger.info('Shelf window DOM loaded, attempting to mount React app');
+
 // Mount the application
 const container = document.getElementById('root');
 if (container) {
-  const root = ReactDOM.createRoot(container);
-  root.render(
-    <React.StrictMode>
-      <ShelfWindow />
-    </React.StrictMode>
-  );
+  logger.info('Root element found, creating React root');
+
+  try {
+    const root = ReactDOM.createRoot(container);
+    logger.info('React root created, rendering ShelfWindow component');
+
+    root.render(
+      <React.StrictMode>
+        <ShelfWindow />
+      </React.StrictMode>
+    );
+
+    logger.info('React render call completed');
+  } catch (error) {
+    logger.error('Failed to render React app:', error);
+    // Show visible error in the window
+    container.innerHTML = `<div style="color: red; padding: 20px;">Failed to render shelf: ${error}</div>`;
+  }
 } else {
   logger.error('Failed to find root element');
+  document.body.innerHTML =
+    '<div style="color: red; padding: 20px;">Error: No root element found</div>';
 }
