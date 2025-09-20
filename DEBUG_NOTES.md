@@ -139,4 +139,45 @@ yarn lint | grep -E "exhaustive-deps|Hook"
 
 # Clear cache and rebuild
 rm -rf dist && yarn build
+
+# Run comprehensive renderer validation
+yarn validate:renderer
 ```
+
+## Renderer Validation Script
+
+A comprehensive validation script is available to catch common renderer issues:
+
+```bash
+yarn validate:renderer
+```
+
+This script checks for:
+
+1. **React hooks dependencies** - Missing or incorrect dependencies
+2. **Circular dependencies** - Module import cycles
+3. **Invalid imports** - Main process imports in renderer
+4. **Error boundaries** - Missing error handling in main components
+5. **Hook definition order** - Functions used before they're defined
+6. **TypeScript errors** - Type checking across the project
+
+### Running Validation Automatically
+
+The validation runs automatically:
+
+- During pre-commit hooks
+- Can be run manually with `yarn validate:renderer`
+
+### Common Issues Found
+
+1. **Hook dependency errors**
+   - Add missing dependencies to useCallback/useEffect arrays
+   - Define functions in the correct order (used functions must be defined first)
+
+2. **Main process imports**
+   - Never import from `@main/` in renderer files
+   - Use IPC for main-renderer communication
+
+3. **Circular dependencies**
+   - Break cycles by reorganizing imports
+   - Use dynamic imports if necessary

@@ -26,6 +26,14 @@ if ! yarn typecheck; then
   exit 1
 fi
 
+# Run renderer validation (hooks, imports, etc)
+echo "🎯 Validating renderer code..."
+if ! yarn validate:renderer; then
+  echo -e "${RED}❌ Renderer validation failed${NC}"
+  echo "Please fix renderer issues before committing."
+  exit 1
+fi
+
 # Check for security issues in Electron main process
 echo "🔐 Checking Electron security..."
 if ! yarn security:check 2>/dev/null; then

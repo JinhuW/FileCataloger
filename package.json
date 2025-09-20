@@ -28,6 +28,7 @@
     "docs:validate": "typedoc --options ./config/typedoc.json --emit none",
     "deps:check": "yarn audit && depcheck && npx ncu -u --target minor",
     "quality:check": "yarn typecheck && yarn lint && yarn format:check && yarn audit && yarn docs:validate",
+    "validate:renderer": "node scripts/validate-renderer.js",
     "review": "node scripts/claude-review.js",
     "review:staged": "git diff --cached --name-only | xargs node scripts/claude-review.js",
     "git:add": "./scripts/git-add-with-review.sh",
