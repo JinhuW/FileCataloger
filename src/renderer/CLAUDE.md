@@ -69,6 +69,7 @@ components/
 ### State Management
 
 Using Zustand stores in `stores/`:
+
 - Shelf items and configuration
 - Drag state tracking
 - Rename patterns and preview
@@ -77,6 +78,7 @@ Using Zustand stores in `stores/`:
 ### IPC Communication
 
 #### Renderer → Main
+
 ```typescript
 // Send messages
 window.api.send('shelf:files-dropped', { shelfId, files });
@@ -88,6 +90,7 @@ const config = await window.api.invoke('shelf:update-config', shelfId, changes);
 ```
 
 #### Main → Renderer
+
 ```typescript
 // Listen for updates
 window.api.on('shelf:config', (config: ShelfConfig) => {
@@ -122,6 +125,7 @@ yarn test --watch
 - **CSS is built automatically** via webpack during development/build
 
 Key Tailwind customizations:
+
 - `shelf-bg`, `shelf-border`, `shelf-hover` color utilities
 - `shelf-appear`, `shelf-disappear` animations
 - Custom backdrop blur values
@@ -136,7 +140,9 @@ Key Tailwind customizations:
 ### Important Patterns
 
 #### Type Guards
+
 All IPC data must be validated using type guards in `utils/typeGuards.ts`:
+
 ```typescript
 if (isShelfConfig(data)) {
   // Safe to use as ShelfConfig
@@ -144,13 +150,17 @@ if (isShelfConfig(data)) {
 ```
 
 #### File Processing
+
 Use utilities in `utils/fileProcessing.ts` for:
+
 - MIME type detection
 - File icon selection
 - Path operations
 
 #### Accessibility
+
 Use `hooks/useAccessibility.ts` for:
+
 - Keyboard navigation
 - Screen reader support
 - Focus management
@@ -165,6 +175,7 @@ Use `hooks/useAccessibility.ts` for:
 ### Path Aliases
 
 TypeScript path aliases configured:
+
 - `@renderer/*` → `src/renderer/*`
 - `@shared/*` → `src/shared/*`
 - `@main/*` → `src/main/*`

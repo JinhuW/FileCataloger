@@ -33,7 +33,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { ShelfConfig, ShelfItem, FileRenamePreview, RenameComponent } from '@shared/types';
-import { getTypeIcon } from '@renderer/utils/fileTypeIcons';
 import { ShelfHeader } from '../ShelfHeader';
 import { ErrorBoundary } from '../ErrorBoundary';
 import { FileDropZone } from '../FileDropZone';
@@ -159,7 +158,7 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
 
       // Proceed with rename
       performRename();
-    }, [selectedFiles, filePreview, destinationPath]);
+    }, [selectedFiles, filePreview, destinationPath, performRename]);
 
     // Perform the actual rename operation
     const performRename = useCallback(() => {
@@ -297,7 +296,7 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
             {/* Right Panel - Rename Pattern Builder */}
             <div
               style={{
-                flex: 1,
+                width: '60%',
                 display: 'flex',
                 flexDirection: 'column',
                 background: 'rgba(35, 35, 35, 0.3)',

@@ -5,6 +5,7 @@
 **Dependencies**: Stage 2 completion
 
 ## Overview
+
 This stage implements the core plugin system architecture, including the plugin manager, sandbox environment, and API layer. This is the foundation that enables third-party developers to create custom naming components.
 
 ## Week 1 Tasks
@@ -12,7 +13,9 @@ This stage implements the core plugin system architecture, including the plugin 
 ### Day 1-2: Plugin Interface Design
 
 #### Core Interfaces
+
 - [ ] **Create Plugin Type Definitions**
+
   ```typescript
   // src/shared/types/plugins.ts
 
@@ -53,9 +56,9 @@ This stage implements the core plugin system architecture, including the plugin 
   }
 
   export interface PluginEngine {
-    filecataloger: string;  // ">=2.0.0"
-    node?: string;          // ">=16.0.0"
-    electron?: string;      // ">=28.0.0"
+    filecataloger: string; // ">=2.0.0"
+    node?: string; // ">=16.0.0"
+    electron?: string; // ">=28.0.0"
   }
 
   export enum PluginCapability {
@@ -95,7 +98,9 @@ This stage implements the core plugin system architecture, including the plugin 
   ```
 
 #### Plugin Context
+
 - [ ] **Define Plugin Context Interface**
+
   ```typescript
   export interface PluginContext {
     // Current file information
@@ -149,7 +154,9 @@ This stage implements the core plugin system architecture, including the plugin 
 ### Day 3-4: Plugin Manager Implementation
 
 #### Core Plugin Manager
+
 - [ ] **Create PluginManager Class**
+
   ```typescript
   // src/main/modules/plugins/pluginManager.ts
 
@@ -177,11 +184,7 @@ This stage implements the core plugin system architecture, including the plugin 
     async deactivatePlugin(id: string): Promise<void>;
 
     // Execution
-    async executePlugin(
-      id: string,
-      method: string,
-      context: PluginContext
-    ): Promise<any>;
+    async executePlugin(id: string, method: string, context: PluginContext): Promise<any>;
 
     // Query
     getPlugin(id: string): LoadedPlugin | undefined;
@@ -194,19 +197,15 @@ This stage implements the core plugin system architecture, including the plugin 
     async getPluginConfig(id: string): Promise<any>;
 
     // Permissions
-    async requestPermissions(
-      id: string,
-      permissions: PluginPermission[]
-    ): Promise<boolean>;
-    async revokePermissions(
-      id: string,
-      permissions: PluginPermission[]
-    ): Promise<void>;
+    async requestPermissions(id: string, permissions: PluginPermission[]): Promise<boolean>;
+    async revokePermissions(id: string, permissions: PluginPermission[]): Promise<void>;
   }
   ```
 
 #### Plugin Registry
+
 - [ ] **Implement Plugin Registry**
+
   ```typescript
   // src/main/modules/plugins/pluginRegistry.ts
 
@@ -236,7 +235,9 @@ This stage implements the core plugin system architecture, including the plugin 
   ```
 
 #### Plugin Loader
+
 - [ ] **Create Plugin Loader**
+
   ```typescript
   // src/main/modules/plugins/pluginLoader.ts
 
@@ -266,6 +267,7 @@ This stage implements the core plugin system architecture, including the plugin 
 ### Day 5: Plugin Sandbox (Week 1)
 
 #### Research Sandboxing Options
+
 - [ ] **Evaluate Sandboxing Solutions**
   - VM2 library evaluation
   - Node.js vm module
@@ -281,7 +283,9 @@ This stage implements the core plugin system architecture, including the plugin 
   - Network restrictions
 
 #### Basic Sandbox Implementation
+
 - [ ] **Create PluginSandbox Class**
+
   ```typescript
   // src/main/modules/plugins/pluginSandbox.ts
 
@@ -301,10 +305,7 @@ This stage implements the core plugin system architecture, including the plugin 
     ): Promise<any>;
 
     // Permission checks
-    checkPermission(
-      pluginId: string,
-      capability: PluginCapability
-    ): boolean;
+    checkPermission(pluginId: string, capability: PluginCapability): boolean;
 
     // Resource management
     setResourceLimits(pluginId: string, limits: ResourceLimits): void;
@@ -318,8 +319,8 @@ This stage implements the core plugin system architecture, including the plugin 
   }
 
   interface ResourceLimits {
-    memory: number;      // MB
-    cpuTime: number;     // ms
+    memory: number; // MB
+    cpuTime: number; // ms
     fileHandles: number;
     networkRequests: number;
   }
@@ -330,7 +331,9 @@ This stage implements the core plugin system architecture, including the plugin 
 ### Day 1-2: Plugin API Implementation
 
 #### Core APIs
+
 - [ ] **Implement Plugin Utils**
+
   ```typescript
   // src/main/modules/plugins/api/pluginUtils.ts
 
@@ -393,7 +396,9 @@ This stage implements the core plugin system architecture, including the plugin 
   ```
 
 #### Storage API
+
 - [ ] **Implement Plugin Storage**
+
   ```typescript
   // src/main/modules/plugins/api/pluginStorage.ts
 
@@ -434,7 +439,9 @@ This stage implements the core plugin system architecture, including the plugin 
   ```
 
 #### Network API (Optional)
+
 - [ ] **Implement Network API**
+
   ```typescript
   // src/main/modules/plugins/api/pluginNetwork.ts
 
@@ -465,7 +472,9 @@ This stage implements the core plugin system architecture, including the plugin 
 ### Day 3-4: Permission System
 
 #### Permission Manager
+
 - [ ] **Create Permission Manager**
+
   ```typescript
   // src/main/modules/plugins/permissionManager.ts
 
@@ -481,26 +490,14 @@ This stage implements the core plugin system architecture, including the plugin 
     ): Promise<PermissionResult>;
 
     // Check permissions
-    hasPermission(
-      pluginId: string,
-      permission: PluginPermission
-    ): boolean;
+    hasPermission(pluginId: string, permission: PluginPermission): boolean;
 
-    hasAllPermissions(
-      pluginId: string,
-      permissions: PluginPermission[]
-    ): boolean;
+    hasAllPermissions(pluginId: string, permissions: PluginPermission[]): boolean;
 
     // Grant/Revoke
-    async grantPermissions(
-      pluginId: string,
-      permissions: PluginPermission[]
-    ): Promise<void>;
+    async grantPermissions(pluginId: string, permissions: PluginPermission[]): Promise<void>;
 
-    async revokePermissions(
-      pluginId: string,
-      permissions: PluginPermission[]
-    ): Promise<void>;
+    async revokePermissions(pluginId: string, permissions: PluginPermission[]): Promise<void>;
 
     // Persistence
     async savePermissions(): Promise<void>;
@@ -515,7 +512,9 @@ This stage implements the core plugin system architecture, including the plugin 
   ```
 
 #### Permission UI
+
 - [ ] **Create Permission Dialog**
+
   ```typescript
   // src/renderer/components/PermissionDialog/PermissionDialog.tsx
 
@@ -542,7 +541,9 @@ This stage implements the core plugin system architecture, including the plugin 
 ### Day 5: Error Handling and Logging
 
 #### Error System
+
 - [ ] **Create Plugin Error Classes**
+
   ```typescript
   // src/main/modules/plugins/errors.ts
 
@@ -566,7 +567,9 @@ This stage implements the core plugin system architecture, including the plugin 
   ```
 
 #### Logging System
+
 - [ ] **Implement Plugin Logger**
+
   ```typescript
   // src/main/modules/plugins/pluginLogger.ts
 
@@ -597,6 +600,7 @@ This stage implements the core plugin system architecture, including the plugin 
 ## Testing Strategy
 
 ### Unit Tests
+
 - [ ] Plugin Manager tests
 - [ ] Plugin Registry tests
 - [ ] Plugin Loader tests
@@ -605,6 +609,7 @@ This stage implements the core plugin system architecture, including the plugin 
 - [ ] API tests
 
 ### Integration Tests
+
 - [ ] Plugin installation flow
 - [ ] Plugin execution flow
 - [ ] Permission request flow
@@ -612,6 +617,7 @@ This stage implements the core plugin system architecture, including the plugin 
 - [ ] Resource cleanup
 
 ### Security Tests
+
 - [ ] Sandbox escape attempts
 - [ ] Resource exhaustion
 - [ ] Permission bypass
@@ -619,6 +625,7 @@ This stage implements the core plugin system architecture, including the plugin 
 - [ ] Path traversal
 
 ### Performance Tests
+
 - [ ] Plugin load time
 - [ ] Execution overhead
 - [ ] Memory usage
@@ -628,6 +635,7 @@ This stage implements the core plugin system architecture, including the plugin 
 ## Architecture Documentation
 
 ### Plugin Lifecycle
+
 ```mermaid
 graph TD
     A[Plugin Discovery] --> B[Validation]
@@ -642,6 +650,7 @@ graph TD
 ```
 
 ### Security Model
+
 ```mermaid
 graph TD
     A[Plugin Code] --> B[Sandbox]

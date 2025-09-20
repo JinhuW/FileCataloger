@@ -1,7 +1,8 @@
 /**
  * @file RenamePatternBuilder.tsx
  * @description Interactive pattern builder for constructing file rename templates using drag-and-drop
- * components. Provides real-time preview and customizable rename patterns.
+ * components. Provides real-time preview and customizable rename patterns with multi-pattern support
+ * and persistence.
  *
  * @props {RenameComponent[]} components - Array of rename pattern components in order
  * @props {function} onChange - Callback when pattern components change
@@ -12,10 +13,12 @@
  * - Visual pattern builder with drag-and-drop component arrangement
  * - Five component types: date, fileName, counter, text, project
  * - Real-time preview of pattern with sample values
- * - Tab-based interface for different pattern formats
+ * - Tab-based interface for multiple pattern management
  * - Component removal with visual feedback
  * - Rename button with state-dependent styling
- * - Future expansion area for component customization
+ * - Pattern persistence and management (create, rename, delete, duplicate)
+ * - Built-in and custom patterns
+ * - Loading states and error handling
  *
  * @component-types
  * - date: Current date in YYYYMMDD format
@@ -35,9 +38,23 @@
  * ```
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { RenameComponent, ShelfItem } from '@shared/types';
+import { ScrollableTabContainer } from '../ScrollableTabContainer';
+import { PatternTab } from '../PatternTab';
+import { AddPatternButton } from '../AddPatternButton';
+import { usePatternManager } from '@renderer/hooks/usePatternManager';
+import { usePatternStore, useToast } from '@renderer/stores';
+import { EmptyState } from '../EmptyState/EmptyState';
+import { LoadingSpinner } from '../LoadingSpinner/LoadingSpinner';
+import { PatternBuilderSkeleton } from '../LoadingSkeleton/LoadingSkeleton';
+import {
+  PATTERN_VALIDATION,
+  PATTERN_COMPONENT_TYPES,
+  PATTERN_COMPONENT_LABELS,
+  PATTERN_COMPONENT_ICONS,
+} from '@renderer/constants/namingPatterns';
 
 export interface RenamePatternBuilderProps {
   components: RenameComponent[];
@@ -48,8 +65,9 @@ export interface RenamePatternBuilderProps {
   onDestinationChange?: (path: string) => void;
 }
 
-// Configurable maximum number of components
-const MAX_COMPONENTS = 10;
+// Component limits from constants
+const MAX_COMPONENTS = PATTERN_VALIDATION.MAX_COMPONENTS;
+const MAX_PATTERNS = PATTERN_VALIDATION.MAX_PATTERNS;
 
 export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
   components,
@@ -59,8 +77,40 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
   selectedFiles = [],
   onDestinationChange,
 }) => {
-  const [activeTab, setActiveTab] = useState(0);
   const [destinationPath, setDestinationPath] = useState('');
+  const [showNewPatternDialog, setShowNewPatternDialog] = useState(false);
+  const [newPatternName, setNewPatternName] = useState('');
+  const [draggedPatternId, setDraggedPatternId] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const toast = useToast();
+  const {
+    patterns,
+    activePattern,
+    activePatternId,
+    patternCount,
+    createPattern,
+    updatePattern,
+    deletePattern,
+    setActivePattern,
+    error,
+  } = usePatternManager();
+
+  const { addComponentToPattern, removeComponentFromPattern } = usePatternStore();
+
+  // Initialize loading state
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Show error toasts
+  useEffect(() => {
+    if (error) {
+      toast.error('Pattern Error', error);
+    }
+  }, [error, toast]);
 
   // Get the directory path from the first file
   React.useEffect(() => {
@@ -75,13 +125,20 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
       } else {
         // Default to Downloads directory if no path is available
         // Try to infer username from window location or use a sensible default
-        const pathMatch = window.location.pathname.match(/\/Users\/([^\/]+)/);
+        const pathMatch = window.location.pathname.match(/\/Users\/([^/]+)/);
         const username = pathMatch ? pathMatch[1] : 'Downloads';
         const defaultPath = pathMatch ? `/Users/${username}/Downloads` : '~/Downloads';
         setDestinationPath(defaultPath);
       }
     }
   }, [selectedFiles]);
+
+  // Sync components with active pattern
+  useEffect(() => {
+    if (activePattern && JSON.stringify(activePattern.components) !== JSON.stringify(components)) {
+      onChange(activePattern.components);
+    }
+  }, [activePattern, onChange, components]);
 
   const handlePathEdit = useCallback(async () => {
     try {
@@ -93,23 +150,42 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
         }
       }
     } catch (error) {
-      console.error('Failed to open folder dialog:', error);
+      // Failed to open folder dialog
     }
   }, [destinationPath, onDestinationChange]);
 
-
   const availableComponents = [
-    { type: 'date', label: 'Date', icon: '📅' },
-    { type: 'fileName', label: 'File Name', icon: '📄' },
-    { type: 'counter', label: 'Counter', icon: '🔢' },
-    { type: 'text', label: 'Text', icon: '💬' },
-    { type: 'project', label: 'Project', icon: '📁' },
+    {
+      type: PATTERN_COMPONENT_TYPES.DATE,
+      label: PATTERN_COMPONENT_LABELS.date,
+      icon: PATTERN_COMPONENT_ICONS.date,
+    },
+    {
+      type: PATTERN_COMPONENT_TYPES.FILE_NAME,
+      label: PATTERN_COMPONENT_LABELS.fileName,
+      icon: PATTERN_COMPONENT_ICONS.fileName,
+    },
+    {
+      type: PATTERN_COMPONENT_TYPES.COUNTER,
+      label: PATTERN_COMPONENT_LABELS.counter,
+      icon: PATTERN_COMPONENT_ICONS.counter,
+    },
+    {
+      type: PATTERN_COMPONENT_TYPES.TEXT,
+      label: PATTERN_COMPONENT_LABELS.text,
+      icon: PATTERN_COMPONENT_ICONS.text,
+    },
+    {
+      type: PATTERN_COMPONENT_TYPES.PROJECT,
+      label: PATTERN_COMPONENT_LABELS.project,
+      icon: PATTERN_COMPONENT_ICONS.project,
+    },
   ];
 
   const addComponent = useCallback(
     (type: RenameComponent['type']) => {
-      if (components.length >= MAX_COMPONENTS) {
-        console.warn(`Maximum component limit of ${MAX_COMPONENTS} reached`);
+      if (!activePattern || components.length >= MAX_COMPONENTS) {
+        // Maximum component limit reached
         return;
       }
 
@@ -120,22 +196,95 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
         format: type === 'date' ? 'YYYYMMDD' : undefined,
       };
 
-      onChange([...components, newComponent]);
+      addComponentToPattern(activePattern.id, newComponent);
     },
-    [components, onChange]
+    [activePattern, components.length, addComponentToPattern]
   );
 
   const removeComponent = useCallback(
     (id: string) => {
-      onChange(components.filter(c => c.id !== id));
+      if (!activePattern) return;
+      removeComponentFromPattern(activePattern.id, id);
     },
-    [components, onChange]
+    [activePattern, removeComponentFromPattern]
+  );
+
+  const handleCreatePattern = useCallback(async () => {
+    if (newPatternName.trim()) {
+      setIsSaving(true);
+      try {
+        await createPattern(newPatternName.trim());
+        setNewPatternName('');
+        setShowNewPatternDialog(false);
+        toast.success('Pattern Created', `"${newPatternName.trim()}" has been created`);
+      } catch (error) {
+        toast.error('Failed to Create Pattern', 'Please try again');
+      } finally {
+        setIsSaving(false);
+      }
+    }
+  }, [newPatternName, createPattern, toast]);
+
+  const handleRenamePattern = useCallback(
+    async (patternId: string, newName: string) => {
+      try {
+        await updatePattern(patternId, { name: newName });
+        toast.success('Pattern Renamed', 'Pattern has been renamed successfully');
+      } catch (error) {
+        toast.error('Failed to Rename Pattern', 'Please try again');
+      }
+    },
+    [updatePattern, toast]
+  );
+
+  const handleDeletePattern = useCallback(
+    async (patternId: string) => {
+      if (window.confirm('Are you sure you want to delete this pattern?')) {
+        try {
+          await deletePattern(patternId);
+          toast.success('Pattern Deleted', 'Pattern has been deleted successfully');
+        } catch (error) {
+          toast.error('Failed to Delete Pattern', 'Please try again');
+        }
+      }
+    },
+    [deletePattern, toast]
+  );
+
+  const handleDragStart = useCallback((e: React.DragEvent, patternId: string) => {
+    setDraggedPatternId(patternId);
+    e.dataTransfer.effectAllowed = 'move';
+  }, []);
+
+  const handleDragEnd = useCallback(() => {
+    setDraggedPatternId(null);
+  }, []);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent, targetPatternId: string) => {
+      e.preventDefault();
+      if (draggedPatternId && draggedPatternId !== targetPatternId) {
+        const store = usePatternStore.getState();
+        store.reorderPatterns(draggedPatternId, targetPatternId);
+      }
+      setDraggedPatternId(null);
+    },
+    [draggedPatternId]
   );
 
   // For future use: updating component values
   // const updateComponent = useCallback((id: string, updates: Partial<RenameComponent>) => {
   //   onChange(components.map(c => c.id === id ? { ...c, ...updates } : c));
   // }, [components, onChange]);
+
+  if (isLoading) {
+    return <PatternBuilderSkeleton />;
+  }
 
   return (
     <div
@@ -144,64 +293,61 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
         display: 'flex',
         flexDirection: 'column',
         padding: '16px',
+        position: 'relative',
       }}
     >
-      {/* Header with tabs */}
-      <div
-        style={{
-          marginBottom: '16px',
-        }}
-      >
-        <h3
-          style={{
-            color: '#fff',
-            fontSize: '14px',
-            fontWeight: 600,
-            margin: '0 0 12px',
-          }}
-        >
-          Naming Pattern
-        </h3>
-
+      {/* Header with scrollable tabs */}
+      <div style={{ marginBottom: '16px' }}>
         <div
           style={{
             display: 'flex',
-            gap: '8px',
-            borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-            paddingBottom: '8px',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginBottom: '12px',
           }}
         >
-          <button
+          <h3
             style={{
-              background: activeTab === 0 ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
-              border: '1px solid ' + (activeTab === 0 ? '#3b82f6' : 'rgba(255, 255, 255, 0.2)'),
-              borderRadius: '6px',
-              color: activeTab === 0 ? '#3b82f6' : 'rgba(255, 255, 255, 0.6)',
-              padding: '6px 12px',
-              fontSize: '12px',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
+              color: '#fff',
+              fontSize: '14px',
+              fontWeight: 600,
+              margin: 0,
             }}
-            onClick={() => setActiveTab(0)}
           >
-            Default Pattern
-          </button>
-          <button
-            style={{
-              background: activeTab === 1 ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
-              border: '1px solid ' + (activeTab === 1 ? '#3b82f6' : 'rgba(255, 255, 255, 0.2)'),
-              borderRadius: '6px',
-              color: activeTab === 1 ? '#3b82f6' : 'rgba(255, 255, 255, 0.6)',
-              padding: '6px 12px',
-              fontSize: '12px',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-            }}
-            onClick={() => setActiveTab(1)}
-          >
-            Custom Pattern
-          </button>
+            Naming Pattern
+          </h3>
+          {isSaving && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <LoadingSpinner size="small" />
+              <span style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: '12px' }}>Saving...</span>
+            </div>
+          )}
         </div>
+
+        <ScrollableTabContainer>
+          {patterns.map(pattern => (
+            <PatternTab
+              key={pattern.id}
+              id={pattern.id}
+              name={pattern.name}
+              active={pattern.id === activePatternId}
+              editable={!pattern.isBuiltIn}
+              isDragging={draggedPatternId === pattern.id}
+              onClick={() => setActivePattern(pattern.id)}
+              onClose={() => handleDeletePattern(pattern.id)}
+              onRename={newName => handleRenamePattern(pattern.id, newName)}
+              onDragStart={e => handleDragStart(e, pattern.id)}
+              onDragEnd={handleDragEnd}
+              onDragOver={handleDragOver}
+              onDrop={e => handleDrop(e, pattern.id)}
+            />
+          ))}
+          <AddPatternButton
+            onClick={() => setShowNewPatternDialog(true)}
+            disabled={patternCount >= MAX_PATTERNS}
+            maxReached={patternCount >= MAX_PATTERNS}
+          />
+        </ScrollableTabContainer>
       </div>
 
       {/* Pattern Builder Area */}
@@ -219,7 +365,8 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
             background: 'rgba(255, 255, 255, 0.05)',
             borderRadius: '8px',
             padding: '16px',
-            height: '120px',
+            minHeight: '120px',
+            maxHeight: '200px',
             overflow: 'hidden',
             position: 'relative',
           }}
@@ -229,21 +376,22 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
               display: 'flex',
               flexWrap: 'wrap',
               gap: '8px',
-              height: '88px',
-              alignItems: 'flex-start',
-              alignContent: 'flex-start',
-              overflow: 'auto',
+              minHeight: '88px',
+              maxHeight: '168px',
+              alignItems: components.length === 0 ? 'center' : 'flex-start',
+              alignContent: components.length === 0 ? 'center' : 'flex-start',
+              justifyContent: components.length === 0 ? 'center' : 'flex-start',
+              overflow: 'hidden',
+              width: '100%',
             }}
           >
             {components.length === 0 ? (
-              <span
-                style={{
-                  color: 'rgba(255, 255, 255, 0.4)',
-                  fontSize: '14px',
-                }}
-              >
-                Click components below to build your pattern
-              </span>
+              <EmptyState
+                icon="🎯"
+                title="No pattern components"
+                description="Click components below to build your pattern"
+                style={{ width: '100%' }}
+              />
             ) : (
               components.map((component, index) => (
                 <motion.div
@@ -277,11 +425,14 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
                         fontWeight: 500,
                       }}
                     >
-                      {component.type === 'date' && '20250917'}
-                      {component.type === 'fileName' && (component.value || 'File Name')}
-                      {component.type === 'counter' && '001'}
-                      {component.type === 'text' && (component.value || 'Text')}
-                      {component.type === 'project' && (component.value || 'Project')}
+                      {component.type === PATTERN_COMPONENT_TYPES.DATE && '20250917'}
+                      {component.type === PATTERN_COMPONENT_TYPES.FILE_NAME &&
+                        (component.value || 'File Name')}
+                      {component.type === PATTERN_COMPONENT_TYPES.COUNTER && '001'}
+                      {component.type === PATTERN_COMPONENT_TYPES.TEXT &&
+                        (component.value || 'Text')}
+                      {component.type === PATTERN_COMPONENT_TYPES.PROJECT &&
+                        (component.value || 'Project')}
                     </span>
                     <button
                       onClick={() => removeComponent(component.id)}
@@ -297,6 +448,8 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}
+                      disabled={activePattern?.isBuiltIn}
+                      aria-label="Remove component"
                     >
                       ✕
                     </button>
@@ -332,15 +485,25 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
               <button
                 key={comp.type}
                 onClick={() => addComponent(comp.type as RenameComponent['type'])}
-                disabled={components.length >= MAX_COMPONENTS}
+                disabled={components.length >= MAX_COMPONENTS || activePattern?.isBuiltIn}
                 style={{
-                  background: components.length >= MAX_COMPONENTS ? 'rgba(255, 255, 255, 0.02)' : 'rgba(255, 255, 255, 0.05)',
+                  background:
+                    components.length >= MAX_COMPONENTS || activePattern?.isBuiltIn
+                      ? 'rgba(255, 255, 255, 0.02)'
+                      : 'rgba(255, 255, 255, 0.05)',
                   border: '1px solid rgba(255, 255, 255, 0.1)',
                   borderRadius: '8px',
                   padding: '8px',
-                  color: components.length >= MAX_COMPONENTS ? 'rgba(255, 255, 255, 0.3)' : 'rgba(255, 255, 255, 0.8)',
-                  cursor: components.length >= MAX_COMPONENTS ? 'not-allowed' : 'pointer',
-                  opacity: components.length >= MAX_COMPONENTS ? 0.5 : 1,
+                  color:
+                    components.length >= MAX_COMPONENTS || activePattern?.isBuiltIn
+                      ? 'rgba(255, 255, 255, 0.3)'
+                      : 'rgba(255, 255, 255, 0.8)',
+                  cursor:
+                    components.length >= MAX_COMPONENTS || activePattern?.isBuiltIn
+                      ? 'not-allowed'
+                      : 'pointer',
+                  opacity:
+                    components.length >= MAX_COMPONENTS || activePattern?.isBuiltIn ? 0.5 : 1,
                   transition: 'all 0.2s',
                   display: 'flex',
                   alignItems: 'center',
@@ -348,17 +511,18 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
                   fontSize: '12px',
                 }}
                 onMouseEnter={e => {
-                  if (components.length < MAX_COMPONENTS) {
+                  if (components.length < MAX_COMPONENTS && !activePattern?.isBuiltIn) {
                     e.currentTarget.style.background = 'rgba(255, 255, 255, 0.1)';
                     e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
                   }
                 }}
                 onMouseLeave={e => {
-                  if (components.length < MAX_COMPONENTS) {
+                  if (components.length < MAX_COMPONENTS && !activePattern?.isBuiltIn) {
                     e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
                     e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
                   }
                 }}
+                aria-label={`Add ${comp.label} component`}
               >
                 <span>{comp.icon}</span>
                 <span>{comp.label}</span>
@@ -367,24 +531,20 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
           </div>
         </div>
 
-        {/* Configuration for selected component */}
-        {components.length > 0 && (
+        {/* Pattern Info */}
+        {activePattern && activePattern.isBuiltIn && (
           <div
             style={{
               background: 'rgba(255, 255, 255, 0.05)',
               borderRadius: '8px',
               padding: '12px',
               marginTop: '8px',
+              fontSize: '12px',
+              color: 'rgba(255, 255, 255, 0.6)',
             }}
           >
-            <p
-              style={{
-                color: 'rgba(255, 255, 255, 0.6)',
-                fontSize: '12px',
-                margin: 0,
-              }}
-            >
-              Click on components above to configure them
+            <p style={{ margin: 0 }}>
+              This is a built-in pattern. Create a custom pattern to edit components.
             </p>
           </div>
         )}
@@ -396,7 +556,8 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
           marginTop: '16px',
           display: 'flex',
           gap: '8px',
-          justifyContent: 'flex-end',
+          justifyContent: 'space-between',
+          alignItems: 'center',
         }}
       >
         {/* Path Display */}
@@ -404,119 +565,170 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
           <div
             style={{
               flex: 1,
-              marginRight: '12px',
               position: 'relative',
               minWidth: 0, // Important for text truncation
-              maxWidth: '60%', // Limit width to prevent overlap with button
             }}
           >
             <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '2px',
+                padding: '10px 12px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                border: '1px solid rgba(255, 255, 255, 0.1)',
+                overflow: 'hidden',
+                minWidth: 0,
+                height: '44px',
+              }}
+              title={destinationPath}
+              onClick={handlePathEdit}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+              }}
+            >
+              {/* Folder Icon */}
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                style={{ color: 'rgba(255, 255, 255, 0.6)', flexShrink: 0 }}
+              >
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+              </svg>
+
+              {/* Path segments */}
+              <div
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '2px',
-                  padding: '8px 12px',
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s',
-                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  gap: '4px',
                   overflow: 'hidden',
+                  flex: 1,
                   minWidth: 0,
                 }}
-                title={destinationPath}
-                onClick={handlePathEdit}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.2)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                  e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                }}
               >
-                {/* Folder Icon */}
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  style={{ color: 'rgba(255, 255, 255, 0.6)', flexShrink: 0 }}
-                >
-                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-                </svg>
+                {(() => {
+                  const segments = destinationPath.split('/').filter(Boolean);
+                  const maxSegments = 4;
 
-                {/* Path segments */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    overflow: 'hidden',
-                    flex: 1,
-                    minWidth: 0,
-                  }}
-                >
-                  {(() => {
-                    const segments = destinationPath.split('/').filter(Boolean);
-                    const maxSegments = 4;
-
-                    if (segments.length > maxSegments) {
-                      // Show first segment, ellipsis, and last 2 segments
-                      return (
-                        <>
-                          <span style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '12px', flexShrink: 0 }}>
-                            {segments[0]}
-                          </span>
-                          <span style={{ color: 'rgba(255, 255, 255, 0.3)', fontSize: '12px', flexShrink: 0 }}>›</span>
-                          <span style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '12px', flexShrink: 0 }}>...</span>
-                          <span style={{ color: 'rgba(255, 255, 255, 0.3)', fontSize: '12px', flexShrink: 0 }}>›</span>
-                          <span style={{ color: 'rgba(255, 255, 255, 0.7)', fontSize: '12px', flexShrink: 0 }}>
-                            {segments[segments.length - 2]}
-                          </span>
-                          <span style={{ color: 'rgba(255, 255, 255, 0.3)', fontSize: '12px', flexShrink: 0 }}>›</span>
+                  if (segments.length > maxSegments) {
+                    // Show first segment, ellipsis, and last 2 segments
+                    return (
+                      <>
+                        <span
+                          style={{
+                            color: 'rgba(255, 255, 255, 0.7)',
+                            fontSize: '12px',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {segments[0]}
+                        </span>
+                        <span
+                          style={{
+                            color: 'rgba(255, 255, 255, 0.3)',
+                            fontSize: '12px',
+                            flexShrink: 0,
+                          }}
+                        >
+                          ›
+                        </span>
+                        <span
+                          style={{
+                            color: 'rgba(255, 255, 255, 0.4)',
+                            fontSize: '12px',
+                            flexShrink: 0,
+                          }}
+                        >
+                          ...
+                        </span>
+                        <span
+                          style={{
+                            color: 'rgba(255, 255, 255, 0.3)',
+                            fontSize: '12px',
+                            flexShrink: 0,
+                          }}
+                        >
+                          ›
+                        </span>
+                        <span
+                          style={{
+                            color: 'rgba(255, 255, 255, 0.7)',
+                            fontSize: '12px',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {segments[segments.length - 2]}
+                        </span>
+                        <span
+                          style={{
+                            color: 'rgba(255, 255, 255, 0.3)',
+                            fontSize: '12px',
+                            flexShrink: 0,
+                          }}
+                        >
+                          ›
+                        </span>
+                        <span
+                          style={{
+                            color: 'rgba(255, 255, 255, 0.7)',
+                            fontSize: '12px',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            minWidth: 0,
+                          }}
+                        >
+                          {segments[segments.length - 1]}
+                        </span>
+                      </>
+                    );
+                  } else {
+                    // Show all segments if not too many
+                    return segments.map((segment, index, array) => (
+                      <React.Fragment key={index}>
+                        <span
+                          style={{
+                            color: 'rgba(255, 255, 255, 0.7)',
+                            fontSize: '12px',
+                            overflow: index === array.length - 1 ? 'hidden' : undefined,
+                            textOverflow: index === array.length - 1 ? 'ellipsis' : undefined,
+                            whiteSpace: index === array.length - 1 ? 'nowrap' : undefined,
+                            minWidth: 0,
+                            flexShrink: index === array.length - 1 ? 1 : 0,
+                          }}
+                        >
+                          {segment}
+                        </span>
+                        {index < array.length - 1 && (
                           <span
                             style={{
-                              color: 'rgba(255, 255, 255, 0.7)',
+                              color: 'rgba(255, 255, 255, 0.3)',
                               fontSize: '12px',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              minWidth: 0,
+                              flexShrink: 0,
                             }}
                           >
-                            {segments[segments.length - 1]}
+                            ›
                           </span>
-                        </>
-                      );
-                    } else {
-                      // Show all segments if not too many
-                      return segments.map((segment, index, array) => (
-                        <React.Fragment key={index}>
-                          <span
-                            style={{
-                              color: 'rgba(255, 255, 255, 0.7)',
-                              fontSize: '12px',
-                              overflow: index === array.length - 1 ? 'hidden' : undefined,
-                              textOverflow: index === array.length - 1 ? 'ellipsis' : undefined,
-                              whiteSpace: index === array.length - 1 ? 'nowrap' : undefined,
-                              minWidth: 0,
-                              flexShrink: index === array.length - 1 ? 1 : 0,
-                            }}
-                          >
-                            {segment}
-                          </span>
-                          {index < array.length - 1 && (
-                            <span style={{ color: 'rgba(255, 255, 255, 0.3)', fontSize: '12px', flexShrink: 0 }}>›</span>
-                          )}
-                        </React.Fragment>
-                      ));
-                    }
-                  })()}
-                </div>
+                        )}
+                      </React.Fragment>
+                    ));
+                  }
+                })()}
               </div>
+            </div>
           </div>
         )}
 
@@ -533,11 +745,103 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
             fontWeight: 600,
             cursor: hasFiles && components.length > 0 ? 'pointer' : 'not-allowed',
             transition: 'all 0.2s',
+            flexShrink: 0,
           }}
+          aria-label="Save and rename files"
         >
-          Rename & Save
+          Save
         </button>
       </div>
+
+      {/* New Pattern Dialog */}
+      {showNewPatternDialog && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.8)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1000,
+          }}
+          onClick={() => setShowNewPatternDialog(false)}
+        >
+          <div
+            style={{
+              background: '#1a1a1a',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              borderRadius: '12px',
+              padding: '24px',
+              width: '400px',
+              boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 style={{ color: '#fff', marginTop: 0 }}>Create New Pattern</h3>
+            <input
+              type="text"
+              placeholder="Pattern name"
+              value={newPatternName}
+              onChange={e => setNewPatternName(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === 'Enter') {
+                  handleCreatePattern();
+                } else if (e.key === 'Escape') {
+                  setShowNewPatternDialog(false);
+                  setNewPatternName('');
+                }
+              }}
+              style={{
+                width: '100%',
+                padding: '10px',
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                borderRadius: '6px',
+                color: '#fff',
+                fontSize: '14px',
+                marginBottom: '16px',
+              }}
+              autoFocus
+            />
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setShowNewPatternDialog(false);
+                  setNewPatternName('');
+                }}
+                style={{
+                  padding: '8px 16px',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  borderRadius: '6px',
+                  color: '#fff',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreatePattern}
+                disabled={!newPatternName.trim()}
+                style={{
+                  padding: '8px 16px',
+                  background: newPatternName.trim() ? '#3b82f6' : 'rgba(255, 255, 255, 0.1)',
+                  border: 'none',
+                  borderRadius: '6px',
+                  color: '#fff',
+                  cursor: newPatternName.trim() ? 'pointer' : 'not-allowed',
+                }}
+              >
+                Create
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -5,6 +5,7 @@
 **Dependencies**: None
 
 ## Overview
+
 This stage focuses on immediate UI improvements that enhance user experience without requiring backend changes. These improvements lay the foundation for the plugin system while providing immediate value to users.
 
 ## Tasks
@@ -12,6 +13,7 @@ This stage focuses on immediate UI improvements that enhance user experience wit
 ### Day 1-2: Update Terminology
 
 #### Morning Session
+
 - [ ] **Search and Replace "File Format" → "Naming Pattern"**
   - File: `src/renderer/components/RenamePatternBuilder/RenamePatternBuilder.tsx`
   - Line 155: Change "New File Format" to "Naming Pattern"
@@ -29,7 +31,9 @@ This stage focuses on immediate UI improvements that enhance user experience wit
   - Ensure accessibility compliance
 
 #### Afternoon Session
+
 - [ ] **Create Constants File**
+
   ```typescript
   // src/renderer/constants/namingPatterns.ts
   export const NAMING_PATTERN_LABELS = {
@@ -50,6 +54,7 @@ This stage focuses on immediate UI improvements that enhance user experience wit
 #### Components to Create
 
 1. **ScrollableTabContainer.tsx**
+
    ```typescript
    interface ScrollableTabContainerProps {
      children: React.ReactNode;
@@ -57,6 +62,7 @@ This stage focuses on immediate UI improvements that enhance user experience wit
      onScroll?: (direction: 'left' | 'right') => void;
    }
    ```
+
    - [ ] Implement horizontal scroll container
    - [ ] Add scroll indicators (left/right arrows)
    - [ ] Show/hide arrows based on scroll position
@@ -65,6 +71,7 @@ This stage focuses on immediate UI improvements that enhance user experience wit
    - [ ] Touch/swipe support for trackpad
 
 2. **PatternTab.tsx**
+
    ```typescript
    interface PatternTabProps {
      id: string;
@@ -76,6 +83,7 @@ This stage focuses on immediate UI improvements that enhance user experience wit
      onRename?: (newName: string) => void;
    }
    ```
+
    - [ ] Create base tab component
    - [ ] Active/inactive styling
    - [ ] Hover and focus states
@@ -85,18 +93,21 @@ This stage focuses on immediate UI improvements that enhance user experience wit
    - [ ] Context menu (right-click)
 
 3. **AddPatternButton.tsx**
+
    ```typescript
    interface AddPatternButtonProps {
      onClick: () => void;
      disabled?: boolean;
    }
    ```
+
    - [ ] Create "+" button component
    - [ ] Consistent styling with tabs
    - [ ] Tooltip "Add new pattern"
    - [ ] Disabled state when max patterns reached
 
 #### Integration Tasks
+
 - [ ] **Update RenamePatternBuilder.tsx**
   - Replace static tab buttons with ScrollableTabContainer
   - Implement dynamic tab rendering
@@ -106,16 +117,26 @@ This stage focuses on immediate UI improvements that enhance user experience wit
 - [ ] **Add CSS Modules**
   ```css
   /* PatternTabs.module.css */
-  .container { /* scroll container styles */ }
-  .tab { /* tab styles */ }
-  .tabActive { /* active tab styles */ }
-  .scrollButton { /* arrow button styles */ }
+  .container {
+    /* scroll container styles */
+  }
+  .tab {
+    /* tab styles */
+  }
+  .tabActive {
+    /* active tab styles */
+  }
+  .scrollButton {
+    /* arrow button styles */
+  }
   ```
 
 ### Day 3-4: Pattern State Management
 
 #### Create Zustand Store
+
 - [ ] **Create patternStore.ts**
+
   ```typescript
   interface PatternState {
     patterns: Map<string, SavedPattern>;
@@ -145,7 +166,9 @@ This stage focuses on immediate UI improvements that enhance user experience wit
   - Show loading states appropriately
 
 #### Create Custom Hooks
+
 - [ ] **usePatternManager.ts**
+
   ```typescript
   export function usePatternManager() {
     // Wrap store methods with error handling
@@ -166,6 +189,7 @@ This stage focuses on immediate UI improvements that enhance user experience wit
 ### Day 4-5: UI Polish and Testing
 
 #### Animations and Transitions
+
 - [ ] **Tab Switching Animation**
   - Fade transition (200ms)
   - Slide animation for tab indicator
@@ -182,6 +206,7 @@ This stage focuses on immediate UI improvements that enhance user experience wit
   - Error state UI
 
 #### Empty States and Edge Cases
+
 - [ ] **No Patterns State**
   - Friendly empty state message
   - Call-to-action to create first pattern
@@ -193,6 +218,7 @@ This stage focuses on immediate UI improvements that enhance user experience wit
   - Retry mechanisms
 
 #### Accessibility
+
 - [ ] **Keyboard Navigation**
   - Tab through all interactive elements
   - Arrow keys for tab selection
@@ -205,6 +231,7 @@ This stage focuses on immediate UI improvements that enhance user experience wit
   - Role attributes
 
 #### Testing
+
 - [ ] **Unit Tests**
   - Test each new component
   - Test state management logic

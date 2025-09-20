@@ -16,6 +16,7 @@ This research report outlines a comprehensive plan to transform FileCataloger's 
    - Limited configurability for components
 
 2. **Data Structure** (`src/shared/types.ts`)
+
    ```typescript
    interface RenameComponent {
      id: string;
@@ -143,24 +144,24 @@ const enhancedDatePlugin: NamingPlugin = {
         dateType: {
           type: 'string',
           enum: ['current', 'created', 'modified', 'accessed'],
-          default: 'current'
+          default: 'current',
         },
         format: {
           type: 'string',
           default: 'YYYYMMDD',
-          examples: ['YYYYMMDD', 'DD-MM-YYYY', 'MM/DD/YY']
+          examples: ['YYYYMMDD', 'DD-MM-YYYY', 'MM/DD/YY'],
         },
         timezone: {
           type: 'string',
-          default: 'local'
-        }
-      }
+          default: 'local',
+        },
+      },
     },
     render: (config, context) => {
       const date = getDateByType(config.dateType, context.file);
       return formatDate(date, config.format, config.timezone);
-    }
-  }
+    },
+  },
 };
 ```
 
@@ -179,22 +180,22 @@ const selectPlugin: NamingPlugin = {
         options: {
           type: 'array',
           items: { type: 'string' },
-          default: []
+          default: [],
         },
         allowCustom: {
           type: 'boolean',
-          default: true
+          default: true,
         },
         defaultValue: {
-          type: 'string'
-        }
-      }
+          type: 'string',
+        },
+      },
     },
     render: (config, context) => {
       return config.defaultValue || config.options[0] || '';
     },
-    configComponent: SelectConfigComponent // Custom React component
-  }
+    configComponent: SelectConfigComponent, // Custom React component
+  },
 };
 ```
 
@@ -213,20 +214,20 @@ module.exports = {
       properties: {
         apiUrl: { type: 'string' },
         apiKey: { type: 'string', format: 'password' },
-        lookupField: { type: 'string', default: 'filename' }
-      }
+        lookupField: { type: 'string', default: 'filename' },
+      },
     },
     render: async (config, context) => {
       const response = await fetch(config.apiUrl, {
-        headers: { 'Authorization': `Bearer ${config.apiKey}` },
+        headers: { Authorization: `Bearer ${config.apiKey}` },
         body: JSON.stringify({
-          [config.lookupField]: context.file.name
-        })
+          [config.lookupField]: context.file.name,
+        }),
       });
       const data = await response.json();
       return data.result || context.file.name;
-    }
-  }
+    },
+  },
 };
 ```
 
@@ -258,6 +259,7 @@ module.exports = {
 ### Phase 2: Pattern Persistence (Week 2)
 
 1. **Extend Preferences Schema**
+
    ```typescript
    interface AppPreferences {
      // ... existing preferences
@@ -293,6 +295,7 @@ module.exports = {
 ### Phase 3: Plugin System Core (Week 3-4)
 
 1. **Plugin Manager Implementation**
+
    ```typescript
    class PluginManager {
      private plugins: Map<string, NamingPlugin>;
@@ -307,25 +310,20 @@ module.exports = {
    ```
 
 2. **Plugin Sandbox**
+
    ```typescript
    class PluginSandbox {
      private vm: VM; // Using vm2 or similar
      private allowedModules: Set<string>;
 
-     async execute(
-       plugin: NamingPlugin,
-       method: string,
-       args: any[]
-     ): Promise<any>;
+     async execute(plugin: NamingPlugin, method: string, args: any[]): Promise<any>;
 
-     validateCapabilities(
-       plugin: NamingPlugin,
-       requested: PluginCapability[]
-     ): boolean;
+     validateCapabilities(plugin: NamingPlugin, requested: PluginCapability[]): boolean;
    }
    ```
 
 3. **Plugin Storage**
+
    ```sql
    CREATE TABLE plugins (
      id TEXT PRIMARY KEY,
@@ -399,6 +397,7 @@ module.exports = {
 ### Node Package Integration
 
 1. **Controlled npm Access**
+
    ```typescript
    class PluginNodeModules {
      private allowedPackages: Set<string>;
@@ -444,7 +443,7 @@ import {
   PluginContext,
   ComponentConfig,
   FileInfo,
-  UIComponents
+  UIComponents,
 } from '@filecataloger/plugin-sdk';
 
 // Create a plugin
@@ -459,9 +458,9 @@ export default createPlugin({
       type: 'object',
       properties: {
         prefix: { type: 'string', default: 'CUSTOM_' },
-        uppercase: { type: 'boolean', default: false }
-      }
-    }
+        uppercase: { type: 'boolean', default: false },
+      },
+    },
   },
 
   // Main render function
@@ -479,8 +478,8 @@ export default createPlugin({
   // Optional: Custom configuration UI
   configUI: {
     component: 'MyConfigComponent',
-    size: { width: 400, height: 300 }
-  }
+    size: { width: 400, height: 300 },
+  },
 });
 ```
 
@@ -499,10 +498,10 @@ interface PluginContext {
 
   // Runtime information
   runtime: {
-    index: number;        // Current file index
-    total: number;        // Total files being renamed
-    timestamp: Date;      // Current timestamp
-    locale: string;       // User's locale
+    index: number; // Current file index
+    total: number; // Total files being renamed
+    timestamp: Date; // Current timestamp
+    locale: string; // User's locale
   };
 
   // Storage API
@@ -513,15 +512,15 @@ interface PluginContext {
 }
 
 interface FileInfo {
-  path: string;                  // Full file path
-  name: string;                  // Filename with extension
-  nameWithoutExtension: string;  // Filename without extension
-  extension: string;             // File extension (including dot)
-  size: number;                  // File size in bytes
-  type: string;                  // MIME type
-  created: Date;                 // Creation date
-  modified: Date;                // Last modified date
-  accessed: Date;                // Last accessed date
+  path: string; // Full file path
+  name: string; // Filename with extension
+  nameWithoutExtension: string; // Filename without extension
+  extension: string; // File extension (including dot)
+  size: number; // File size in bytes
+  type: string; // MIME type
+  created: Date; // Creation date
+  modified: Date; // Last modified date
+  accessed: Date; // Last accessed date
   metadata?: Record<string, any>; // Custom metadata
 }
 
@@ -689,7 +688,7 @@ export default createPlugin({
     // Make API call (requires network permission)
     if (utils.http) {
       const response = await utils.http.get(config.apiUrl, {
-        params: { filename: file.name }
+        params: { filename: file.name },
       });
 
       return response.data.suggestedName || file.name;
@@ -702,7 +701,7 @@ export default createPlugin({
   permissions: ['network'],
 
   // Timeout for async operations
-  timeout: 5000
+  timeout: 5000,
 });
 ```
 
@@ -719,16 +718,14 @@ export default createPlugin({
   // Process all files at once
   renderBatch: async (contexts: PluginContext[]) => {
     // Generate sequence based on all files
-    const sorted = contexts.sort((a, b) =>
-      a.file.name.localeCompare(b.file.name)
-    );
+    const sorted = contexts.sort((a, b) => a.file.name.localeCompare(b.file.name));
 
     return sorted.map((context, index) => {
       const { config } = context;
       const paddedIndex = String(index + 1).padStart(config.digits || 3, '0');
       return `${config.prefix}${paddedIndex}`;
     });
-  }
+  },
 });
 ```
 
@@ -838,12 +835,12 @@ describe('My Plugin', () => {
       plugin: myPlugin,
       files: [
         { name: 'test.jpg', size: 1024 },
-        { name: 'example.png', size: 2048 }
+        { name: 'example.png', size: 2048 },
       ],
       config: {
         prefix: 'IMG_',
-        uppercase: true
-      }
+        uppercase: true,
+      },
     });
 
     expect(result).toEqual(['IMG_TEST', 'IMG_EXAMPLE']);
@@ -854,6 +851,7 @@ describe('My Plugin', () => {
 ### Publishing Your Plugin
 
 1. **Prepare your plugin**
+
    ```bash
    npm run build
    npm test
@@ -861,6 +859,7 @@ describe('My Plugin', () => {
    ```
 
 2. **Publish to npm**
+
    ```bash
    npm publish --tag filecataloger-plugin
    ```

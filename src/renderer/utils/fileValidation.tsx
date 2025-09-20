@@ -113,27 +113,45 @@ export function formatValidationWarning(summary: ValidationSummary): {
   const issues: string[] = [];
 
   if (summary.pathIssues.length > 0) {
-    issues.push(`${summary.pathIssues.length} file${summary.pathIssues.length > 1 ? 's' : ''} exceed the maximum path length of ${MAX_PATH_LENGTH} characters`);
+    issues.push(
+      `${summary.pathIssues.length} file${summary.pathIssues.length > 1 ? 's' : ''} exceed the maximum path length of ${MAX_PATH_LENGTH} characters`
+    );
   }
 
   if (summary.filenameIssues.length > 0) {
-    issues.push(`${summary.filenameIssues.length} file${summary.filenameIssues.length > 1 ? 's' : ''} exceed the maximum filename length of ${MAX_FILENAME_LENGTH} characters`);
+    issues.push(
+      `${summary.filenameIssues.length} file${summary.filenameIssues.length > 1 ? 's' : ''} exceed the maximum filename length of ${MAX_FILENAME_LENGTH} characters`
+    );
   }
 
-  const message = issues.join(' and ') + '. These files may not be renamed successfully on some file systems.';
+  const message =
+    issues.join(' and ') + '. These files may not be renamed successfully on some file systems.';
 
   const details = (
     <div>
       {summary.pathIssues.length > 0 && (
         <div style={{ marginBottom: summary.filenameIssues.length > 0 ? '16px' : 0 }}>
-          <h4 style={{ margin: '0 0 8px', fontSize: '12px', color: 'rgba(251, 191, 36, 0.9)', textTransform: 'uppercase' }}>
-            Path Too Long ({summary.pathIssues.length} file{summary.pathIssues.length > 1 ? 's' : ''})
+          <h4
+            style={{
+              margin: '0 0 8px',
+              fontSize: '12px',
+              color: 'rgba(251, 191, 36, 0.9)',
+              textTransform: 'uppercase',
+            }}
+          >
+            Path Too Long ({summary.pathIssues.length} file
+            {summary.pathIssues.length > 1 ? 's' : ''})
           </h4>
           <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px' }}>
             {summary.pathIssues.slice(0, 5).map((issue, index) => (
-              <li key={index} style={{ marginBottom: '8px', wordBreak: 'break-all', lineHeight: 1.4 }}>
+              <li
+                key={index}
+                style={{ marginBottom: '8px', wordBreak: 'break-all', lineHeight: 1.4 }}
+              >
                 <div style={{ color: 'rgba(255, 255, 255, 0.6)' }}>{issue.newFilename}</div>
-                <div style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '11px', marginTop: '2px' }}>
+                <div
+                  style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '11px', marginTop: '2px' }}
+                >
                   ({issue.pathLength} chars)
                 </div>
               </li>
@@ -149,14 +167,27 @@ export function formatValidationWarning(summary: ValidationSummary): {
 
       {summary.filenameIssues.length > 0 && (
         <div>
-          <h4 style={{ margin: '0 0 8px', fontSize: '12px', color: 'rgba(251, 191, 36, 0.9)', textTransform: 'uppercase' }}>
-            Filename Too Long ({summary.filenameIssues.length} file{summary.filenameIssues.length > 1 ? 's' : ''})
+          <h4
+            style={{
+              margin: '0 0 8px',
+              fontSize: '12px',
+              color: 'rgba(251, 191, 36, 0.9)',
+              textTransform: 'uppercase',
+            }}
+          >
+            Filename Too Long ({summary.filenameIssues.length} file
+            {summary.filenameIssues.length > 1 ? 's' : ''})
           </h4>
           <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px' }}>
             {summary.filenameIssues.slice(0, 5).map((issue, index) => (
-              <li key={index} style={{ marginBottom: '8px', wordBreak: 'break-all', lineHeight: 1.4 }}>
+              <li
+                key={index}
+                style={{ marginBottom: '8px', wordBreak: 'break-all', lineHeight: 1.4 }}
+              >
                 <div style={{ color: 'rgba(255, 255, 255, 0.6)' }}>{issue.newFilename}</div>
-                <div style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '11px', marginTop: '2px' }}>
+                <div
+                  style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '11px', marginTop: '2px' }}
+                >
                   ({issue.filenameLength} chars)
                 </div>
               </li>

@@ -95,6 +95,11 @@ body {
   scroll-behavior: smooth;
 }
 
+/* Scrollable Tab Container */
+.scrollable-tab-container-inner::-webkit-scrollbar {
+  display: none;
+}
+
 /* Item count indicator styling */
 .item-count-indicator {
   backdrop-filter: blur(5px);

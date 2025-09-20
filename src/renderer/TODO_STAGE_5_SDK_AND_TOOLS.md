@@ -5,12 +5,15 @@
 **Dependencies**: Stage 4 completion
 
 ## Overview
+
 This stage creates the developer tools and SDK that enable third-party developers to create, test, and distribute plugins for FileCataloger. This includes the npm package, CLI tools, documentation, and example projects.
 
 ## Day 1: SDK Package Setup
 
 ### Package Structure
+
 - [ ] **Initialize @filecataloger/plugin-sdk**
+
   ```bash
   mkdir packages/plugin-sdk
   cd packages/plugin-sdk
@@ -18,6 +21,7 @@ This stage creates the developer tools and SDK that enable third-party developer
   ```
 
 - [ ] **Configure TypeScript**
+
   ```json
   // tsconfig.json
   {
@@ -72,7 +76,9 @@ This stage creates the developer tools and SDK that enable third-party developer
   ```
 
 ### Core SDK Structure
+
 - [ ] **Create Main Entry Point**
+
   ```typescript
   // src/index.ts
 
@@ -100,7 +106,9 @@ This stage creates the developer tools and SDK that enable third-party developer
 ## Day 2: Core SDK Implementation
 
 ### Plugin Factory
+
 - [ ] **Implement createPlugin Function**
+
   ```typescript
   // src/core/createPlugin.ts
 
@@ -125,7 +133,7 @@ This stage creates the developer tools and SDK that enable third-party developer
       engine: {
         filecataloger: options.engine?.filecataloger || '>=2.0.0',
         node: options.engine?.node,
-        electron: options.engine?.electron
+        electron: options.engine?.electron,
       },
       capabilities: options.capabilities || [],
       permissions: options.permissions || [],
@@ -133,22 +141,32 @@ This stage creates the developer tools and SDK that enable third-party developer
         render: functionToString(options.render),
         renderBatch: options.renderBatch ? functionToString(options.renderBatch) : undefined,
         preview: options.preview ? functionToString(options.preview) : undefined,
-        validate: options.validate ? functionToString(options.validate) : undefined
+        validate: options.validate ? functionToString(options.validate) : undefined,
       },
       configSchema: options.configSchema,
       defaultConfig: options.defaultConfig,
-      lifecycle: options.lifecycle ? {
-        onInstall: options.lifecycle.onInstall ? functionToString(options.lifecycle.onInstall) : undefined,
-        onUninstall: options.lifecycle.onUninstall ? functionToString(options.lifecycle.onUninstall) : undefined,
-        onActivate: options.lifecycle.onActivate ? functionToString(options.lifecycle.onActivate) : undefined,
-        onDeactivate: options.lifecycle.onDeactivate ? functionToString(options.lifecycle.onDeactivate) : undefined
-      } : undefined
+      lifecycle: options.lifecycle
+        ? {
+            onInstall: options.lifecycle.onInstall
+              ? functionToString(options.lifecycle.onInstall)
+              : undefined,
+            onUninstall: options.lifecycle.onUninstall
+              ? functionToString(options.lifecycle.onUninstall)
+              : undefined,
+            onActivate: options.lifecycle.onActivate
+              ? functionToString(options.lifecycle.onActivate)
+              : undefined,
+            onDeactivate: options.lifecycle.onDeactivate
+              ? functionToString(options.lifecycle.onDeactivate)
+              : undefined,
+          }
+        : undefined,
     };
 
     // Add metadata
     plugin.metadata = {
       sdkVersion: SDK_VERSION,
-      createdAt: Date.now()
+      createdAt: Date.now(),
     };
 
     return plugin;
@@ -179,7 +197,9 @@ This stage creates the developer tools and SDK that enable third-party developer
   ```
 
 ### Type Definitions
+
 - [ ] **Export Core Types**
+
   ```typescript
   // src/types/index.ts
 
@@ -232,12 +252,14 @@ This stage creates the developer tools and SDK that enable third-party developer
     PluginCapability,
     PluginPermission,
     PluginFileInfo,
-    PluginUtils
+    PluginUtils,
   } from '@filecataloger/shared';
   ```
 
 ### Utility Functions
+
 - [ ] **Create Utility Exports**
+
   ```typescript
   // src/utils/index.ts
 
@@ -268,14 +290,16 @@ This stage creates the developer tools and SDK that enable third-party developer
       }
 
       return `${size.toFixed(precision)} ${units[unitIndex]}`;
-    }
+    },
   };
   ```
 
 ## Day 3: UI Component Library
 
 ### React Components
+
 - [ ] **Create UI Components**
+
   ```typescript
   // src/ui/index.ts
 
@@ -301,6 +325,7 @@ This stage creates the developer tools and SDK that enable third-party developer
   ```
 
 - [ ] **Implement Form Components**
+
   ```typescript
   // src/ui/components/Form/Form.tsx
 
@@ -347,7 +372,9 @@ This stage creates the developer tools and SDK that enable third-party developer
   ```
 
 ### Component Hooks
+
 - [ ] **Implement Plugin Hooks**
+
   ```typescript
   // src/ui/hooks/usePluginConfig.ts
 
@@ -376,16 +403,22 @@ This stage creates the developer tools and SDK that enable third-party developer
       return () => window.removeEventListener('message', handler);
     }, []);
 
-    const updateConfig = useCallback((updates: Partial<T>) => {
-      const newConfig = { ...config, ...updates };
-      setConfig(newConfig);
+    const updateConfig = useCallback(
+      (updates: Partial<T>) => {
+        const newConfig = { ...config, ...updates };
+        setConfig(newConfig);
 
-      // Send to parent
-      window.parent.postMessage({
-        type: 'config-change',
-        config: newConfig
-      }, '*');
-    }, [config]);
+        // Send to parent
+        window.parent.postMessage(
+          {
+            type: 'config-change',
+            config: newConfig,
+          },
+          '*'
+        );
+      },
+      [config]
+    );
 
     const resetConfig = useCallback(() => {
       window.parent.postMessage({ type: 'config-reset' }, '*');
@@ -398,7 +431,9 @@ This stage creates the developer tools and SDK that enable third-party developer
 ## Day 4: CLI Tools
 
 ### CLI Package
+
 - [ ] **Create @filecataloger/cli**
+
   ```typescript
   // packages/cli/src/index.ts
 
@@ -456,7 +491,9 @@ This stage creates the developer tools and SDK that enable third-party developer
   ```
 
 ### Plugin Scaffolding
+
 - [ ] **Implement Create Command**
+
   ```typescript
   // packages/cli/src/commands/create.ts
 
@@ -516,56 +553,60 @@ This stage creates the developer tools and SDK that enable third-party developer
     await installDependencies(projectPath);
 
     console.log(`
-Plugin created successfully!
+  Plugin created successfully!
+  ```
 
 Next steps:
-  cd ${answers.name || name}
-  npm run dev
+cd ${answers.name || name}
+npm run dev
 
 Happy plugin development! 🎉
-    `);
-  }
-  ```
+`);
+}
+
+````
 
 ### Project Templates
 - [ ] **Create Plugin Templates**
-  ```typescript
-  // packages/cli/templates/basic/src/index.ts
+```typescript
+// packages/cli/templates/basic/src/index.ts
 
-  import { createPlugin } from '@filecataloger/plugin-sdk';
+import { createPlugin } from '@filecataloger/plugin-sdk';
 
-  export default createPlugin({
-    id: '{{pluginId}}',
-    name: '{{pluginName}}',
-    version: '1.0.0',
-    author: {
-      name: '{{authorName}}',
-      email: '{{authorEmail}}'
-    },
-    description: '{{description}}',
+export default createPlugin({
+  id: '{{pluginId}}',
+  name: '{{pluginName}}',
+  version: '1.0.0',
+  author: {
+    name: '{{authorName}}',
+    email: '{{authorEmail}}'
+  },
+  description: '{{description}}',
 
-    configSchema: {
-      type: 'object',
-      properties: {
-        prefix: {
-          type: 'string',
-          default: '',
-          description: 'Prefix to add before the value'
-        }
+  configSchema: {
+    type: 'object',
+    properties: {
+      prefix: {
+        type: 'string',
+        default: '',
+        description: 'Prefix to add before the value'
       }
-    },
-
-    render: (context) => {
-      const { file, config } = context;
-      return config.prefix + file.nameWithoutExtension;
     }
-  });
-  ```
+  },
+
+  render: (context) => {
+    const { file, config } = context;
+    return config.prefix + file.nameWithoutExtension;
+  }
+});
+````
 
 ## Day 5: Testing and Documentation
 
 ### Testing Framework
+
 - [ ] **Create Test Utilities**
+
   ```typescript
   // src/testing/index.ts
 
@@ -596,19 +637,19 @@ Happy plugin development! 🎉
           return {
             pass: result === expected,
             actual: result,
-            expected
+            expected,
           };
         } else {
           return {
             pass: expected.test(result),
             actual: result,
-            expected: expected.toString()
+            expected: expected.toString(),
           };
         }
       } catch (error) {
         return {
           pass: false,
-          error: error.message
+          error: error.message,
         };
       }
     }
@@ -621,16 +662,16 @@ Happy plugin development! 🎉
       // Batch testing implementation
     }
 
-    async benchmark(
-      iterations: number = 1000
-    ): Promise<BenchmarkResult> {
+    async benchmark(iterations: number = 1000): Promise<BenchmarkResult> {
       // Performance testing
     }
   }
   ```
 
 ### Documentation Generator
+
 - [ ] **Create Documentation Tools**
+
   ```typescript
   // packages/cli/src/commands/docs.ts
 
@@ -640,6 +681,7 @@ Happy plugin development! 🎉
 
     // Generate README.md
     const readme = `# ${plugin.name}
+  ```
 
 ${plugin.description}
 
@@ -667,30 +709,33 @@ ${plugin.license || 'MIT'}
 `;
 
     await fs.writeFile('README.md', readme);
-  }
-  ```
+
+}
+
+````
 
 ### API Documentation
 - [ ] **Generate TypeDoc Documentation**
-  ```json
-  // typedoc.json
-  {
-    "entryPoints": ["src/index.ts"],
-    "out": "docs/api",
-    "theme": "default",
-    "includeVersion": true,
-    "categorizeByGroup": true,
-    "categoryOrder": [
-      "Core",
-      "Types",
-      "Utils",
-      "UI",
-      "Testing"
-    ]
-  }
-  ```
+```json
+// typedoc.json
+{
+  "entryPoints": ["src/index.ts"],
+  "out": "docs/api",
+  "theme": "default",
+  "includeVersion": true,
+  "categorizeByGroup": true,
+  "categoryOrder": [
+    "Core",
+    "Types",
+    "Utils",
+    "UI",
+    "Testing"
+  ]
+}
+````
 
 ### Example Projects
+
 - [ ] **Create Example Plugins**
   - Simple text transformer
   - API integration example
@@ -701,7 +746,9 @@ ${plugin.license || 'MIT'}
 ## Publishing Infrastructure
 
 ### NPM Publishing
+
 - [ ] **Configure NPM Publishing**
+
   ```json
   // .npmrc
   @filecataloger:registry=https://registry.npmjs.org/
@@ -709,6 +756,7 @@ ${plugin.license || 'MIT'}
   ```
 
 - [ ] **GitHub Actions for Publishing**
+
   ```yaml
   # .github/workflows/publish.yml
   name: Publish SDK
@@ -736,6 +784,7 @@ ${plugin.license || 'MIT'}
   ```
 
 ### Plugin Registry
+
 - [ ] **Create Plugin Registry API**
   - Plugin submission endpoint
   - Version management
@@ -745,6 +794,7 @@ ${plugin.license || 'MIT'}
 ## Developer Experience
 
 ### VS Code Extension
+
 - [ ] **Create VS Code Extension**
   - Syntax highlighting for plugin files
   - IntelliSense for SDK
@@ -753,6 +803,7 @@ ${plugin.license || 'MIT'}
   - Debugging support
 
 ### Developer Portal
+
 - [ ] **Build Developer Portal**
   - Getting started guide
   - API reference

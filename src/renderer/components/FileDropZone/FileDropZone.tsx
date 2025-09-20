@@ -31,6 +31,7 @@
 import React, { useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { ShelfItem } from '@shared/types';
+import { logger } from '@shared/logger';
 
 export interface FileDropZoneProps {
   isDragOver: boolean;
@@ -73,9 +74,12 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
         let pathTypes: Record<string, 'file' | 'folder' | 'unknown'> = {};
         if (pathsToCheck.length > 0) {
           try {
-            pathTypes = await window.api.invoke('fs:check-path-type', pathsToCheck) as Record<string, 'file' | 'folder' | 'unknown'>;
+            pathTypes = (await window.api.invoke('fs:check-path-type', pathsToCheck)) as Record<
+              string,
+              'file' | 'folder' | 'unknown'
+            >;
           } catch (error) {
-            console.error('Failed to check path types:', error);
+            // Failed to check path types
           }
         }
 
@@ -86,14 +90,17 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
           // Determine type based on file system check or fallback to heuristics
           let type: ShelfItem['type'] = 'file';
           if (filePath && pathTypes[filePath]) {
-            type = pathTypes[filePath] === 'folder' ? 'folder' :
-                   file.type.startsWith('image/') ? 'image' : 'file';
+            type =
+              pathTypes[filePath] === 'folder'
+                ? 'folder'
+                : file.type.startsWith('image/')
+                  ? 'image'
+                  : 'file';
           } else {
             // Fallback to heuristic detection
             const hasExtension = file.name.includes('.') && !file.name.endsWith('.app');
-            const isFolder = (!hasExtension && file.size === 0) ||
-                            (!file.type && !hasExtension);
-            type = isFolder ? 'folder' : (file.type.startsWith('image/') ? 'image' : 'file');
+            const isFolder = (!hasExtension && file.size === 0) || (!file.type && !hasExtension);
+            type = isFolder ? 'folder' : file.type.startsWith('image/') ? 'image' : 'file';
           }
 
           const item: ShelfItem = {
@@ -166,9 +173,12 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
       let pathTypes: Record<string, 'file' | 'folder' | 'unknown'> = {};
       if (pathsToCheck.length > 0) {
         try {
-          pathTypes = await window.api.invoke('fs:check-path-type', pathsToCheck) as Record<string, 'file' | 'folder' | 'unknown'>;
+          pathTypes = (await window.api.invoke('fs:check-path-type', pathsToCheck)) as Record<
+            string,
+            'file' | 'folder' | 'unknown'
+          >;
         } catch (error) {
-          console.error('Failed to check path types:', error);
+          logger.error('Failed to check path types:', error);
         }
       }
 
@@ -179,14 +189,17 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
         // Determine type based on file system check or fallback to heuristics
         let type: ShelfItem['type'] = 'file';
         if (filePath && pathTypes[filePath]) {
-          type = pathTypes[filePath] === 'folder' ? 'folder' :
-                 file.type.startsWith('image/') ? 'image' : 'file';
+          type =
+            pathTypes[filePath] === 'folder'
+              ? 'folder'
+              : file.type.startsWith('image/')
+                ? 'image'
+                : 'file';
         } else {
           // Fallback to heuristic detection
           const hasExtension = file.name.includes('.') && !file.name.endsWith('.app');
-          const isFolder = (!hasExtension && file.size === 0) ||
-                          (!file.type && !hasExtension);
-          type = isFolder ? 'folder' : (file.type.startsWith('image/') ? 'image' : 'file');
+          const isFolder = (!hasExtension && file.size === 0) || (!file.type && !hasExtension);
+          type = isFolder ? 'folder' : file.type.startsWith('image/') ? 'image' : 'file';
         }
 
         const item: ShelfItem = {

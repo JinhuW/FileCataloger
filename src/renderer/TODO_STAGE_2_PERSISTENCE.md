@@ -5,6 +5,7 @@
 **Dependencies**: Stage 1 completion
 
 ## Overview
+
 This stage implements persistent storage for naming patterns, allowing users to save, load, and share their custom patterns. We'll leverage the existing storage infrastructure (electron-store and better-sqlite3) while adding pattern-specific functionality.
 
 ## Tasks
@@ -12,7 +13,9 @@ This stage implements persistent storage for naming patterns, allowing users to 
 ### Day 1: Storage Schema Design
 
 #### Update Type Definitions
+
 - [ ] **Extend AppPreferences Interface**
+
   ```typescript
   // src/shared/types/preferences.ts
   interface NamingPatternPreferences {
@@ -51,7 +54,9 @@ This stage implements persistent storage for naming patterns, allowing users to 
   ```
 
 #### Database Schema
+
 - [ ] **Create SQL Schema**
+
   ```sql
   -- patterns table
   CREATE TABLE IF NOT EXISTS patterns (
@@ -98,7 +103,9 @@ This stage implements persistent storage for naming patterns, allowing users to 
 ### Day 2: Pattern Persistence Manager
 
 #### Create PatternPersistenceManager Class
+
 - [ ] **Basic Structure**
+
   ```typescript
   // src/main/modules/storage/patternPersistenceManager.ts
   export class PatternPersistenceManager {
@@ -141,6 +148,7 @@ This stage implements persistent storage for naming patterns, allowing users to 
   ```
 
 #### Implement Core Methods
+
 - [ ] **Save Pattern Method**
   - Validate pattern data
   - Check for duplicates
@@ -166,7 +174,9 @@ This stage implements persistent storage for naming patterns, allowing users to 
   - Return array of patterns
 
 #### Validation Layer
+
 - [ ] **Create Validation Schemas with Zod**
+
   ```typescript
   const PatternComponentSchema = z.object({
     id: z.string(),
@@ -192,7 +202,9 @@ This stage implements persistent storage for naming patterns, allowing users to 
 ### Day 3: IPC Integration
 
 #### Create IPC Channels
+
 - [ ] **Main Process Handlers**
+
   ```typescript
   // src/main/ipc/patternHandlers.ts
 
@@ -237,7 +249,9 @@ This stage implements persistent storage for naming patterns, allowing users to 
   ```
 
 #### Renderer API Layer
+
 - [ ] **Create Pattern API**
+
   ```typescript
   // src/renderer/api/patterns.ts
   export const patternAPI = {
@@ -259,30 +273,30 @@ This stage implements persistent storage for naming patterns, allowing users to 
 ### Day 4: Auto-save and Sync
 
 #### Implement Auto-save
+
 - [ ] **Create Auto-save Hook**
+
   ```typescript
   // src/renderer/hooks/usePatternAutoSave.ts
-  export function usePatternAutoSave(
-    pattern: SavedPattern | null,
-    delay: number = 2000
-  ) {
+  export function usePatternAutoSave(pattern: SavedPattern | null, delay: number = 2000) {
     const [isSaving, setIsSaving] = useState(false);
     const [lastSaved, setLastSaved] = useState<number | null>(null);
 
     // Debounced save function
     const debouncedSave = useMemo(
-      () => debounce(async (patternToSave: SavedPattern) => {
-        setIsSaving(true);
-        try {
-          await patternAPI.save(patternToSave);
-          setLastSaved(Date.now());
-        } catch (error) {
-          console.error('Auto-save failed:', error);
-          // Show error notification
-        } finally {
-          setIsSaving(false);
-        }
-      }, delay),
+      () =>
+        debounce(async (patternToSave: SavedPattern) => {
+          setIsSaving(true);
+          try {
+            await patternAPI.save(patternToSave);
+            setLastSaved(Date.now());
+          } catch (error) {
+            console.error('Auto-save failed:', error);
+            // Show error notification
+          } finally {
+            setIsSaving(false);
+          }
+        }, delay),
       [delay]
     );
 
@@ -304,6 +318,7 @@ This stage implements persistent storage for naming patterns, allowing users to 
   - Recover from crashes
 
 #### Conflict Resolution
+
 - [ ] **Handle Concurrent Edits**
   - Version tracking
   - Last-write-wins strategy
@@ -319,7 +334,9 @@ This stage implements persistent storage for naming patterns, allowing users to 
 ### Day 5: Import/Export Features
 
 #### Export Functionality
+
 - [ ] **Single Pattern Export**
+
   ```typescript
   interface ExportedPattern {
     version: '1.0.0';
@@ -329,6 +346,7 @@ This stage implements persistent storage for naming patterns, allowing users to 
     checksum: string;
   }
   ```
+
   - Include all pattern data
   - Add metadata
   - Generate checksum
@@ -343,6 +361,7 @@ This stage implements persistent storage for naming patterns, allowing users to 
   - Progress indicator
 
 #### Import Functionality
+
 - [ ] **Import Validation**
   - Verify file format
   - Check version compatibility
@@ -358,6 +377,7 @@ This stage implements persistent storage for naming patterns, allowing users to 
   - Success/error feedback
 
 #### Pattern Sharing
+
 - [ ] **Share via Link**
   - Generate shareable links
   - Copy to clipboard
@@ -373,6 +393,7 @@ This stage implements persistent storage for naming patterns, allowing users to 
 ## Testing Requirements
 
 ### Unit Tests
+
 - [ ] Test PatternPersistenceManager methods
 - [ ] Test validation functions
 - [ ] Test import/export logic
@@ -380,6 +401,7 @@ This stage implements persistent storage for naming patterns, allowing users to 
 - [ ] Test error scenarios
 
 ### Integration Tests
+
 - [ ] Test IPC communication
 - [ ] Test database operations
 - [ ] Test auto-save functionality
@@ -387,6 +409,7 @@ This stage implements persistent storage for naming patterns, allowing users to 
 - [ ] Test data migration
 
 ### E2E Tests
+
 - [ ] Save and load patterns
 - [ ] Import/export workflows
 - [ ] Auto-save scenarios
@@ -396,6 +419,7 @@ This stage implements persistent storage for naming patterns, allowing users to 
 ## Migration Strategy
 
 ### Upgrade Path
+
 - [ ] **From Stage 1 to Stage 2**
   - Detect existing patterns in memory
   - Offer to save to persistent storage
@@ -403,6 +427,7 @@ This stage implements persistent storage for naming patterns, allowing users to 
   - No data loss
 
 ### Data Migration
+
 - [ ] **Version 1.0 to 2.0**
   ```typescript
   async function migratePatterns() {
