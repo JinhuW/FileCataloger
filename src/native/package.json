@@ -1,0 +1,71 @@
+{
+  "name": "@filecataloger/native-modules",
+  "version": "1.0.0",
+  "description": "Native modules for FileCataloger - centralized build and dependency management",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo 'Using direct node-gyp build - advanced build system available in scripts/native/' && cd mouse-tracker/darwin && node-gyp rebuild && cd ../../drag-monitor && node-gyp rebuild",
+    "build:clean": "cd mouse-tracker/darwin && node-gyp clean && node-gyp rebuild && cd ../../drag-monitor && node-gyp clean && node-gyp rebuild",
+    "build:verbose": "cd mouse-tracker/darwin && node-gyp rebuild --verbose && cd ../../drag-monitor && node-gyp rebuild --verbose",
+    "build:mouse-tracker": "cd mouse-tracker/darwin && node-gyp rebuild",
+    "build:drag-monitor": "cd drag-monitor && node-gyp rebuild",
+    "clean": "cd mouse-tracker/darwin && node-gyp clean",
+    "test": "echo 'Native module tests not yet implemented'",
+    "validate": "echo 'Configuration validation available in scripts/native/'"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "node-addon-api": "^8.0.0",
+    "node-gyp": "^10.0.0",
+    "typescript": "^5.0.0",
+    "@types/node": "^20.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "os": [
+    "darwin",
+    "win32",
+    "linux"
+  ],
+  "cpu": [
+    "x64",
+    "arm64"
+  ],
+  "keywords": [
+    "native",
+    "addon",
+    "mouse-tracking",
+    "macos",
+    "electron"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/your-org/filecataloger.git",
+    "directory": "src/native"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/filecataloger/issues"
+  },
+  "homepage": "https://github.com/your-org/filecataloger#readme",
+  "config": {
+    "platform": {
+      "darwin": {
+        "minVersion": "10.15"
+      },
+      "win32": {
+        "minVersion": "10.0"
+      },
+      "linux": {
+        "minDistro": "ubuntu-20.04"
+      }
+    },
+    "build": {
+      "concurrency": 4,
+      "timeout": 300000,
+      "verboseLogging": true
+    }
+  }
+}

@@ -38,14 +38,14 @@ node scripts/claude-review.js --all
 
 ## 🎯 Review Checks
 
-| Check | Type | Blocks Staging |
-|-------|------|----------------|
-| TypeScript errors | Critical | ✅ Yes |
-| ESLint errors | Critical | ✅ Yes |
-| Security issues (`eval`, etc.) | Critical | ✅ Yes |
-| `console.log` usage | Warning | ❌ No |
-| Missing error handling | Warning | ❌ No |
-| TODO/FIXME comments | Suggestion | ❌ No |
+| Check                          | Type       | Blocks Staging |
+| ------------------------------ | ---------- | -------------- |
+| TypeScript errors              | Critical   | ✅ Yes         |
+| ESLint errors                  | Critical   | ✅ Yes         |
+| Security issues (`eval`, etc.) | Critical   | ✅ Yes         |
+| `console.log` usage            | Warning    | ❌ No          |
+| Missing error handling         | Warning    | ❌ No          |
+| TODO/FIXME comments            | Suggestion | ❌ No          |
 
 ## 🔄 Workflow
 

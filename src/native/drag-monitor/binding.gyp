@@ -37,7 +37,8 @@
           "-framework", "CoreGraphics",
           "-framework", "ApplicationServices",
           "-framework", "AppKit",
-          "-framework", "Foundation"
+          "-framework", "Foundation",
+          "-framework", "UniformTypeIdentifiers"
         ]
       },
       "defines": ["NAPI_DISABLE_CPP_EXCEPTIONS"]

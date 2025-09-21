@@ -20,7 +20,7 @@ module.exports = merge(common, {
       {
         test: /\.ts$/,
         include: /src/,
-        exclude: /node_modules/,
+        exclude: [/node_modules/, /src\/native\/test/],
         use: [{
           loader: 'ts-loader',
           options: {
@@ -71,14 +71,15 @@ module.exports = merge(common, {
           to: path.join(projectRoot, 'dist/main/assets/[name][ext]'),
           noErrorOnMissing: true
         },
-        {
-          from: path.join(projectRoot, 'src/native/drag-monitor/build/Release/drag_monitor_darwin.node'),
-          to: path.join(projectRoot, 'dist/main/drag_monitor_darwin.node'),
-          noErrorOnMissing: true
-        },
+        // Copy all native modules built by centralized build system
         {
           from: path.join(projectRoot, 'src/native/mouse-tracker/darwin/build/Release/mouse_tracker_darwin.node'),
           to: path.join(projectRoot, 'dist/main/mouse_tracker_darwin.node'),
+          noErrorOnMissing: true
+        },
+        {
+          from: path.join(projectRoot, 'src/native/drag-monitor/build/Release/drag_monitor_darwin.node'),
+          to: path.join(projectRoot, 'dist/main/drag_monitor_darwin.node'),
           noErrorOnMissing: true
         },
         // Generate package.json in dist/main for native module resolution

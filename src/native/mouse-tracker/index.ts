@@ -1,27 +1,30 @@
 /**
- * @fileoverview Platform-agnostic mouse tracker factory
+ * @fileoverview High-performance mouse tracker for FileCataloger
  *
- * This module provides a factory function to create the appropriate mouse tracker
- * for the current operating system. Currently only macOS is supported via CGEventTap.
+ * This module provides optimized mouse tracking for macOS using CGEventTap with
+ * advanced performance optimizations including event batching, memory pooling,
+ * and intelligent throttling.
  *
- * Architecture:
- * - Factory pattern for platform abstraction
- * - Returns native tracker for macOS (DarwinNativeTracker)
- * - Throws errors for unsupported platforms (Windows/Linux)
+ * Currently supports:
+ * - macOS (darwin) with CGEventTap - highly optimized C++ implementation
+ *
+ * Planned support:
+ * - Windows (win32) with Win32 APIs
+ * - Linux (linux) with X11/Wayland APIs
  *
  * Usage:
  * ```typescript
  * const tracker = createMouseTracker();
  * tracker.start();
- * tracker.onMouseMove((position) => console.log(position));
+ * tracker.on('position', (position) => console.log(position));
+ * tracker.on('buttonStateChange', (state) => console.log(state));
  * ```
  *
  * @module mouse-tracker
  */
 
-import { MouseTracker } from '@shared/types';
-// import { NodeMouseTracker } from './nodeTracker'; // Not used currently
-import { DarwinNativeTracker } from './darwinNativeTracker';
+import { MouseTracker as IMouseTracker } from '@shared/types';
+import { MacOSMouseTracker } from './mouseTracker';
 import { createLogger } from '@main/modules/utils/logger';
 
 const logger = createLogger('MouseTrackerFactory');
@@ -29,18 +32,18 @@ const logger = createLogger('MouseTrackerFactory');
 /**
  * Factory function to create appropriate mouse tracker for the current platform
  */
-export function createMouseTracker(): MouseTracker {
+export function createMouseTracker(): IMouseTracker {
   const platform = process.platform;
 
   switch (platform) {
     case 'darwin': {
       try {
-        // Use native macOS tracker with CGEventTap (no fallback)
-        const tracker = new DarwinNativeTracker();
-        logger.info('Successfully initialized native macOS mouse tracker');
+        // Use optimized native macOS tracker with event batching and memory pooling
+        const tracker = new MacOSMouseTracker();
+        logger.info('Successfully initialized optimized macOS mouse tracker');
         return tracker;
       } catch (error) {
-        logger.error('Failed to initialize Darwin native tracker:', error);
+        logger.error('Failed to initialize optimized mouse tracker:', error);
         throw new Error(
           `Failed to initialize macOS mouse tracker: ${error instanceof Error ? error.message : 'Unknown error'}`
         );
@@ -60,5 +63,5 @@ export function createMouseTracker(): MouseTracker {
   }
 }
 
-export * from './baseTracker';
-export * from './nodeTracker';
+// Export the main tracker class for direct use if needed
+export { MacOSMouseTracker };

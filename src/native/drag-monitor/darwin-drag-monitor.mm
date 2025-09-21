@@ -2,6 +2,7 @@
 #include <CoreGraphics/CoreGraphics.h>
 #include <ApplicationServices/ApplicationServices.h>
 #include <AppKit/AppKit.h>
+#include <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #include <thread>
 #include <atomic>
 #include <chrono>
@@ -164,7 +165,7 @@ bool DarwinDragMonitor::CheckForFileDrag() {
         
         // Enhanced file type detection - covers more drag sources
         bool hasFiles = [types containsObject:NSPasteboardTypeFileURL] ||           // Modern file URLs
-                       [types containsObject:NSFilenamesPboardType] ||             // Legacy filenames
+                       [types containsObject:(__bridge NSString*)kUTTypeFileURL] || // Modern file URL UTI
                        [types containsObject:@"public.file-url"] ||                // Public UTI for files
                        [types containsObject:@"public.folder"] ||                   // Folder UTI
                        [types containsObject:@"com.apple.pasteboard.promised-file-content"] || // Promised files
@@ -208,9 +209,9 @@ bool DarwinDragMonitor::CheckForFileDrag() {
                                                         options:@{NSPasteboardURLReadingFileURLsOnlyKey: @YES}];
             } 
             
-            if ((!fileURLs || fileURLs.count == 0) && [types containsObject:NSFilenamesPboardType]) {
-                // Legacy way - still used by some apps
-                NSArray* filenames = [dragPasteboard propertyListForType:NSFilenamesPboardType];
+            if ((!fileURLs || fileURLs.count == 0) && [types containsObject:(__bridge NSString*)kUTTypeFileURL]) {
+                // Alternative method using UTI - covers legacy applications
+                NSArray* filenames = [dragPasteboard readObjectsForClasses:@[[NSString class]] options:nil];
                 if (filenames) {
                     NSMutableArray* urls = [NSMutableArray arrayWithCapacity:filenames.count];
                     for (NSString* filename in filenames) {
@@ -588,7 +589,7 @@ bool DarwinDragMonitor::DetectCircularMotion() {
         }
     }
     
-    return curveCount > dragState.trajectory.size() / 6;
+    return static_cast<size_t>(curveCount) > dragState.trajectory.size() / 6;
 }
 
 bool DarwinDragMonitor::DetectZigzagPattern() {
