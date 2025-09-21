@@ -1,8 +1,12 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { enableMapSet } from 'immer';
 import { SavedPattern, RenameComponent } from '@shared/types';
 import { logger } from '@shared/logger';
+
+// Enable MapSet plugin for Immer to work with Map and Set
+enableMapSet();
 
 interface PatternState {
   // State
