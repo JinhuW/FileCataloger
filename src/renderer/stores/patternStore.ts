@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
 import { SavedPattern, RenameComponent } from '@shared/types';
 import { logger } from '@shared/logger';
 
@@ -62,7 +63,7 @@ const DEFAULT_PATTERNS: SavedPattern[] = [
 
 export const usePatternStore = create<PatternState>()(
   devtools(
-    (set, get) => ({
+    immer((set, get) => ({
       // Initial state
       patterns: new Map(DEFAULT_PATTERNS.map(p => [p.id, p])),
       activePatternId: 'default-pattern',
@@ -75,17 +76,13 @@ export const usePatternStore = create<PatternState>()(
           state => {
             if (state.patterns.size >= 20) {
               logger.warn('Maximum pattern limit reached');
-              return { error: 'Maximum of 20 patterns allowed' };
+              state.error = 'Maximum of 20 patterns allowed';
+              return;
             }
 
-            const newPatterns = new Map(state.patterns);
-            newPatterns.set(pattern.id, pattern);
+            state.patterns.set(pattern.id, pattern);
+            state.error = null;
             logger.debug('Added pattern:', pattern.id);
-
-            return {
-              patterns: newPatterns,
-              error: null,
-            };
           },
           false,
           'addPattern'
@@ -94,18 +91,17 @@ export const usePatternStore = create<PatternState>()(
       updatePattern: (id, updates) =>
         set(
           state => {
-            const newPatterns = new Map(state.patterns);
-            const pattern = newPatterns.get(id);
+            const pattern = state.patterns.get(id);
 
             if (!pattern) {
               logger.warn('Pattern not found for update:', id);
-              return state;
+              return;
             }
 
             // Don't allow updating built-in patterns' core properties
             if (pattern.isBuiltIn && (updates.name || updates.isBuiltIn !== undefined)) {
               logger.warn('Cannot update built-in pattern core properties');
-              return state;
+              return;
             }
 
             const updatedPattern = {
@@ -114,10 +110,8 @@ export const usePatternStore = create<PatternState>()(
               updatedAt: Date.now(),
             };
 
-            newPatterns.set(id, updatedPattern);
+            state.patterns.set(id, updatedPattern);
             logger.debug('Updated pattern:', id);
-
-            return { patterns: newPatterns };
           },
           false,
           'updatePattern'
@@ -345,7 +339,7 @@ export const usePatternStore = create<PatternState>()(
       getAllPatterns: () => Array.from(get().patterns.values()),
 
       getPatternCount: () => get().patterns.size,
-    }),
+    })),
     {
       name: 'pattern-store',
     }

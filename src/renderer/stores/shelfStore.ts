@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { immer } from 'zustand/middleware/immer';
 import { ShelfConfig, ShelfItem, ShelfMode, DockPosition } from '@shared/types';
 import { logger } from '@shared/logger';
 
@@ -43,7 +44,7 @@ interface ShelfStore {
 
 export const useShelfStore = create<ShelfStore>()(
   devtools(
-    (set, get) => ({
+    immer((set, get) => ({
       // Initial state
       shelves: new Map(),
       activeShelfId: null,
@@ -53,10 +54,8 @@ export const useShelfStore = create<ShelfStore>()(
       addShelf: config =>
         set(
           state => {
-            const newShelves = new Map(state.shelves);
-            newShelves.set(config.id, config);
+            state.shelves.set(config.id, config);
             logger.debug('Added shelf:', config.id);
-            return { shelves: newShelves };
           },
           false,
           'addShelf'
@@ -65,15 +64,13 @@ export const useShelfStore = create<ShelfStore>()(
       updateShelf: (id, updates) =>
         set(
           state => {
-            const newShelves = new Map(state.shelves);
-            const shelf = newShelves.get(id);
+            const shelf = state.shelves.get(id);
             if (shelf) {
-              newShelves.set(id, { ...shelf, ...updates });
+              state.shelves.set(id, { ...shelf, ...updates });
               logger.debug('Updated shelf:', id, updates);
             } else {
               logger.warn('Shelf not found for update:', id);
             }
-            return { shelves: newShelves };
           },
           false,
           'updateShelf'
@@ -82,37 +79,39 @@ export const useShelfStore = create<ShelfStore>()(
       removeShelf: id =>
         set(
           state => {
-            const newShelves = new Map(state.shelves);
-            const deleted = newShelves.delete(id);
+            const deleted = state.shelves.delete(id);
             if (deleted) {
               logger.debug('Removed shelf:', id);
+              if (state.activeShelfId === id) {
+                state.activeShelfId = null;
+              }
+              if (state.dragOverShelfId === id) {
+                state.dragOverShelfId = null;
+              }
             }
-            return {
-              shelves: newShelves,
-              activeShelfId: state.activeShelfId === id ? null : state.activeShelfId,
-              dragOverShelfId: state.dragOverShelfId === id ? null : state.dragOverShelfId,
-            };
           },
           false,
           'removeShelf'
         ),
 
-      setActiveShelf: id => set({ activeShelfId: id }, false, 'setActiveShelf'),
+      setActiveShelf: id =>
+        set(
+          state => {
+            state.activeShelfId = id;
+          },
+          false,
+          'setActiveShelf'
+        ),
 
       // Item Management
       addItemToShelf: (shelfId, item) =>
         set(
           state => {
-            const newShelves = new Map(state.shelves);
-            const shelf = newShelves.get(shelfId);
+            const shelf = state.shelves.get(shelfId);
             if (shelf) {
-              newShelves.set(shelfId, {
-                ...shelf,
-                items: [...shelf.items, item],
-              });
+              shelf.items.push(item);
               logger.debug('Added item to shelf:', shelfId, item.id);
             }
-            return { shelves: newShelves };
           },
           false,
           'addItemToShelf'
@@ -121,16 +120,11 @@ export const useShelfStore = create<ShelfStore>()(
       addItemsToShelf: (shelfId, items) =>
         set(
           state => {
-            const newShelves = new Map(state.shelves);
-            const shelf = newShelves.get(shelfId);
+            const shelf = state.shelves.get(shelfId);
             if (shelf) {
-              newShelves.set(shelfId, {
-                ...shelf,
-                items: [...shelf.items, ...items],
-              });
+              shelf.items.push(...items);
               logger.debug('Added', items.length, 'items to shelf:', shelfId);
             }
-            return { shelves: newShelves };
           },
           false,
           'addItemsToShelf'
@@ -139,16 +133,14 @@ export const useShelfStore = create<ShelfStore>()(
       removeItemFromShelf: (shelfId, itemId) =>
         set(
           state => {
-            const newShelves = new Map(state.shelves);
-            const shelf = newShelves.get(shelfId);
+            const shelf = state.shelves.get(shelfId);
             if (shelf) {
-              newShelves.set(shelfId, {
-                ...shelf,
-                items: shelf.items.filter(item => item.id !== itemId),
-              });
-              logger.debug('Removed item from shelf:', shelfId, itemId);
+              const index = shelf.items.findIndex(item => item.id === itemId);
+              if (index !== -1) {
+                shelf.items.splice(index, 1);
+                logger.debug('Removed item from shelf:', shelfId, itemId);
+              }
             }
-            return { shelves: newShelves };
           },
           false,
           'removeItemFromShelf'
@@ -157,18 +149,14 @@ export const useShelfStore = create<ShelfStore>()(
       updateItemInShelf: (shelfId, itemId, updates) =>
         set(
           state => {
-            const newShelves = new Map(state.shelves);
-            const shelf = newShelves.get(shelfId);
+            const shelf = state.shelves.get(shelfId);
             if (shelf) {
-              newShelves.set(shelfId, {
-                ...shelf,
-                items: shelf.items.map(item =>
-                  item.id === itemId ? { ...item, ...updates } : item
-                ),
-              });
-              logger.debug('Updated item in shelf:', shelfId, itemId);
+              const item = shelf.items.find(item => item.id === itemId);
+              if (item) {
+                Object.assign(item, updates);
+                logger.debug('Updated item in shelf:', shelfId, itemId);
+              }
             }
-            return { shelves: newShelves };
           },
           false,
           'updateItemInShelf'
@@ -177,16 +165,11 @@ export const useShelfStore = create<ShelfStore>()(
       clearShelfItems: shelfId =>
         set(
           state => {
-            const newShelves = new Map(state.shelves);
-            const shelf = newShelves.get(shelfId);
+            const shelf = state.shelves.get(shelfId);
             if (shelf) {
-              newShelves.set(shelfId, {
-                ...shelf,
-                items: [],
-              });
+              shelf.items.length = 0;
               logger.debug('Cleared items from shelf:', shelfId);
             }
-            return { shelves: newShelves };
           },
           false,
           'clearShelfItems'
@@ -196,12 +179,10 @@ export const useShelfStore = create<ShelfStore>()(
       setShelfVisibility: (shelfId, isVisible) =>
         set(
           state => {
-            const newShelves = new Map(state.shelves);
-            const shelf = newShelves.get(shelfId);
+            const shelf = state.shelves.get(shelfId);
             if (shelf) {
-              newShelves.set(shelfId, { ...shelf, isVisible });
+              shelf.isVisible = isVisible;
             }
-            return { shelves: newShelves };
           },
           false,
           'setShelfVisibility'
@@ -210,12 +191,10 @@ export const useShelfStore = create<ShelfStore>()(
       setShelfPosition: (shelfId, position) =>
         set(
           state => {
-            const newShelves = new Map(state.shelves);
-            const shelf = newShelves.get(shelfId);
+            const shelf = state.shelves.get(shelfId);
             if (shelf) {
-              newShelves.set(shelfId, { ...shelf, position });
+              shelf.position = position;
             }
-            return { shelves: newShelves };
           },
           false,
           'setShelfPosition'
@@ -224,12 +203,10 @@ export const useShelfStore = create<ShelfStore>()(
       setShelfDockPosition: (shelfId, dockPosition) =>
         set(
           state => {
-            const newShelves = new Map(state.shelves);
-            const shelf = newShelves.get(shelfId);
+            const shelf = state.shelves.get(shelfId);
             if (shelf) {
-              newShelves.set(shelfId, { ...shelf, dockPosition });
+              shelf.dockPosition = dockPosition;
             }
-            return { shelves: newShelves };
           },
           false,
           'setShelfDockPosition'
@@ -238,12 +215,10 @@ export const useShelfStore = create<ShelfStore>()(
       setShelfPinned: (shelfId, isPinned) =>
         set(
           state => {
-            const newShelves = new Map(state.shelves);
-            const shelf = newShelves.get(shelfId);
+            const shelf = state.shelves.get(shelfId);
             if (shelf) {
-              newShelves.set(shelfId, { ...shelf, isPinned });
+              shelf.isPinned = isPinned;
             }
-            return { shelves: newShelves };
           },
           false,
           'setShelfPinned'
@@ -252,12 +227,10 @@ export const useShelfStore = create<ShelfStore>()(
       setShelfMode: (shelfId, mode) =>
         set(
           state => {
-            const newShelves = new Map(state.shelves);
-            const shelf = newShelves.get(shelfId);
+            const shelf = state.shelves.get(shelfId);
             if (shelf) {
-              newShelves.set(shelfId, { ...shelf, mode });
+              shelf.mode = mode;
             }
-            return { shelves: newShelves };
           },
           false,
           'setShelfMode'
@@ -266,19 +239,24 @@ export const useShelfStore = create<ShelfStore>()(
       setShelfOpacity: (shelfId, opacity) =>
         set(
           state => {
-            const newShelves = new Map(state.shelves);
-            const shelf = newShelves.get(shelfId);
+            const shelf = state.shelves.get(shelfId);
             if (shelf) {
-              newShelves.set(shelfId, { ...shelf, opacity });
+              shelf.opacity = opacity;
             }
-            return { shelves: newShelves };
           },
           false,
           'setShelfOpacity'
         ),
 
       // Drag State
-      setDragOverShelf: shelfId => set({ dragOverShelfId: shelfId }, false, 'setDragOverShelf'),
+      setDragOverShelf: shelfId =>
+        set(
+          state => {
+            state.dragOverShelfId = shelfId;
+          },
+          false,
+          'setDragOverShelf'
+        ),
 
       // Getters
       getShelf: id => get().shelves.get(id),
@@ -296,7 +274,7 @@ export const useShelfStore = create<ShelfStore>()(
         const shelf = get().shelves.get(shelfId);
         return shelf ? shelf.items.length : 0;
       },
-    }),
+    })),
     {
       name: 'shelf-store',
     }
