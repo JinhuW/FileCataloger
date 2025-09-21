@@ -572,8 +572,8 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
             <div
               style={{
                 display: 'flex',
-                alignItems: 'center',
-                gap: '2px',
+                alignItems: 'flex-start',
+                gap: '8px',
                 padding: '10px 12px',
                 background: 'rgba(255, 255, 255, 0.05)',
                 borderRadius: '8px',
@@ -582,7 +582,8 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
                 border: '1px solid rgba(255, 255, 255, 0.1)',
                 overflow: 'hidden',
                 minWidth: 0,
-                height: '44px',
+                minHeight: '44px',
+                maxHeight: '80px', // Allow up to ~3 lines
               }}
               title={destinationPath}
               onClick={handlePathEdit}
@@ -603,7 +604,11 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
-                style={{ color: 'rgba(255, 255, 255, 0.6)', flexShrink: 0 }}
+                style={{
+                  color: 'rgba(255, 255, 255, 0.6)',
+                  flexShrink: 0,
+                  marginTop: '2px', // Align with first line of text
+                }}
               >
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
               </svg>
@@ -612,48 +617,30 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
               <div
                 style={{
                   display: 'flex',
-                  alignItems: 'center',
+                  flexWrap: 'wrap',
                   gap: '4px',
                   overflow: 'hidden',
                   flex: 1,
                   minWidth: 0,
+                  wordBreak: 'break-all',
+                  lineHeight: '20px',
                 }}
               >
                 {(() => {
                   const segments = destinationPath.split('/').filter(Boolean);
-                  const maxSegments = 4;
 
-                  if (segments.length > maxSegments) {
-                    // Show first segment, ellipsis, and last 2 segments
-                    return (
-                      <>
-                        <span
-                          style={{
-                            color: 'rgba(255, 255, 255, 0.7)',
-                            fontSize: '12px',
-                            flexShrink: 0,
-                          }}
-                        >
-                          {segments[0]}
-                        </span>
-                        <span
-                          style={{
-                            color: 'rgba(255, 255, 255, 0.3)',
-                            fontSize: '12px',
-                            flexShrink: 0,
-                          }}
-                        >
-                          ›
-                        </span>
-                        <span
-                          style={{
-                            color: 'rgba(255, 255, 255, 0.4)',
-                            fontSize: '12px',
-                            flexShrink: 0,
-                          }}
-                        >
-                          ...
-                        </span>
+                  return segments.map((segment, index, array) => (
+                    <React.Fragment key={index}>
+                      <span
+                        style={{
+                          color: 'rgba(255, 255, 255, 0.7)',
+                          fontSize: '12px',
+                          wordBreak: 'break-all',
+                        }}
+                      >
+                        {segment}
+                      </span>
+                      {index < array.length - 1 && (
                         <span
                           style={{
                             color: 'rgba(255, 255, 255, 0.3)',
@@ -663,69 +650,9 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
                         >
                           ›
                         </span>
-                        <span
-                          style={{
-                            color: 'rgba(255, 255, 255, 0.7)',
-                            fontSize: '12px',
-                            flexShrink: 0,
-                          }}
-                        >
-                          {segments[segments.length - 2]}
-                        </span>
-                        <span
-                          style={{
-                            color: 'rgba(255, 255, 255, 0.3)',
-                            fontSize: '12px',
-                            flexShrink: 0,
-                          }}
-                        >
-                          ›
-                        </span>
-                        <span
-                          style={{
-                            color: 'rgba(255, 255, 255, 0.7)',
-                            fontSize: '12px',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            minWidth: 0,
-                          }}
-                        >
-                          {segments[segments.length - 1]}
-                        </span>
-                      </>
-                    );
-                  } else {
-                    // Show all segments if not too many
-                    return segments.map((segment, index, array) => (
-                      <React.Fragment key={index}>
-                        <span
-                          style={{
-                            color: 'rgba(255, 255, 255, 0.7)',
-                            fontSize: '12px',
-                            overflow: index === array.length - 1 ? 'hidden' : undefined,
-                            textOverflow: index === array.length - 1 ? 'ellipsis' : undefined,
-                            whiteSpace: index === array.length - 1 ? 'nowrap' : undefined,
-                            minWidth: 0,
-                            flexShrink: index === array.length - 1 ? 1 : 0,
-                          }}
-                        >
-                          {segment}
-                        </span>
-                        {index < array.length - 1 && (
-                          <span
-                            style={{
-                              color: 'rgba(255, 255, 255, 0.3)',
-                              fontSize: '12px',
-                              flexShrink: 0,
-                            }}
-                          >
-                            ›
-                          </span>
-                        )}
-                      </React.Fragment>
-                    ));
-                  }
+                      )}
+                    </React.Fragment>
+                  ));
                 })()}
               </div>
             </div>

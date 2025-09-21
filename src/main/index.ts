@@ -214,25 +214,6 @@ class FileCatalogerApp {
             preferencesManager.showPreferencesWindow();
           },
         },
-        {
-          label: 'Performance',
-          submenu: [
-            {
-              label: 'Show Status',
-              click: () => {
-                const status = performanceMonitor.getHealthStatus();
-                const metrics = performanceMonitor.getMetrics();
-                if (metrics) {
-                  const message = `CPU: ${metrics.cpu.usage.toFixed(1)}%\nMemory: ${metrics.memory.percentage.toFixed(1)}%\nHealth: ${status.healthy ? 'Good' : 'Issues detected'}`;
-                  this.logger.info(message);
-                  if (status.issues.length > 0) {
-                    this.logger.info('Issues:', status.issues.join('\n'));
-                  }
-                }
-              },
-            },
-          ],
-        },
         { type: 'separator' },
         {
           label: 'Quit FileCataloger',
@@ -262,16 +243,20 @@ class FileCatalogerApp {
 
   private createTrayIcon(): Electron.NativeImage {
     try {
-      // Try to load icon from assets first
-      const iconPath = path.join(__dirname, '../../assets/tray-icon.png');
-      // const icon2xPath = path.join(__dirname, '../../assets/tray-icon@2x.png');
+      // Try to load icon from bundled assets first
+      // In development and production, webpack copies assets to dist/main/assets
+      const iconPathCandidates = [
+        path.join(__dirname, 'assets/logo.png'), // dist/main/assets/logo.png
+        path.join(__dirname, '../../assets/logo.png'), // fallback if structure differs
+      ];
 
-      // Check if icon files exist
-      if (fs.existsSync(iconPath)) {
-        const image = nativeImage.createFromPath(iconPath);
-        image.setTemplateImage(true);
-        this.logger.info('✓ Tray icon loaded from assets');
-        return image;
+      for (const candidate of iconPathCandidates) {
+        if (fs.existsSync(candidate)) {
+          const image = nativeImage.createFromPath(candidate);
+          image.setTemplateImage(true);
+          this.logger.info(`✓ Tray icon loaded from asset: ${candidate}`);
+          return image;
+        }
       }
 
       // Fallback: Use a simple geometric pattern

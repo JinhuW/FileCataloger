@@ -65,6 +65,12 @@ module.exports = merge(common, {
     // Copy native modules to dist/main where they can be directly required
     new CopyWebpackPlugin({
       patterns: [
+        // Copy main process assets (e.g., tray/logo icons)
+        {
+          from: path.join(projectRoot, 'src/main/assets/**/*'),
+          to: path.join(projectRoot, 'dist/main/assets/[name][ext]'),
+          noErrorOnMissing: true
+        },
         {
           from: path.join(projectRoot, 'src/native/drag-monitor/build/Release/drag_monitor_darwin.node'),
           to: path.join(projectRoot, 'dist/main/drag_monitor_darwin.node'),
