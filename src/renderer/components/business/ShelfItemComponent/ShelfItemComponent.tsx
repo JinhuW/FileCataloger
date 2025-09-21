@@ -73,7 +73,7 @@ export const ShelfItemComponent = React.memo<ShelfItemComponentProps>(
     // Debug logging for hover state
     useEffect(() => {
       if (isHovered) {
-        console.log('[ShelfItemComponent] Item hovered:', item.name);
+        // Debug logging removed for production
       }
     }, [isHovered, item.name]);
 

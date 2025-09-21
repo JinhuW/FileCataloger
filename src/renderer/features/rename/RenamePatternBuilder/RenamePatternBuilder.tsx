@@ -41,14 +41,13 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { RenameComponent, ShelfItem } from '@shared/types';
-import { ScrollableTabContainer } from '../ScrollableTabContainer';
+import { ScrollableTabContainer } from '@renderer/components/layout';
 import { PatternTab } from '../PatternTab';
 import { AddPatternButton } from '../AddPatternButton';
 import { usePatternManager } from '@renderer/hooks/usePatternManager';
 import { usePatternStore, useToast } from '@renderer/stores';
-import { EmptyState } from '../EmptyState/EmptyState';
-import { LoadingSpinner } from '../LoadingSpinner/LoadingSpinner';
-import { PatternBuilderSkeleton } from '../LoadingSkeleton/LoadingSkeleton';
+import { EmptyState } from '@renderer/components/business';
+import { LoadingSpinner, PatternBuilderSkeleton } from '@renderer/components/ui';
 import {
   PATTERN_VALIDATION,
   PATTERN_COMPONENT_TYPES,

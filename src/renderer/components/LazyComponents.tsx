@@ -42,25 +42,25 @@ const LoadingFallback: React.FC<{ message?: string }> = ({ message = 'Loading...
 
 // Lazy loaded components
 export const FileRenameShelf = lazy(() =>
-  import('./FileRenameShelf').then(module => ({
+  import('../features/rename/FileRenameShelf').then(module => ({
     default: module.FileRenameShelf,
   }))
 );
 
 export const VirtualizedList = lazy(() =>
-  import('./VirtualizedList').then(module => ({
+  import('./business/VirtualizedList').then(module => ({
     default: module.VirtualizedList,
   }))
 );
 
 export const RenamePatternBuilder = lazy(() =>
-  import('./RenamePatternBuilder').then(module => ({
+  import('../features/rename/RenamePatternBuilder').then(module => ({
     default: module.RenamePatternBuilder,
   }))
 );
 
 export const FileRenamePreviewList = lazy(() =>
-  import('./FileRenamePreviewList').then(module => ({
+  import('../features/rename/FileRenamePreviewList').then(module => ({
     default: module.FileRenamePreviewList,
   }))
 );
@@ -85,22 +85,25 @@ export function withLazyLoading<P extends object>(
   Component: ComponentType<P>,
   loadingMessage?: string
 ): React.FC<P> {
-  return (props: P) => (
+  const LazyWrapper: React.FC<P> = (props: P) => (
     <Suspense fallback={<LoadingFallback message={loadingMessage} />}>
       <Component {...props} />
     </Suspense>
   );
+  LazyWrapper.displayName = `withLazyLoading(${Component.displayName || Component.name})`;
+  return LazyWrapper;
 }
 
 // Preload function for critical components
 export const preloadComponents = () => {
   // Preload components that are likely to be used
-  import('./FileRenameShelf');
-  import('./VirtualizedList');
+  import('../features/rename/FileRenameShelf');
+  import('./business/VirtualizedList');
 };
 
 // Component-specific preload functions
-export const preloadFileRenameShelf = () => import('./FileRenameShelf');
-export const preloadVirtualizedList = () => import('./VirtualizedList');
-export const preloadRenamePatternBuilder = () => import('./RenamePatternBuilder');
-export const preloadFileRenamePreviewList = () => import('./FileRenamePreviewList');
+export const preloadFileRenameShelf = () => import('../features/rename/FileRenameShelf');
+export const preloadVirtualizedList = () => import('./business/VirtualizedList');
+export const preloadRenamePatternBuilder = () => import('../features/rename/RenamePatternBuilder');
+export const preloadFileRenamePreviewList = () =>
+  import('../features/rename/FileRenamePreviewList');

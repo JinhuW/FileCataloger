@@ -74,7 +74,7 @@ export function useShelfItems(
     return () => {
       cleanupItemThumbnails(config.items);
     };
-  }, []);
+  }, [config.items]);
 
   return {
     handleItemAction,
