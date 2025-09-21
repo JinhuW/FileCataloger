@@ -18,6 +18,7 @@ import { errorHandler, ErrorSeverity, ErrorCategory } from './modules/utils';
 import { Logger, LogLevel } from './modules/utils/logger';
 import { LogEntry } from '@shared/logger';
 import { securityConfig } from './modules/config';
+import { ShelfConfig, ShelfItem } from '@shared/types';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -143,6 +144,8 @@ class FileCatalogerApp {
   }
 
   private async onReady(): Promise<void> {
+    this.logger.info('🚀 onReady() method called - starting application initialization');
+
     // Hide dock icon for menu bar app (macOS)
     const prefs = preferencesManager.getPreferences();
     if (process.platform === 'darwin' && app.dock) {
@@ -158,13 +161,16 @@ class FileCatalogerApp {
     this.createSystemTray();
 
     // Check for accessibility permissions on macOS
+    this.logger.info('🔐 Checking accessibility permissions...');
     const hasPermissions = await this.checkAccessibilityPermissions();
     if (!hasPermissions) {
       this.logger.warn('Starting without accessibility permissions - some features may not work');
     }
+    this.logger.info(`🔐 Accessibility permissions check complete: ${hasPermissions}`);
 
     // Initialize and start the core application
     try {
+      this.logger.info('🚀 Starting ApplicationController...');
       await this.applicationController.start();
       // Start keyboard manager
       keyboardManager.start();
@@ -380,6 +386,86 @@ class FileCatalogerApp {
       this.applicationController.handleFilesDropped(data.shelfId, data.files);
     });
 
+    // Centralized IPC handlers for all shelf operations
+
+    // Handle shelf creation
+    ipcMain.handle('shelf:create', async (event, config: Partial<ShelfConfig>) => {
+      this.logger.debug('📡 Received shelf:create IPC:', config);
+      try {
+        const result = await this.applicationController.createShelf(config);
+        this.logger.debug('📡 shelf:create result:', result);
+        return result;
+      } catch (error) {
+        this.logger.error('📡 Error in shelf:create handler:', error);
+        return null;
+      }
+    });
+
+    // Handle item addition to shelf
+    ipcMain.handle('shelf:add-item', async (event, shelfId: string, item: ShelfItem) => {
+      this.logger.debug('📡 Received shelf:add-item IPC:', { shelfId, item });
+      try {
+        // Route through ApplicationController for consistency
+        const result = await this.applicationController.addItemToShelf(shelfId, item);
+        this.logger.debug('📡 shelf:add-item result:', result);
+        return result;
+      } catch (error) {
+        this.logger.error('📡 Error in shelf:add-item handler:', error);
+        return false;
+      }
+    });
+
+    // Handle item removal from shelf
+    ipcMain.handle('shelf:remove-item', async (event, shelfId: string, itemId: string) => {
+      this.logger.debug('📡 Received shelf:remove-item IPC:', { shelfId, itemId });
+      try {
+        this.logger.debug('📡 Calling applicationController.handleItemRemove...');
+        this.logger.debug('📡 ApplicationController type:', typeof this.applicationController);
+        this.logger.debug(
+          '📡 handleItemRemove method exists:',
+          typeof this.applicationController.handleItemRemove
+        );
+
+        if (typeof this.applicationController.handleItemRemove !== 'function') {
+          this.logger.error('📡 handleItemRemove method does not exist!');
+          return false;
+        }
+
+        const result = await this.applicationController.handleItemRemove(shelfId, itemId);
+        this.logger.debug('📡 shelf:remove-item result:', result);
+        return result;
+      } catch (error) {
+        this.logger.error('📡 Error in shelf:remove-item handler:', error);
+        this.logger.error('📡 Error stack:', (error as Error).stack);
+        return false;
+      }
+    });
+
+    // Handle shelf visibility
+    ipcMain.handle('shelf:show', async (event, shelfId: string) => {
+      this.logger.debug('📡 Received shelf:show IPC:', { shelfId });
+      try {
+        const result = await this.applicationController.showShelf(shelfId);
+        this.logger.debug('📡 shelf:show result:', result);
+        return result;
+      } catch (error) {
+        this.logger.error('📡 Error in shelf:show handler:', error);
+        return false;
+      }
+    });
+
+    ipcMain.handle('shelf:hide', async (event, shelfId: string) => {
+      this.logger.debug('📡 Received shelf:hide IPC:', { shelfId });
+      try {
+        const result = await this.applicationController.hideShelf(shelfId);
+        this.logger.debug('📡 shelf:hide result:', result);
+        return result;
+      } catch (error) {
+        this.logger.error('📡 Error in shelf:hide handler:', error);
+        return false;
+      }
+    });
+
     // Handle shelf close
     ipcMain.handle('shelf:close', async (event, shelfId) => {
       return await this.applicationController.destroyShelf(shelfId);
@@ -465,7 +551,7 @@ class FileCatalogerApp {
         preload: path.join(__dirname, '../preload/index.js'),
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: false, // Set to false for now to avoid issues
+        sandbox: true, // Enable sandboxing for security
         webviewTag: false, // Explicitly set to false as per Electron security recommendations
       },
       show: false, // Don't show by default - only when requested

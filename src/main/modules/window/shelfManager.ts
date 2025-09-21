@@ -2,8 +2,10 @@ import { BrowserWindow, screen, ipcMain } from 'electron';
 import { EventEmitter } from 'events';
 import * as path from 'path';
 import { ShelfConfig, DockPosition, Vector2D, ShelfItem } from '@shared/types';
-import { SHELF_CONSTANTS, IPC_CHANNELS } from '@shared/constants';
+import { SHELF_CONSTANTS } from '@shared/constants';
 import { createLogger } from '../utils/logger';
+import { globalIPCRateLimiter } from '../utils/ipcRateLimiter';
+import { AdvancedWindowPool } from './advancedWindowPool';
 
 /**
  * Advanced shelf window management system
@@ -15,9 +17,8 @@ export class ShelfManager extends EventEmitter {
   private shelves = new Map<string, BrowserWindow>();
   private shelfConfigs = new Map<string, ShelfConfig>();
 
-  // Window pool for performance optimization
-  private windowPool: BrowserWindow[] = [];
-  private readonly MAX_POOL_SIZE = SHELF_CONSTANTS.MAX_POOL_SIZE;
+  // Advanced window pool for performance optimization
+  private windowPool: AdvancedWindowPool;
 
   // Active shelves tracking
   private activeShelves = new Set<string>();
@@ -33,8 +34,18 @@ export class ShelfManager extends EventEmitter {
 
   constructor() {
     super();
+    this.logger.info('🚀 ShelfManager constructor started');
+    this.windowPool = new AdvancedWindowPool({
+      maxWarmPool: 2,
+      maxColdPool: 3,
+      maxTotalPool: 5,
+      preloadThreshold: 1,
+    });
+    this.logger.info('✓ AdvancedWindowPool created');
     this.initializeDockPositions();
+    this.logger.info('✓ Dock positions initialized');
     this.setupEventHandlers();
+    this.logger.info('✓ ShelfManager IPC event handlers registered');
   }
 
   /**
@@ -46,56 +57,45 @@ export class ShelfManager extends EventEmitter {
   }
 
   /**
-   * Set up IPC event handlers
+   * Wrapper for IPC handlers with rate limiting
+   */
+  private createRateLimitedHandler<T extends any[], R>(
+    channel: string,
+    handler: (event: Electron.IpcMainInvokeEvent, ...args: T) => Promise<R> | R
+  ): (event: Electron.IpcMainInvokeEvent, ...args: T) => Promise<R> {
+    return async (event: Electron.IpcMainInvokeEvent, ...args: T): Promise<R> => {
+      // Check rate limit
+      const rateLimitResult = globalIPCRateLimiter.checkRateLimit(
+        channel,
+        event.sender.id.toString()
+      );
+
+      if (!rateLimitResult.allowed) {
+        this.logger.warn(`IPC rate limit exceeded for channel ${channel}:`, {
+          senderId: event.sender.id,
+          reason: rateLimitResult.reason,
+          resetTime: new Date(rateLimitResult.resetTime).toISOString(),
+        });
+
+        // Throw an error that will be passed back to the renderer
+        throw new Error(
+          `Rate limit exceeded: ${rateLimitResult.reason}. Try again in ${Math.ceil((rateLimitResult.resetTime - Date.now()) / 1000)} seconds.`
+        );
+      }
+
+      // Call the original handler
+      return await handler(event, ...args);
+    };
+  }
+
+  /**
+   * Set up IPC event handlers - DISABLED
+   * All IPC handlers moved to main/index.ts for centralized routing
    */
   private setupEventHandlers(): void {
-    ipcMain.handle(IPC_CHANNELS.SHELF_CREATE, async (event, config: Partial<ShelfConfig>) => {
-      return this.createShelf(config);
-    });
-
-    ipcMain.handle(IPC_CHANNELS.SHELF_DESTROY, async (event, shelfId: string) => {
-      return this.destroyShelf(shelfId);
-    });
-
-    ipcMain.handle(IPC_CHANNELS.SHELF_SHOW, async (event, shelfId: string) => {
-      return this.showShelf(shelfId);
-    });
-
-    ipcMain.handle(IPC_CHANNELS.SHELF_HIDE, async (event, shelfId: string) => {
-      return this.hideShelf(shelfId);
-    });
-
-    ipcMain.handle(
-      IPC_CHANNELS.SHELF_DOCK,
-      async (event, shelfId: string, position: DockPosition) => {
-        return this.dockShelf(shelfId, position);
-      }
-    );
-
-    ipcMain.handle(IPC_CHANNELS.SHELF_UNDOCK, async (event, shelfId: string) => {
-      return this.undockShelf(shelfId);
-    });
-
-    ipcMain.handle(IPC_CHANNELS.SHELF_ADD_ITEM, async (event, shelfId: string, item: ShelfItem) => {
-      this.logger.debug('IPC: shelf:add-item received for shelf', shelfId, 'with item:', item);
-      const result = this.addItemToShelf(shelfId, item);
-      this.logger.debug('IPC: shelf:add-item result:', result);
-      return result;
-    });
-
-    ipcMain.handle(
-      IPC_CHANNELS.SHELF_REMOVE_ITEM,
-      async (event, shelfId: string, itemId: string) => {
-        return this.removeItemFromShelf(shelfId, itemId);
-      }
-    );
-
-    ipcMain.handle(
-      IPC_CHANNELS.SHELF_UPDATE_CONFIG,
-      async (event, shelfId: string, changes: Partial<ShelfConfig>) => {
-        return this.updateShelfConfig(shelfId, changes);
-      }
-    );
+    // NOTE: All IPC handlers have been moved to main/index.ts to avoid duplicate registrations
+    // and provide centralized IPC routing. This prevents conflicts and ensures proper error handling.
+    this.logger.info('📡 IPC handlers setup skipped - using centralized routing in main/index.ts');
   }
 
   /**
@@ -128,7 +128,7 @@ export class ShelfManager extends EventEmitter {
     };
 
     // Get or create window
-    const window = this.acquireWindow();
+    const window = await this.acquireWindow();
 
     // Configure window
     this.configureShelfWindow(window, shelfConfig);
@@ -155,63 +155,10 @@ export class ShelfManager extends EventEmitter {
   }
 
   /**
-   * Acquire a window from the pool or create a new one
+   * Acquire a window from the advanced pool
    */
-  private acquireWindow(): BrowserWindow {
-    // Try to get from pool first
-    const pooledWindow = this.windowPool.pop();
-    if (pooledWindow && !pooledWindow.isDestroyed()) {
-      // Reset window state
-      pooledWindow.removeAllListeners();
-      pooledWindow.show();
-      return pooledWindow;
-    }
-
-    // Create new window
-    return this.createWindow();
-  }
-
-  /**
-   * Create a new shelf window
-   */
-  private createWindow(): BrowserWindow {
-    const window = new BrowserWindow({
-      width: this.DEFAULT_SHELF_SIZE.width,
-      height: this.DEFAULT_SHELF_SIZE.height,
-      frame: false,
-      transparent: true, // Enable transparency
-      backgroundColor: undefined, // No background color to ensure full transparency
-      alwaysOnTop: true, // Keep on top of other windows
-      skipTaskbar: true,
-      resizable: false, // Disable resizing for now
-      minimizable: false,
-      maximizable: false,
-      closable: false,
-      focusable: true,
-      show: false,
-      movable: true, // Ensure window is movable
-      hasShadow: false, // Disable shadow to avoid dark background
-      acceptFirstMouse: true, // Accept clicks/drops immediately
-      titleBarStyle: 'hidden', // Hide title bar but keep window controls
-      // vibrancy: 'under-window', // Disabled to avoid background effects
-      // visualEffectState: 'active', // Disabled to avoid background effects
-      webPreferences: {
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true, // Enable sandboxing for security
-        // Use __dirname which is more reliable in packaged apps
-        preload: path.join(__dirname, '../preload/index.js'),
-        webSecurity: true, // Enable web security to allow file drag and drop
-      },
-    });
-
-    // Set window properties for shelf behavior
-    window.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
-
-    // Set window level for proper behavior
-    window.setAlwaysOnTop(true, 'floating');
-
-    return window;
+  private async acquireWindow(): Promise<BrowserWindow> {
+    return await this.windowPool.getWindow();
   }
 
   /**
@@ -616,20 +563,18 @@ export class ShelfManager extends EventEmitter {
       if (index > -1) {
         const removedItem = config.items.splice(index, 1)[0];
 
+        // Add debug logging for item removal
+        this.logger.debug(`🗑️ ShelfManager: Removed item ${itemId} from shelf ${shelfId}`);
+        this.logger.debug(`🗑️ ShelfManager: Shelf now has ${config.items.length} items`);
+
         // Notify renderer
         window.webContents.send('shelf:item-removed', itemId);
+
+        // IMPORTANT: Always emit the event so ApplicationController can handle empty shelf logic
         this.emit('shelf-item-removed', shelfId, removedItem);
 
-        // Check if shelf is now empty and should be destroyed
-        if (config.items.length === 0) {
-          this.logger.debug(`Shelf ${shelfId} is now empty, destroying it`);
-          // Unpin the shelf first
-          config.isPinned = false;
-          // Destroy the shelf after a short delay to allow UI to update
-          setTimeout(() => {
-            this.destroyShelf(shelfId);
-          }, 100);
-        }
+        // Do NOT automatically destroy empty shelves here - let ApplicationController handle it
+        // The ApplicationController has the proper logic for auto-hide timers and drag state checking
 
         return true;
       }
@@ -713,20 +658,10 @@ export class ShelfManager extends EventEmitter {
   }
 
   /**
-   * Release window back to pool or destroy it
+   * Release window back to advanced pool
    */
   private releaseWindow(window: BrowserWindow): void {
-    if (this.windowPool.length < this.MAX_POOL_SIZE && !window.isDestroyed()) {
-      // Clean window state and add to pool
-      window.hide();
-      window.removeAllListeners();
-      this.windowPool.push(window);
-    } else {
-      // Destroy window
-      if (!window.isDestroyed()) {
-        window.destroy();
-      }
-    }
+    this.windowPool.releaseWindow(window);
   }
 
   /**
@@ -785,13 +720,8 @@ export class ShelfManager extends EventEmitter {
       this.destroyShelf(shelfId);
     }
 
-    // Destroy pooled windows
-    for (const window of this.windowPool) {
-      if (!window.isDestroyed()) {
-        window.destroy();
-      }
-    }
-    this.windowPool = [];
+    // Destroy window pool
+    this.windowPool.destroy();
 
     // Remove IPC handlers
     ipcMain.removeAllListeners('shelf:create');

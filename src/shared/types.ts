@@ -54,6 +54,24 @@ export interface DragDetector {
   removeAllListeners(event?: string): void;
 }
 
+export interface DragShakeEvent {
+  type: 'dragShake';
+  isDragging: boolean;
+  items?: Array<{
+    name: string;
+    path: string;
+    type: string;
+  }>;
+  position: Vector2D;
+  timestamp: number;
+}
+
+export interface DragItem {
+  name: string;
+  path: string;
+  type: string;
+}
+
 export type DockPosition = 'top' | 'right' | 'bottom' | 'left';
 
 export interface ShelfItem {

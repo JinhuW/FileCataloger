@@ -74,6 +74,9 @@ src/native/*/build/
 src/native/*/node_modules/
 *.node
 
+# Scripts build output
+scripts/native/dist/
+
 # Temporary files
 *.tmp
 *.temp
@@ -91,3 +94,4 @@ src/**/*.js.map
 # OS files
 *.swp
 *.swo
+**/build/**

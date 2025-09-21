@@ -42,6 +42,25 @@ export interface PerformanceThresholds {
   appMemoryLimit: number; // MB, default 500
 }
 
+export interface PredictiveTrend {
+  metric: 'cpu' | 'memory';
+  trend: 'increasing' | 'stable' | 'decreasing';
+  slope: number; // Rate of change per minute
+  confidence: number; // 0-1, how confident we are in this prediction
+  predictedIssueIn?: number; // milliseconds until threshold breach (if trending toward issue)
+  recommendation?: string;
+}
+
+export interface PredictiveAlert {
+  severity: 'warning' | 'critical';
+  metric: string;
+  currentValue: number;
+  predictedValue: number;
+  predictedTime: number; // when the issue is predicted to occur
+  trend: PredictiveTrend;
+  suggestion: string;
+}
+
 export class PerformanceMonitor extends EventEmitter {
   private static instance: PerformanceMonitor;
   private isMonitoring: boolean = false;
@@ -125,6 +144,7 @@ export class PerformanceMonitor extends EventEmitter {
 
       // Check thresholds
       this.checkThresholds(metrics);
+      this.checkPredictiveIssues();
 
       // Emit metrics
       this.emit('metrics', metrics);
@@ -464,6 +484,177 @@ export class PerformanceMonitor extends EventEmitter {
       healthy: issues.length === 0,
       issues,
     };
+  }
+
+  /**
+   * Perform predictive trend analysis on performance metrics
+   */
+  public analyzeTrends(lookbackMinutes: number = 5): PredictiveTrend[] {
+    const now = Date.now();
+    const lookbackMs = lookbackMinutes * 60 * 1000;
+    const relevantMetrics = this.metricsHistory.filter(m => m.timestamp > now - lookbackMs);
+
+    if (relevantMetrics.length < 3) {
+      return []; // Need at least 3 data points for trend analysis
+    }
+
+    const trends: PredictiveTrend[] = [];
+
+    // Analyze CPU trend
+    const cpuTrend = this.calculateTrend(
+      relevantMetrics,
+      m => m.cpu.usage,
+      'cpu',
+      this.thresholds.cpuWarning,
+      this.thresholds.cpuCritical
+    );
+    if (cpuTrend) trends.push(cpuTrend);
+
+    // Analyze memory trend
+    const memoryTrend = this.calculateTrend(
+      relevantMetrics,
+      m => m.memory.percentage,
+      'memory',
+      this.thresholds.memoryWarning,
+      this.thresholds.memoryCritical
+    );
+    if (memoryTrend) trends.push(memoryTrend);
+
+    return trends;
+  }
+
+  /**
+   * Calculate trend for a specific metric
+   */
+  private calculateTrend(
+    metrics: PerformanceMetrics[],
+    valueExtractor: (m: PerformanceMetrics) => number,
+    metricName: 'cpu' | 'memory',
+    warningThreshold: number,
+    criticalThreshold: number
+  ): PredictiveTrend | null {
+    if (metrics.length < 3) return null;
+
+    const values = metrics.map(valueExtractor);
+    const times = metrics.map(m => m.timestamp);
+
+    // Calculate linear regression slope (rate of change per minute)
+    const n = values.length;
+    const sumX = times.reduce((a, b) => a + b, 0);
+    const sumY = values.reduce((a, b) => a + b, 0);
+    const sumXY = times.reduce((sum, x, i) => sum + x * values[i], 0);
+    const sumXX = times.reduce((sum, x) => sum + x * x, 0);
+
+    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const intercept = (sumY - slope * sumX) / n;
+
+    // Convert slope to per-minute rate
+    const slopePerMinute = slope * 60 * 1000; // Convert from per-ms to per-minute
+
+    // Determine trend direction
+    let trend: 'increasing' | 'stable' | 'decreasing';
+    if (Math.abs(slopePerMinute) < 1) {
+      trend = 'stable';
+    } else if (slopePerMinute > 0) {
+      trend = 'increasing';
+    } else {
+      trend = 'decreasing';
+    }
+
+    // Calculate confidence based on R-squared
+    const meanY = sumY / n;
+    const ssRes = values.reduce((sum, y, i) => {
+      const predicted = slope * times[i] + intercept;
+      return sum + Math.pow(y - predicted, 2);
+    }, 0);
+    const ssTot = values.reduce((sum, y) => sum + Math.pow(y - meanY, 2), 0);
+    const rSquared = ssTot === 0 ? 1 : 1 - ssRes / ssTot;
+    const confidence = Math.max(0, Math.min(1, rSquared));
+
+    // Predict when thresholds might be breached
+    let predictedIssueIn: number | undefined;
+    let recommendation: string | undefined;
+
+    if (trend === 'increasing' && slopePerMinute > 0.5) {
+      const currentValue = values[values.length - 1];
+      const timeToWarning =
+        currentValue < warningThreshold
+          ? ((warningThreshold - currentValue) / slopePerMinute) * 60 * 1000
+          : 0;
+      const timeToCritical =
+        currentValue < criticalThreshold
+          ? ((criticalThreshold - currentValue) / slopePerMinute) * 60 * 1000
+          : 0;
+
+      if (timeToCritical > 0 && timeToCritical < 300000) {
+        // Less than 5 minutes
+        predictedIssueIn = timeToCritical;
+        recommendation = `${metricName.toUpperCase()} trending toward critical level. Consider reducing system load.`;
+      } else if (timeToWarning > 0 && timeToWarning < 600000) {
+        // Less than 10 minutes
+        predictedIssueIn = timeToWarning;
+        recommendation = `${metricName.toUpperCase()} usage increasing. Monitor closely.`;
+      }
+    }
+
+    if (trend === 'decreasing' && values[values.length - 1] > warningThreshold) {
+      recommendation = `${metricName.toUpperCase()} usage decreasing. System recovering.`;
+    }
+
+    return {
+      metric: metricName,
+      trend,
+      slope: slopePerMinute,
+      confidence,
+      predictedIssueIn,
+      recommendation,
+    };
+  }
+
+  /**
+   * Generate predictive alerts based on trend analysis
+   */
+  public generatePredictiveAlerts(): PredictiveAlert[] {
+    const trends = this.analyzeTrends();
+    const alerts: PredictiveAlert[] = [];
+    const currentMetrics = this.getMetrics();
+
+    if (!currentMetrics) return alerts;
+
+    for (const trend of trends) {
+      if (trend.predictedIssueIn && trend.recommendation) {
+        const currentValue =
+          trend.metric === 'cpu' ? currentMetrics.cpu.usage : currentMetrics.memory.percentage;
+
+        const predictedValue = currentValue + trend.slope * (trend.predictedIssueIn / (60 * 1000));
+
+        const severity: 'warning' | 'critical' =
+          trend.predictedIssueIn < 180000 ? 'critical' : 'warning';
+
+        alerts.push({
+          severity,
+          metric: trend.metric,
+          currentValue,
+          predictedValue,
+          predictedTime: Date.now() + trend.predictedIssueIn,
+          trend,
+          suggestion: trend.recommendation,
+        });
+      }
+    }
+
+    return alerts;
+  }
+
+  /**
+   * Check for predictive issues and emit alerts
+   */
+  private checkPredictiveIssues(): void {
+    const alerts = this.generatePredictiveAlerts();
+
+    for (const alert of alerts) {
+      this.emit('predictive-alert', alert);
+    }
   }
 
   public destroy(): void {

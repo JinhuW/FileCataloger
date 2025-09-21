@@ -166,6 +166,8 @@ export const ShelfPage: React.FC = () => {
   };
 
   const handleItemRemove = async (itemId: string) => {
+    logger.info(`🗑️ handleItemRemove called for itemId: ${itemId} on shelf: ${config.id}`);
+
     setConfig(prev => ({
       ...prev,
       items: prev.items.filter(item => item.id !== itemId),
@@ -174,10 +176,25 @@ export const ShelfPage: React.FC = () => {
     // Notify main process
     if (isConnected) {
       try {
+        logger.info(`📡 Calling shelf:remove-item IPC for shelf: ${config.id}, item: ${itemId}`);
         await invoke('shelf:remove-item', config.id, itemId);
+        logger.info(`✅ IPC shelf:remove-item succeeded`);
       } catch (error) {
         logger.error('Failed to remove item via IPC:', error);
       }
+    } else {
+      logger.warn('⚠️ Not connected to main process, skipping IPC call');
+    }
+
+    // RESTORE FRONTEND FIX: Auto-hide empty shelf after 3 seconds
+    // Keep this until main process architecture is fully working
+    const updatedItems = config.items.filter(item => item.id !== itemId);
+    if (updatedItems.length === 0 && !config.isPinned) {
+      logger.info(`⏰ FRONTEND: Shelf ${config.id} is empty, scheduling auto-hide in 3 seconds`);
+      setTimeout(() => {
+        logger.info(`🗑️ FRONTEND: Auto-hiding empty shelf ${config.id}`);
+        handleClose();
+      }, 3000);
     }
   };
 

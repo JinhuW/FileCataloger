@@ -202,9 +202,9 @@ export class DragShakeDetector extends EventEmitter {
     this.isDragging = false;
     this.draggedItems = [];
 
-    // Don't emit dragEnd event - let shelves manage their own lifecycle
-    // This prevents shelves from disappearing when dropping files
-    // this.emit('dragEnd');
+    // Emit drag-end event to allow proper shelf cleanup
+    // The ApplicationController will handle smart cleanup logic
+    this.emit('drag-end');
   }
 
   public async start(): Promise<void> {
