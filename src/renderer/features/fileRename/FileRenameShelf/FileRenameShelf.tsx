@@ -33,10 +33,10 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { ShelfConfig, ShelfItem, FileRenamePreview, RenameComponent } from '@shared/types';
-import { ShelfHeader, ErrorBoundary, FileDropZone } from '@renderer/components/business';
+import { ShelfHeader, ErrorBoundary, FileDropZone } from '@renderer/components/domain';
 import { RenamePatternBuilder } from '../RenamePatternBuilder';
 import { FileRenamePreviewList } from '../FileRenamePreviewList';
-import { WarningDialog } from '@renderer/components/ui';
+import { WarningDialog } from '@renderer/components/primitives';
 import { validateFileRenames, formatValidationWarning } from '@renderer/utils/fileValidation';
 
 export interface FileRenameShelfProps {

@@ -21,7 +21,7 @@ import React, { useState, useEffect } from 'react';
 import { ShelfConfig, ShelfItem } from '@shared/types';
 import { logger } from '@shared/logger';
 import { isShelfConfig, isShelfItem } from '@renderer/utils/typeGuards';
-import { FileRenameShelf } from '@renderer/features/rename/FileRenameShelf';
+import { FileRenameShelf } from '@renderer/features/fileRename/FileRenameShelf';
 import { useIPC } from '@renderer/hooks/useIPC';
 
 export const ShelfPage: React.FC = () => {

@@ -46,8 +46,8 @@ import { PatternTab } from '../PatternTab';
 import { AddPatternButton } from '../AddPatternButton';
 import { usePatternManager } from '@renderer/hooks/usePatternManager';
 import { usePatternStore, useToast } from '@renderer/stores';
-import { EmptyState } from '@renderer/components/business';
-import { LoadingSpinner, PatternBuilderSkeleton } from '@renderer/components/ui';
+import { EmptyState } from '@renderer/components/domain';
+import { LoadingSpinner, PatternBuilderSkeleton } from '@renderer/components/primitives';
 import {
   PATTERN_VALIDATION,
   PATTERN_COMPONENT_TYPES,

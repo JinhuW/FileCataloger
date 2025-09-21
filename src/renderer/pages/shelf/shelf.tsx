@@ -8,9 +8,9 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { logger } from '@shared/logger';
-import { AppProviders } from './app/providers/AppProviders';
-import { ShelfPage } from './pages/shelf/ShelfPage';
-import './styles/globals.css';
+import { ErrorBoundary } from '@renderer/components/domain';
+import { ShelfPage } from './ShelfPage';
+import '@renderer/styles/globals.css';
 
 // Add global error handler to catch rendering errors
 window.addEventListener('error', event => {
@@ -44,9 +44,9 @@ if (container) {
 
     root.render(
       <React.StrictMode>
-        <AppProviders>
+        <ErrorBoundary>
           <ShelfPage />
-        </AppProviders>
+        </ErrorBoundary>
       </React.StrictMode>
     );
 

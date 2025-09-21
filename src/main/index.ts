@@ -201,13 +201,6 @@ class FileCatalogerApp {
       // Create context menu
       const contextMenu = Menu.buildFromTemplate([
         {
-          label: 'Show Status',
-          click: () => {
-            this.showMainWindow();
-          },
-        },
-        { type: 'separator' },
-        {
           label: 'Preferences...',
           accelerator: 'CommandOrControl+,',
           click: () => {

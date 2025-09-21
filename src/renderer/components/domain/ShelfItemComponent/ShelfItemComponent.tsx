@@ -27,7 +27,7 @@
  * ```
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ShelfItem } from '@shared/types';
 import { useShelfItemAccessibility } from '@renderer/hooks/useAccessibility';
@@ -69,13 +69,6 @@ export const ShelfItemComponent = React.memo<ShelfItemComponentProps>(
   ({ item, isCompact, onAction, index, totalCount, isSelected = false }) => {
     const [isHovered, setIsHovered] = useState(false);
     const [showActions, setShowActions] = useState(false);
-
-    // Debug logging for hover state
-    useEffect(() => {
-      if (isHovered) {
-        // Debug logging removed for production
-      }
-    }, [isHovered, item.name]);
 
     // Get ARIA attributes for accessibility
     const itemAccessibility = useShelfItemAccessibility(item, index, totalCount);
