@@ -4,7 +4,7 @@ import { DragShakeDetector } from '../input';
 import { ShelfManager } from '../window/shelfManager';
 import { errorHandler, ErrorSeverity, ErrorCategory } from '../utils/errorHandler';
 import { PreferencesManager } from '../config/preferencesManager';
-import { MouseTracker, DragShakeEvent, DragItem, ShelfConfig } from '@shared/types';
+import { MouseTracker, DragShakeEvent, DragItem, ShelfConfig, ShelfItem } from '@shared/types';
 import { Logger, createLogger } from '../utils/logger';
 import { SHELF_CONSTANTS, APP_CONSTANTS, PERFORMANCE_CONSTANTS } from '@shared/constants';
 
