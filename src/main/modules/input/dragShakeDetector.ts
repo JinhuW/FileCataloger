@@ -20,6 +20,18 @@ export interface DragShakeEvent {
   timestamp: number;
 }
 
+export interface ShakeEventData {
+  directionChanges: number;
+  distance: number;
+  velocity: number;
+  intensity: number;
+  timestamp: number;
+}
+
+export interface BatchedEvent {
+  positions: MousePosition[];
+}
+
 /**
  * Native drag and shake detection for macOS
  * ONLY works with proper native module - no fallbacks
@@ -71,9 +83,9 @@ export class DragShakeDetector extends EventEmitter {
     try {
       this.dragMonitor = createDragMonitor();
       this.logger.info('✅ Native drag monitor initialized');
-    } catch (error: any) {
+    } catch (error: unknown) {
       this.logger.error('❌ FATAL: Native drag monitor could not be initialized');
-      this.logger.error('Error:', error.message);
+      this.logger.error('Error:', error instanceof Error ? error.message : String(error));
       this.logger.error('');
       this.logger.error('To fix:');
       this.logger.error('1. Rebuild native modules: npm run rebuild:native');
@@ -85,7 +97,7 @@ export class DragShakeDetector extends EventEmitter {
 
   private setupEventHandlers(): void {
     // Set up mouse batcher handlers
-    this.mouseBatcher.on('batch', (batchedEvent: any) => {
+    this.mouseBatcher.on('batch', (batchedEvent: BatchedEvent) => {
       // Process batched positions for shake detection
       batchedEvent.positions.forEach((pos: MousePosition) => {
         this.shakeDetector.processPosition(pos);
@@ -99,7 +111,7 @@ export class DragShakeDetector extends EventEmitter {
     });
 
     // Handle shake events - only process during active drag
-    this.shakeDetector.on('shake', (event: any) => {
+    this.shakeDetector.on('shake', (event: ShakeEventData) => {
       this.logger.debug('🌟 Shake event detected', {
         isDragging: this.isDragging,
         intensity: event.intensity,
@@ -127,6 +139,8 @@ export class DragShakeDetector extends EventEmitter {
         this.handleDragStart(items);
       });
 
+      // Listen for actual drag events from native monitor
+
       this.dragMonitor.on('dragging', (items: DraggedItem[]) => {
         this.updateDraggedItems(items);
       });
@@ -136,7 +150,7 @@ export class DragShakeDetector extends EventEmitter {
         this.handleDragEnd();
       });
 
-      this.dragMonitor.on('error', (error: any) => {
+      this.dragMonitor.on('error', (error: Error) => {
         this.logger.error('Native monitor error:', error);
       });
 
@@ -155,6 +169,10 @@ export class DragShakeDetector extends EventEmitter {
       files: items.map(i => i.name),
     });
 
+    // Emit drag start event for state machine
+    this.logger.info('📡 EMITTING: drag-start event to ApplicationController');
+    this.emit('drag-start', items);
+
     // Don't show shelf yet - wait for shake!
     this.logger.info('⏳ Shake mouse to show shelf...');
     this.logger.debug('DragShakeDetector: File drag started, waiting for shake...');
@@ -167,7 +185,7 @@ export class DragShakeDetector extends EventEmitter {
     }
   }
 
-  private handleDragShake(shakeEvent: any): void {
+  private handleDragShake(shakeEvent: ShakeEventData): void {
     const now = Date.now();
 
     // Debounce rapid shakes
@@ -204,6 +222,7 @@ export class DragShakeDetector extends EventEmitter {
 
     // Emit drag-end event to allow proper shelf cleanup
     // The ApplicationController will handle smart cleanup logic
+    this.logger.info('📡 EMITTING: drag-end event to ApplicationController');
     this.emit('drag-end');
   }
 

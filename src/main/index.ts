@@ -19,6 +19,7 @@ import { Logger, LogLevel } from './modules/utils/logger';
 import { LogEntry } from '@shared/logger';
 import { securityConfig } from './modules/config';
 import { ShelfConfig, ShelfItem } from '@shared/types';
+import { getGlobalTimerManager, destroyGlobalTimerManager } from './modules/utils';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -27,16 +28,15 @@ if (require('electron-squirrel-startup')) {
 
 class FileCatalogerApp {
   private mainWindow: BrowserWindow | null = null;
-  private applicationController: ApplicationController;
+  private applicationController: ApplicationController | null = null;
   private tray: Tray | null = null;
   private isQuitting: boolean = false;
   private logger: Logger;
-  private statusUpdateInterval: NodeJS.Timeout | null = null;
 
   constructor() {
     // Initialize logger first
     this.logger = Logger.getInstance();
-    this.applicationController = new ApplicationController();
+    // Don't create ApplicationController yet - wait until onReady
     this.initializeApp();
   }
 
@@ -146,6 +146,14 @@ class FileCatalogerApp {
   private async onReady(): Promise<void> {
     this.logger.info('🚀 onReady() method called - starting application initialization');
 
+    // Check for accessibility permissions first before any initialization
+    this.logger.info('🔐 Checking accessibility permissions...');
+    const hasPermissions = await this.checkAccessibilityPermissions();
+    if (!hasPermissions) {
+      this.logger.warn('Starting without accessibility permissions - some features may not work');
+    }
+    this.logger.info(`🔐 Accessibility permissions check complete: ${hasPermissions}`);
+
     // Hide dock icon for menu bar app (macOS)
     const prefs = preferencesManager.getPreferences();
     if (process.platform === 'darwin' && app.dock) {
@@ -157,21 +165,25 @@ class FileCatalogerApp {
     // Initialize security configuration
     securityConfig.initialize();
 
-    // Create system tray
+    // Create system tray after permissions check
     this.createSystemTray();
-
-    // Check for accessibility permissions on macOS
-    this.logger.info('🔐 Checking accessibility permissions...');
-    const hasPermissions = await this.checkAccessibilityPermissions();
-    if (!hasPermissions) {
-      this.logger.warn('Starting without accessibility permissions - some features may not work');
-    }
-    this.logger.info(`🔐 Accessibility permissions check complete: ${hasPermissions}`);
 
     // Initialize and start the core application
     try {
+      this.logger.info('🚀 Creating ApplicationController...');
+      this.logger.info('📊 Initialization prerequisites check:');
+      this.logger.info(`   ✓ Electron ready: ${app.isReady()}`);
+      this.logger.info(`   ✓ Accessibility permissions: ${hasPermissions}`);
+      this.logger.info(`   ✓ Security config initialized: ${securityConfig ? 'yes' : 'no'}`);
+      this.logger.info(`   ✓ System tray created: ${this.tray ? 'yes' : 'no'}`);
+
+      this.applicationController = new ApplicationController();
+      this.logger.info('✅ ApplicationController created successfully');
+
       this.logger.info('🚀 Starting ApplicationController...');
+      this.logger.info('📍 About to call applicationController.start()');
       await this.applicationController.start();
+      this.logger.info('✅ ApplicationController.start() completed successfully');
       // Start keyboard manager
       keyboardManager.start();
 
@@ -211,6 +223,24 @@ class FileCatalogerApp {
           accelerator: 'CommandOrControl+,',
           click: () => {
             preferencesManager.showPreferencesWindow();
+          },
+        },
+        { type: 'separator' },
+        {
+          label: 'Create Shelf (Debug)',
+          accelerator: 'CommandOrControl+Shift+S',
+          click: async () => {
+            this.logger.info('🔧 Manual shelf creation requested from tray');
+            try {
+              if (!this.applicationController) {
+                this.logger.warn('ApplicationController not initialized yet');
+                return;
+              }
+              const shelfConfig = await this.applicationController.createShelf({});
+              this.logger.info('✅ Debug shelf created:', shelfConfig);
+            } catch (error) {
+              this.logger.error('❌ Failed to create debug shelf:', error);
+            }
           },
         },
         { type: 'separator' },
@@ -335,6 +365,7 @@ class FileCatalogerApp {
   }
 
   private showMainWindow(): void {
+    // Create window lazily if needed
     if (!this.mainWindow) {
       this.createMainWindow();
     }
@@ -346,44 +377,63 @@ class FileCatalogerApp {
       this.mainWindow.show();
       this.mainWindow.focus();
 
-      // Send status to renderer
-      this.mainWindow.webContents.send('app:status', this.applicationController.getStatus());
+      // Send initial status to renderer
+      if (this.applicationController) {
+        this.mainWindow.webContents.send('app:status', this.applicationController.getStatus());
+      }
     }
   }
 
   private setupIpcHandlers(): void {
     // Get application status
     ipcMain.handle('app:get-status', () => {
+      if (!this.applicationController) {
+        return { isRunning: false, error: 'ApplicationController not initialized' };
+      }
       return this.applicationController.getStatus();
     });
 
     // Create shelf manually
     ipcMain.handle('app:create-shelf', async (event, config) => {
+      if (!this.applicationController) {
+        return null;
+      }
       return await this.applicationController.createShelf(config);
     });
 
     // Update configuration
     ipcMain.handle('app:update-config', (event, config) => {
+      if (!this.applicationController) {
+        return false;
+      }
       this.applicationController.updateConfig(config);
       return true;
     });
 
     // Handle shelf drop operations
     ipcMain.on('shelf:drop-start', (event, shelfId) => {
-      this.applicationController.handleDropStart(shelfId);
+      if (this.applicationController) {
+        this.applicationController.handleDropStart(shelfId);
+      }
     });
 
     ipcMain.on('shelf:drop-end', (event, shelfId) => {
-      this.applicationController.handleDropEnd(shelfId);
+      if (this.applicationController) {
+        this.applicationController.handleDropEnd(shelfId);
+      }
     });
 
     ipcMain.on('shelf:add-files', (event, data) => {
-      this.applicationController.handleFilesDropped(data.shelfId, data.files);
+      if (this.applicationController) {
+        this.applicationController.handleFilesDropped(data.shelfId, data.files);
+      }
     });
 
     ipcMain.on('shelf:files-dropped', (event, data) => {
       this.logger.debug('📡 Received shelf:files-dropped IPC:', data);
-      this.applicationController.handleFilesDropped(data.shelfId, data.files);
+      if (this.applicationController) {
+        this.applicationController.handleFilesDropped(data.shelfId, data.files);
+      }
     });
 
     // Centralized IPC handlers for all shelf operations
@@ -392,6 +442,10 @@ class FileCatalogerApp {
     ipcMain.handle('shelf:create', async (event, config: Partial<ShelfConfig>) => {
       this.logger.debug('📡 Received shelf:create IPC:', config);
       try {
+        if (!this.applicationController) {
+          this.logger.error('📡 ApplicationController not initialized');
+          return null;
+        }
         const result = await this.applicationController.createShelf(config);
         this.logger.debug('📡 shelf:create result:', result);
         return result;
@@ -405,6 +459,10 @@ class FileCatalogerApp {
     ipcMain.handle('shelf:add-item', async (event, shelfId: string, item: ShelfItem) => {
       this.logger.debug('📡 Received shelf:add-item IPC:', { shelfId, item });
       try {
+        if (!this.applicationController) {
+          this.logger.error('📡 ApplicationController not initialized');
+          return false;
+        }
         // Route through ApplicationController for consistency
         const result = await this.applicationController.addItemToShelf(shelfId, item);
         this.logger.debug('📡 shelf:add-item result:', result);
@@ -419,6 +477,11 @@ class FileCatalogerApp {
     ipcMain.handle('shelf:remove-item', async (event, shelfId: string, itemId: string) => {
       this.logger.debug('📡 Received shelf:remove-item IPC:', { shelfId, itemId });
       try {
+        if (!this.applicationController) {
+          this.logger.error('📡 ApplicationController not initialized');
+          return false;
+        }
+
         this.logger.debug('📡 Calling applicationController.handleItemRemove...');
         this.logger.debug('📡 ApplicationController type:', typeof this.applicationController);
         this.logger.debug(
@@ -445,6 +508,10 @@ class FileCatalogerApp {
     ipcMain.handle('shelf:show', async (event, shelfId: string) => {
       this.logger.debug('📡 Received shelf:show IPC:', { shelfId });
       try {
+        if (!this.applicationController) {
+          this.logger.error('📡 ApplicationController not initialized');
+          return false;
+        }
         const result = await this.applicationController.showShelf(shelfId);
         this.logger.debug('📡 shelf:show result:', result);
         return result;
@@ -457,6 +524,10 @@ class FileCatalogerApp {
     ipcMain.handle('shelf:hide', async (event, shelfId: string) => {
       this.logger.debug('📡 Received shelf:hide IPC:', { shelfId });
       try {
+        if (!this.applicationController) {
+          this.logger.error('📡 ApplicationController not initialized');
+          return false;
+        }
         const result = await this.applicationController.hideShelf(shelfId);
         this.logger.debug('📡 shelf:hide result:', result);
         return result;
@@ -468,6 +539,9 @@ class FileCatalogerApp {
 
     // Handle shelf close
     ipcMain.handle('shelf:close', async (event, shelfId) => {
+      if (!this.applicationController) {
+        return false;
+      }
       return await this.applicationController.destroyShelf(shelfId);
     });
 
@@ -539,6 +613,11 @@ class FileCatalogerApp {
   }
 
   private createMainWindow(): void {
+    // Only create window if it doesn't exist (lazy loading)
+    if (this.mainWindow) {
+      return;
+    }
+
     // Create the browser window for settings/development
     this.mainWindow = new BrowserWindow({
       height: 600,
@@ -590,6 +669,8 @@ class FileCatalogerApp {
     // Clean up reference when destroyed
     this.mainWindow.on('closed', () => {
       this.mainWindow = null;
+      // Stop status updates when window is destroyed
+      getGlobalTimerManager().clearInterval('status-update');
     });
 
     // Open DevTools in development
@@ -598,18 +679,23 @@ class FileCatalogerApp {
     }
 
     // Set up periodic status updates
-    this.statusUpdateInterval = setInterval(() => {
-      if (this.mainWindow && !this.mainWindow.isDestroyed()) {
-        this.mainWindow.webContents.send('app:status', this.applicationController.getStatus());
-      }
-    }, 2000);
+    getGlobalTimerManager().setInterval(
+      'status-update',
+      () => {
+        if (this.mainWindow && !this.mainWindow.isDestroyed() && this.applicationController) {
+          this.mainWindow.webContents.send('app:status', this.applicationController.getStatus());
+        }
+      },
+      2000,
+      'Send status updates to renderer'
+    );
   }
 
   public getMainWindow(): BrowserWindow | null {
     return this.mainWindow;
   }
 
-  public getApplicationController(): ApplicationController {
+  public getApplicationController(): ApplicationController | null {
     return this.applicationController;
   }
 
@@ -627,7 +713,9 @@ class FileCatalogerApp {
     });
 
     keyboardManager.on('new-shelf', async () => {
-      await this.applicationController.createShelf({});
+      if (this.applicationController) {
+        await this.applicationController.createShelf({});
+      }
     });
   }
 
@@ -662,12 +750,6 @@ class FileCatalogerApp {
     // Create cleanup promise
     const cleanup = async () => {
       try {
-        // Stop all intervals and timers first
-        if (this.statusUpdateInterval) {
-          clearInterval(this.statusUpdateInterval);
-          this.statusUpdateInterval = null;
-        }
-
         // Stop keyboard manager
         this.logger.info('Stopping keyboard manager...');
         keyboardManager.stop();
@@ -678,8 +760,14 @@ class FileCatalogerApp {
         performanceMonitor.destroy();
 
         // Destroy application controller (cleans up timers and native module)
-        this.logger.info('Destroying application controller...');
-        await this.applicationController.destroy();
+        if (this.applicationController) {
+          this.logger.info('Destroying application controller...');
+          await this.applicationController.destroy();
+        }
+
+        // Destroy global timer manager (cleans up all timers)
+        this.logger.info('Destroying global timer manager...');
+        destroyGlobalTimerManager();
 
         // Shutdown error handler
         this.logger.info('Shutting down error handler...');

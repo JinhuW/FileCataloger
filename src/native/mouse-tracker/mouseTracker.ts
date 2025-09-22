@@ -180,6 +180,20 @@ export class MacOSMouseTracker extends EventEmitter implements MouseTracker {
         logger.info(
           '✅ Optimized macOS mouse tracking started with event batching and button detection'
         );
+
+        // Health check: Verify mouse events start flowing within 2 seconds
+        setTimeout(() => {
+          if (this.eventCount === 0) {
+            logger.warn(
+              '⚠️ HEALTH CHECK FAILED: No mouse events received within 2 seconds of starting'
+            );
+            logger.warn('This may indicate CGEventTap is not capturing events properly');
+          } else {
+            logger.info(
+              `✅ HEALTH CHECK PASSED: ${this.eventCount} mouse events received in first 2 seconds`
+            );
+          }
+        }, 2000);
       } else {
         // Get detailed error information
         const error = this.nativeTracker?.getLastError() ?? {
