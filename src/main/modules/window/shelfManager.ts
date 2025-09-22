@@ -1,7 +1,7 @@
 import { BrowserWindow, screen, ipcMain } from 'electron';
 import { EventEmitter } from 'events';
 import * as path from 'path';
-import { ShelfConfig, DockPosition, Vector2D, ShelfItem } from '@shared/types';
+import { ShelfConfig, DockPosition, Vector2D, ShelfItem, ShelfMode } from '@shared/types';
 import { SHELF_CONSTANTS } from '@shared/constants';
 import { createLogger } from '../utils/logger';
 import { globalIPCRateLimiter } from '../utils/ipcRateLimiter';
@@ -52,7 +52,7 @@ export class ShelfManager extends EventEmitter {
    * Initialize dock position tracking
    */
   private initializeDockPositions(): void {
-    const positions: DockPosition[] = ['top', 'right', 'bottom', 'left'];
+    const positions: DockPosition[] = [DockPosition.TOP, DockPosition.RIGHT, DockPosition.BOTTOM, DockPosition.LEFT];
     positions.forEach(pos => this.dockPositions.set(pos, []));
   }
 
@@ -124,7 +124,7 @@ export class ShelfManager extends EventEmitter {
       opacity: config.opacity || SHELF_CONSTANTS.OPACITY,
       isDropZone: config.isDropZone || false,
       autoHide: config.autoHide || false,
-      mode: config.mode || 'rename', // Default to rename mode
+      mode: config.mode || ShelfMode.RENAME, // Default to rename mode
     };
 
     // Get or create window
@@ -166,7 +166,7 @@ export class ShelfManager extends EventEmitter {
    */
   private configureShelfWindow(window: BrowserWindow, config: ShelfConfig): void {
     // Set window size based on mode
-    if (config.mode === 'rename') {
+    if (config.mode === ShelfMode.RENAME) {
       // Larger size for rename UI
       window.setSize(900, 600);
     } else {

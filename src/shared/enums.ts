@@ -44,15 +44,7 @@ export enum AnimationEasing {
   CUBIC_BEZIER = 'cubic-bezier(0.4, 0, 0.2, 1)',
 }
 
-/**
- * Log levels for the application
- */
-export enum LogLevel {
-  DEBUG = 'debug',
-  INFO = 'info',
-  WARN = 'warn',
-  ERROR = 'error',
-}
+// LogLevel is already defined in logger.ts, so we'll skip it here to avoid conflicts
 
 /**
  * Error severity levels

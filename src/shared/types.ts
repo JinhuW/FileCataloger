@@ -1,8 +1,9 @@
 // Shared type definitions for the application
 
-export type DockPosition = 'top' | 'right' | 'bottom' | 'left';
-export type ShelfItemType = 'file' | 'folder' | 'text' | 'url' | 'image';
-export type ShelfMode = 'default' | 'rename';
+import { DockPosition, ShelfItemType, ShelfMode } from './enums';
+
+// Re-export for convenience
+export { DockPosition, ShelfItemType, ShelfMode };
 
 export interface Vector2D {
   x: number;
