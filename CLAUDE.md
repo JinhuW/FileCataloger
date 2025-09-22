@@ -11,9 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 yarn install
 
 # Build native modules (required after install)
-cd src/native/mouse-tracker/darwin
-node-gyp rebuild
-cd ../../../..
+cd src/native/mouse-tracker/darwin && node-gyp rebuild && cd ../../drag-monitor && node-gyp rebuild && cd ../../../..
 # OR use the convenience command:
 yarn rebuild:native
 
@@ -47,11 +45,19 @@ yarn dist:mac:x64    # Intel Macs
 yarn dist
 ```
 
-### Additional Commands
+### Testing and Quality Checks
 
 ```bash
-# Rebuild native modules after Node/Electron version change
-yarn rebuild:native
+# Run tests
+yarn test
+yarn test:ui
+yarn test:coverage
+
+# Test native modules
+yarn test:native
+yarn test:native:smoke
+yarn test:native:benchmark
+yarn test:native:validate
 
 # Format code
 yarn format
@@ -63,33 +69,36 @@ yarn security:check
 # Quality checks (type + lint + format + audit)
 yarn quality:check
 
+# Validate renderer code
+yarn validate:renderer
+
 # Generate TypeDoc documentation
 yarn docs:generate
 ```
 
 ## Architecture Overview
 
-This is **FileCataloger** - an Electron-based desktop application that creates floating "shelf" windows for temporary file storage during drag operations. The application uses native macOS APIs for mouse tracking and drag detection.
+FileCataloger is an Electron-based desktop application that creates floating "shelf" windows for temporary file storage during drag operations. The application uses native macOS APIs for mouse tracking and drag detection.
 
 ### Core Components
 
 1. **Main Process** (`src/main/`)
-   - `ApplicationController`: Central orchestrator managing all modules
-   - `ShelfManager`: Manages creation, positioning, and lifecycle of shelf windows
-   - `DragShakeDetector`: Detects mouse shake gestures to trigger shelf creation
-   - `PreferencesManager`: Handles user preferences with Electron Store
+   - `applicationController`: Central orchestrator managing all modules
+   - `shelfManager`: Manages creation, positioning, and lifecycle of shelf windows
+   - `dragShakeDetector`: Detects mouse shake gestures to trigger shelf creation
+   - `preferencesManager`: Handles user preferences with Electron Store
    - Native mouse tracking via CGEventTap (macOS)
 
 2. **Renderer Process** (`src/renderer/`)
    - React 19 + TypeScript for UI
    - Tailwind CSS for styling
    - Framer Motion for animations
-   - Zustand for state management
+   - Zustand for state management with Immer middleware
 
 3. **Native Modules** (`src/native/`)
    - `mouse-tracker`: Platform-specific mouse tracking (C++ for macOS)
    - `drag-monitor`: Native drag detection using NSPasteboard
-   - Requires `node-gyp` for building
+   - Built with node-gyp using monorepo architecture
 
 ### Key Patterns
 
@@ -101,11 +110,11 @@ This is **FileCataloger** - an Electron-based desktop application that creates f
 
 ### Shelf Creation Flow
 
-1. User shakes mouse (6+ direction changes in 500ms)
-2. `DragShakeDetector` detects pattern
-3. `ApplicationController` creates shelf via `ShelfManager`
+1. User shakes mouse (6+ direction changes in 500ms) while dragging files
+2. `dragShakeDetector` detects pattern
+3. `applicationController` creates shelf via `shelfManager`
 4. Shelf window appears at cursor position
-5. User drags files onto shelf
+5. User drops files onto shelf
 6. Shelf auto-hides when empty (after 5s delay)
 
 ## Project Structure
@@ -114,41 +123,52 @@ This is **FileCataloger** - an Electron-based desktop application that creates f
 src/
 ├── main/modules/
 │   ├── core/
-│   │   └── application-controller.ts  # Central orchestrator
+│   │   └── applicationController.ts  # Central orchestrator
 │   ├── input/
-│   │   ├── drag-shake-detector.ts     # Combined drag/shake detection
-│   │   └── mouse-event-batcher.ts     # Performance optimization
+│   │   ├── dragShakeDetector.ts     # Combined drag/shake detection
+│   │   └── mouseEventBatcher.ts     # Performance optimization
 │   ├── window/
-│   │   ├── shelf-manager.ts           # Window lifecycle
-│   │   └── optimized-window-pool.ts   # Window pooling
+│   │   ├── shelfManager.ts          # Window lifecycle
+│   │   └── optimizedWindowPool.ts   # Window pooling
 │   ├── config/
-│   │   ├── preferences-manager.ts     # User preferences
-│   │   └── security-config.ts         # Security headers
+│   │   ├── preferencesManager.ts    # User preferences
+│   │   └── securityConfig.ts        # Security headers
 │   └── utils/
-│       ├── logger.ts                  # Structured logging
-│       ├── error-handler.ts           # Error management
-│       └── performance-monitor.ts     # Resource monitoring
+│       ├── logger.ts                 # Structured logging
+│       ├── errorHandler.ts           # Error management
+│       └── performanceMonitor.ts     # Resource monitoring
 ├── renderer/
 │   ├── components/
-│   │   ├── Shelf/                     # Main shelf component
-│   │   └── VirtualizedList/           # Performance optimization
+│   │   ├── domain/                   # Business logic components
+│   │   └── primitives/               # Basic UI building blocks
+│   ├── features/
+│   │   └── fileRename/               # File renaming functionality
+│   ├── pages/
+│   │   ├── preferences/              # Preferences window
+│   │   └── shelf/                    # Shelf window pages
 │   └── stores/
-│       └── shelf-store.ts             # Zustand state management
+│       └── shelfStore.ts             # Zustand state management
 └── shared/
-    ├── types/                         # TypeScript interfaces
-    ├── constants.ts                   # Shared constants
-    └── ipc-schema.ts                  # IPC message schemas
+    ├── types/                        # TypeScript interfaces
+    ├── constants.ts                  # Shared constants
 ```
 
 ## Important Notes
 
 ### Native Module Building
 
-- The application uses native C++ modules for mouse tracking
-- These MUST be rebuilt after `yarn install` or Node/Electron version changes
-- If you see errors about missing `.node` files, run the native build commands above
-- Binding file is at `src/native/mouse-tracker/darwin/binding.gyp`
-- Alternative build method: `yarn rebuild:native` to rebuild all native modules at once
+- **Automatic Installation**: Native modules rebuild automatically during `yarn install` via intelligent installer
+- **Multi-Strategy Approach**: Tries prebuild-install → electron-rebuild → manual build as needed
+- **Zero Configuration**: No manual rebuild steps required for normal development
+- **Smart Validation**: Automatic verification that modules load correctly (79KB + 96KB expected)
+- **Electron Integration**: Automatic version matching with current Electron version
+
+#### Manual Commands (rarely needed)
+```bash
+yarn rebuild:native              # Force rebuild if automatic install fails
+npm run install:native           # Run smart installer with validation
+yarn build:native:verbose        # Debug build issues
+```
 
 ### macOS Permissions
 
@@ -166,7 +186,7 @@ src/
 
 ### IPC Communication
 
-All IPC messages follow strict schemas defined in `src/shared/ipc-schema.ts`:
+All IPC messages follow strict schemas defined in `src/shared/ipcSchema.ts`:
 
 - `app:get-status` - Get application status
 - `app:create-shelf` - Create shelf manually
@@ -182,7 +202,7 @@ All IPC messages follow strict schemas defined in `src/shared/ipc-schema.ts`:
 
 ### Performance Considerations
 
-- Mouse events batched for efficiency
+- Mouse events batched for efficiency (60fps max)
 - Virtual scrolling for large file lists
 - Window pooling reduces creation overhead
 - Automatic garbage collection on high memory usage
@@ -196,7 +216,7 @@ All IPC messages follow strict schemas defined in `src/shared/ipc-schema.ts`:
 
 ### Common Issues
 
-1. **Native module errors**: Rebuild with `yarn rebuild:native` or `node-gyp rebuild` in native module directory
+1. **Native module errors**: Rebuild with `yarn rebuild:native`
 2. **Shelf not appearing**: Check Accessibility permissions in macOS settings
 3. **Type errors**: Run `yarn typecheck` before committing
 4. **Build failures**: Ensure Python is installed for `node-gyp`
@@ -206,11 +226,20 @@ All IPC messages follow strict schemas defined in `src/shared/ipc-schema.ts`:
 ## Code Style
 
 - Use TypeScript for all new code
-- Use camelCase for all file names (e.g., `dragShakeDetector.ts`, not `drag-shake-detector.ts`)
-- Follow existing patterns in the codebase
+- Follow existing file naming conventions
 - No console.log in production - use the Logger module
 - Prefer functional components with hooks in React
 - Use proper error boundaries and error handling
 - Always handle async errors with try/catch
 - Use Zod for runtime validation of external data
 
+## Pre-commit Hooks
+
+The project uses Husky for pre-commit hooks that automatically run:
+
+- Prettier formatting
+- ESLint fixes
+- TypeScript type checking
+- Renderer validation
+
+These checks ensure code quality before commits are made.
