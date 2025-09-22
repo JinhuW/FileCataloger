@@ -74,6 +74,10 @@ src/native/*/build/
 src/native/*/node_modules/
 *.node
 
+# Prebuild artifacts
+prebuilds/
+src/native/prebuilds/
+
 # Scripts build output
 scripts/native/dist/
 

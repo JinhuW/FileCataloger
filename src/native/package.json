@@ -19,7 +19,14 @@
     "node-addon-api": "^8.0.0",
     "node-gyp": "^10.0.0",
     "typescript": "^5.0.0",
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "prebuild": "^14.0.0"
+  },
+  "binary": {
+    "module_name": "native_modules",
+    "module_path": "./prebuilds/{platform}-{arch}",
+    "remote_path": "./prebuilds/",
+    "package_name": "{module_name}-v{version}-{platform}-{arch}.tar.gz"
   },
   "engines": {
     "node": ">=18.0.0",

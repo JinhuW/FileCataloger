@@ -54,6 +54,7 @@ import {
   PATTERN_COMPONENT_LABELS,
   PATTERN_COMPONENT_ICONS,
 } from '@renderer/constants/namingPatterns';
+// import { ComponentPluginBridge } from '@shared/ComponentPluginBridge';
 
 export interface RenamePatternBuilderProps {
   components: RenameComponent[];
@@ -84,6 +85,9 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
   const [isSaving, setIsSaving] = useState(false);
 
   const toast = useToast();
+
+  // Initialize ComponentPluginBridge for handling both legacy and plugin components
+  // const componentBridge = useMemo(() => new ComponentPluginBridge(), []);
   const {
     patterns,
     activePattern,
@@ -482,7 +486,7 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
           >
             {availableComponents.map(comp => (
               <button
-                key={comp.type}
+                key={comp.id}
                 onClick={() => addComponent(comp.type as RenameComponent['type'])}
                 disabled={components.length >= MAX_COMPONENTS || activePattern?.isBuiltIn}
                 style={{

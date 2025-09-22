@@ -1,5 +1,9 @@
 // Shared type definitions for the application
 
+export type DockPosition = 'top' | 'right' | 'bottom' | 'left';
+export type ShelfItemType = 'file' | 'folder' | 'text' | 'url' | 'image';
+export type ShelfMode = 'default' | 'rename';
+
 export interface Vector2D {
   x: number;
   y: number;
@@ -72,11 +76,11 @@ export interface DragItem {
   type: string;
 }
 
-export type DockPosition = 'top' | 'right' | 'bottom' | 'left';
+// DockPosition is now imported from enums.ts
 
 export interface ShelfItem {
   id: string;
-  type: 'file' | 'folder' | 'text' | 'url' | 'image';
+  type: ShelfItemType;
   name: string;
   path?: string;
   content?: string;
@@ -95,7 +99,7 @@ export interface ShelfConfig {
   opacity: number;
   isDropZone?: boolean; // True if this is a temporary drop zone
   autoHide?: boolean; // True if shelf should auto-hide when drag ends
-  mode?: 'default' | 'rename'; // Shelf mode - default or rename
+  mode?: ShelfMode; // Shelf mode
 }
 
 export interface PerformanceMetrics {
