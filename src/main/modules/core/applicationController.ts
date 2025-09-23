@@ -46,6 +46,9 @@ export class ApplicationController extends EventEmitter {
     emptyShelfTimeout: SHELF_CONSTANTS.EMPTY_TIMEOUT,
   };
 
+  // Store native dragged files for full path resolution
+  private nativeDraggedFiles: Array<{ path: string; name: string }> = [];
+
   constructor() {
     super();
 
@@ -279,15 +282,15 @@ export class ApplicationController extends EventEmitter {
             'Quick cleanup for non-drag scenarios'
           );
         } else {
-          // Standard delay for drag operations to allow drop completion
-          this.logger.info('⏰ Drag operation detected - using standard delay for cleanup');
+          // Longer delay for drag operations to allow drop completion
+          this.logger.info('⏰ Drag operation detected - using extended delay for cleanup');
           this.timerManager.setTimeout(
             'drag-cleanup',
             () => {
               this.logger.info('⏰ Checking for empty shelves after drag completion delay');
               this.clearEmptyShelves();
             },
-            1000,
+            3000, // Increased from 1000ms to 3000ms to give more time for drop processing
             'Clean up empty shelves after drag'
           );
         }
@@ -309,9 +312,20 @@ export class ApplicationController extends EventEmitter {
     });
 
     // Enhanced drag detector events with state machine
-    this.dragShakeDetector.on('drag-start', () => {
+    this.dragShakeDetector.on('drag-start', (items: Array<{ path: string; name: string }>) => {
       this.logger.info('📡 RECEIVED: drag-start event from DragShakeDetector');
       this.logger.info('🎯 Drag operation started (optimistic)');
+      // Store native dragged files for later use
+
+      this.nativeDraggedFiles =
+        items?.map(item => ({
+          path: item.path,
+          name: item.name,
+        })) || [];
+
+      this.logger.info(
+        `📁 Stored ${this.nativeDraggedFiles.length} native dragged files with full paths`
+      );
       this.stateMachine.send(DragShelfEvent.START_DRAG);
       this.emit('drag-started');
     });
@@ -319,6 +333,7 @@ export class ApplicationController extends EventEmitter {
     this.dragShakeDetector.on('drag-end', () => {
       this.logger.info('📡 RECEIVED: drag-end event from DragShakeDetector');
       this.logger.info('🛑 Drag operation ended');
+      // Don't clear native dragged files immediately - keep them for drop operations
       this.stateMachine.send(DragShelfEvent.END_DRAG);
 
       // Remove all shelves from active drop operations after a delay
@@ -332,20 +347,33 @@ export class ApplicationController extends EventEmitter {
             this.activeDropOperations.clear();
           }
 
-          // IMPORTANT: Clean up empty shelves immediately when drag ends (acts as mouse release)
-          this.logger.info(
-            '🧹 Immediate cleanup of empty shelves on drag end (equivalent to mouse release)'
-          );
-          this.clearEmptyShelves();
+          // IMPORTANT: Give sufficient time for drop operations to complete
+          // File drops can take time to process, especially with validation
+          this.logger.info('⏰ Scheduling empty shelf cleanup after drop processing window');
 
-          // Also re-evaluate any remaining shelves for auto-hide scheduling
-          this.logger.info(
-            '🔄 Re-evaluating remaining shelves for auto-hide after drag completion'
+          // Schedule cleanup with a longer delay to allow drop operations to complete
+          this.timerManager.setTimeout(
+            'empty-shelf-cleanup',
+            () => {
+              this.logger.info('🧹 Checking for empty shelves after drop processing delay');
+              this.clearEmptyShelves();
+
+              // Clear native dragged files after drop operations have had time to complete
+              this.logger.info('🗑️ Clearing native dragged files after drop processing');
+              this.nativeDraggedFiles = [];
+
+              // Also re-evaluate any remaining shelves for auto-hide scheduling
+              this.logger.info(
+                '🔄 Re-evaluating remaining shelves for auto-hide after drag completion'
+              );
+              this.reevaluateEmptyShelvesForAutoHide();
+            },
+            3000, // Give 3 seconds for drop operations to complete
+            'Clean up empty shelves after drop processing'
           );
-          this.reevaluateEmptyShelvesForAutoHide();
         },
-        200,
-        'Process drop operations and cleanup empty shelves'
+        500, // Initial delay to clear drop operations tracking
+        'Process drop operations and schedule cleanup'
       );
 
       this.emit('drag-ended');
@@ -804,6 +832,13 @@ export class ApplicationController extends EventEmitter {
   }
 
   /**
+   * Get native dragged files with full paths
+   */
+  public getNativeDraggedFiles(): Array<{ path: string; name: string }> {
+    return this.nativeDraggedFiles;
+  }
+
+  /**
    * Handle drop start event from shelf
    */
   public handleDropStart(shelfId: string): void {
@@ -881,6 +916,16 @@ export class ApplicationController extends EventEmitter {
   public handleFilesDropped(shelfId: string, filePaths: string[]): void {
     try {
       this.logger.info(`📁 HANDLING DROPPED FILES on shelf ${shelfId}:`, filePaths);
+      this.logger.debug(
+        `🔧 DEBUG: Input filePaths analysis:`,
+        filePaths.map(fp => ({
+          value: fp,
+          length: fp.length,
+          hasSlash: fp.includes('/'),
+          isFullPath: fp.startsWith('/'),
+          type: typeof fp,
+        }))
+      );
 
       // Cancel any auto-hide timer since shelf now has files
       this.cancelShelfAutoHide(shelfId);
@@ -895,6 +940,15 @@ export class ApplicationController extends EventEmitter {
       }));
 
       this.logger.info(`📁 Adding ${items.length} items to shelf ${shelfId}`);
+      this.logger.debug(
+        `🔧 DEBUG: Created items with paths:`,
+        items.map(item => ({
+          id: item.id,
+          name: item.name,
+          path: item.path,
+          pathType: typeof item.path,
+        }))
+      );
 
       // Add items to shelf
       for (const item of items) {

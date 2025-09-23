@@ -56,14 +56,49 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
       const items: ShelfItem[] = [];
       const dataTransfer = e.dataTransfer;
 
-      if (dataTransfer.files && dataTransfer.files.length > 0) {
+      // Always try to get native dragged files first, regardless of dataTransfer.files
+      let nativeDraggedFiles: Array<{ path: string; name: string }> = [];
+      try {
+        nativeDraggedFiles = (await window.api.invoke('drag:get-native-files')) as Array<{
+          path: string;
+          name: string;
+        }>;
+      } catch (error) {
+        logger.error('Failed to get native dragged files:', error);
+      }
+
+      // If we have native files but no dataTransfer files, create items from native files
+      if (
+        nativeDraggedFiles.length > 0 &&
+        (!dataTransfer.files || dataTransfer.files.length === 0)
+      ) {
+        for (const nativeFile of nativeDraggedFiles) {
+          const item: ShelfItem = {
+            id: `file-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+            type: 'file', // Default to file, could be enhanced with path analysis
+            name: nativeFile.name,
+            path: nativeFile.path,
+            size: undefined, // Size not available from native drag monitor
+            createdAt: Date.now(),
+          };
+          items.push(item);
+        }
+      } else if (dataTransfer.files && dataTransfer.files.length > 0) {
+        // Create a map of file names to native paths for quick lookup
+        const nativePathMap = new Map<string, string>();
+        nativeDraggedFiles.forEach(file => {
+          nativePathMap.set(file.name, file.path);
+        });
+
         // Collect paths for type checking
         const pathsToCheck: string[] = [];
         const fileMap: Map<string, { file: File; index: number }> = new Map();
 
         for (let i = 0; i < dataTransfer.files.length; i++) {
           const file = dataTransfer.files[i];
-          const filePath = (file as unknown as { path?: string }).path;
+          // Try native path first, then fall back to browser's path property
+          const filePath =
+            nativePathMap.get(file.name) || (file as unknown as { path?: string }).path;
           if (filePath) {
             pathsToCheck.push(filePath);
             fileMap.set(filePath, { file, index: i });
@@ -85,7 +120,9 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
 
         for (let i = 0; i < dataTransfer.files.length; i++) {
           const file = dataTransfer.files[i];
-          const filePath = (file as unknown as { path?: string }).path;
+          // Try native path first, then fall back to browser's path property
+          const filePath =
+            nativePathMap.get(file.name) || (file as unknown as { path?: string }).path;
 
           // Determine type based on file system check or fallback to heuristics
           let type: ShelfItem['type'] = 'file';

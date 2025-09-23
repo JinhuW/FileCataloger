@@ -184,6 +184,14 @@ class FileCatalogerApp {
       this.logger.info('📍 About to call applicationController.start()');
       await this.applicationController.start();
       this.logger.info('✅ ApplicationController.start() completed successfully');
+
+      // Scan for external plugins after startup
+      this.logger.info('🔌 Scanning for external plugins...');
+      import('./modules/plugins/pluginManager').then(({ pluginManager }) => {
+        pluginManager.scanPluginsDirectory().catch(error => {
+          this.logger.error('Failed to scan plugins directory:', error);
+        });
+      });
       // Start keyboard manager
       keyboardManager.start();
 
@@ -385,6 +393,24 @@ class FileCatalogerApp {
   }
 
   private setupIpcHandlers(): void {
+    // Register pattern handlers
+    import('./ipc/patternHandlers')
+      .then(({ registerPatternHandlers }) => {
+        registerPatternHandlers();
+      })
+      .catch(error => {
+        this.logger.error('Failed to register pattern handlers:', error);
+      });
+
+    // Register plugin handlers
+    import('./ipc/pluginHandlers')
+      .then(({ registerPluginHandlers }) => {
+        registerPluginHandlers();
+      })
+      .catch(error => {
+        this.logger.error('Failed to register plugin handlers:', error);
+      });
+
     // Get application status
     ipcMain.handle('app:get-status', () => {
       if (!this.applicationController) {
@@ -595,6 +621,11 @@ class FileCatalogerApp {
       return null;
     });
 
+    // Handle message box dialog
+    ipcMain.handle('dialog:show-message-box', async (event, options) => {
+      return await dialog.showMessageBox(options);
+    });
+
     // Check if path is a directory
     ipcMain.handle('fs:check-path-type', async (event, paths: string[]) => {
       const results: Record<string, 'file' | 'folder' | 'unknown'> = {};
@@ -609,6 +640,95 @@ class FileCatalogerApp {
       }
 
       return results;
+    });
+
+    // Native drag file resolution
+    ipcMain.handle('drag:get-native-files', async () => {
+      if (!this.applicationController) {
+        this.logger.debug('📁 No applicationController, returning empty array');
+        return [];
+      }
+      const nativeFiles = this.applicationController.getNativeDraggedFiles();
+      this.logger.debug('📁 Returning native dragged files:', {
+        count: nativeFiles.length,
+        files: nativeFiles,
+        type: typeof nativeFiles,
+        isArray: Array.isArray(nativeFiles),
+      });
+      return nativeFiles;
+    });
+
+    // Handle single file rename
+    ipcMain.handle('fs:rename-file', async (event, oldPath: string, newPath: string) => {
+      try {
+        await fs.promises.rename(oldPath, newPath);
+        this.logger.info(`✅ File renamed: ${path.basename(oldPath)} → ${path.basename(newPath)}`);
+        return { success: true };
+      } catch (error) {
+        this.logger.error(`❌ Failed to rename file ${oldPath} to ${newPath}:`, error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
+    });
+
+    // Handle batch file rename
+    ipcMain.handle(
+      'fs:rename-files',
+      async (event, operations: Array<{ oldPath: string; newPath: string }>) => {
+        const results = [];
+        for (const op of operations) {
+          try {
+            await fs.promises.rename(op.oldPath, op.newPath);
+            this.logger.info(
+              `✅ File renamed: ${path.basename(op.oldPath)} → ${path.basename(op.newPath)}`
+            );
+            results.push({ success: true, oldPath: op.oldPath, newPath: op.newPath });
+          } catch (error) {
+            this.logger.error(`❌ Failed to rename ${op.oldPath}:`, error);
+            results.push({
+              success: false,
+              oldPath: op.oldPath,
+              newPath: op.newPath,
+              error: error instanceof Error ? error.message : 'Unknown error',
+            });
+          }
+        }
+        return { success: true, results };
+      }
+    );
+
+    // TEST: Add temporary test IPC for file rename validation
+    ipcMain.handle('fs:test-rename', async () => {
+      try {
+        const testSource = '/tmp/test_rename_source.txt';
+        const testTarget = '/tmp/test_rename_target.txt';
+
+        // Test if source exists
+        const sourceExists = await fs.promises
+          .access(testSource)
+          .then(() => true)
+          .catch(() => false);
+        if (!sourceExists) {
+          return { success: false, error: 'Test source file not found' };
+        }
+
+        // Perform test rename
+        await fs.promises.rename(testSource, testTarget);
+        this.logger.info(`✅ TEST: File rename IPC working - renamed test file`);
+
+        // Rename back for cleanup
+        await fs.promises.rename(testTarget, testSource);
+
+        return { success: true, message: 'File rename IPC backend working correctly' };
+      } catch (error) {
+        this.logger.error(`❌ TEST: File rename IPC failed:`, error);
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        };
+      }
     });
   }
 
