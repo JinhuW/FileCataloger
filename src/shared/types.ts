@@ -83,7 +83,7 @@ export interface ShelfItem {
   id: string;
   type: ShelfItemType;
   name: string;
-  path?: string;
+  path?: string; // Optional - browser File API doesn't always provide full path
   content?: string;
   size?: number;
   createdAt: number;
@@ -113,10 +113,12 @@ export interface PerformanceMetrics {
 // File Rename Types
 export interface RenameComponent {
   id: string;
-  type: 'date' | 'fileName' | 'counter' | 'text' | 'project';
+  type: 'date' | 'fileName' | 'counter' | 'text' | 'project' | string; // Allow plugin types
   value?: string;
   format?: string; // For date components
   placeholder?: string;
+  pluginId?: string; // For plugin components
+  config?: Record<string, any>; // Plugin-specific configuration
 }
 
 export interface RenamePattern {

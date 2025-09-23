@@ -54,6 +54,7 @@ import {
   PATTERN_COMPONENT_LABELS,
   PATTERN_COMPONENT_ICONS,
 } from '@renderer/constants/namingPatterns';
+import { useExternalPlugins } from '@renderer/hooks/useExternalPlugins';
 // import { ComponentPluginBridge } from '@shared/ComponentPluginBridge';
 
 export interface RenamePatternBuilderProps {
@@ -85,6 +86,9 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
   const [isSaving, setIsSaving] = useState(false);
 
   const toast = useToast();
+
+  // Get external plugin components
+  const { components: pluginComponents, isLoading: pluginsLoading } = useExternalPlugins();
 
   // Initialize ComponentPluginBridge for handling both legacy and plugin components
   // const componentBridge = useMemo(() => new ComponentPluginBridge(), []);
@@ -183,10 +187,18 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
       label: PATTERN_COMPONENT_LABELS.project,
       icon: PATTERN_COMPONENT_ICONS.project,
     },
+    // Add external plugin components
+    ...pluginComponents.map(plugin => ({
+      type: plugin.type,
+      label: plugin.label,
+      icon: plugin.icon,
+      pluginId: plugin.pluginId,
+      description: plugin.description,
+    })),
   ];
 
   const addComponent = useCallback(
-    (type: RenameComponent['type']) => {
+    (type: RenameComponent['type'], pluginInfo?: { pluginId: string; description?: string }) => {
       if (!activePattern || components.length >= MAX_COMPONENTS) {
         // Maximum component limit reached
         return;
@@ -197,6 +209,8 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
         type,
         value: type === 'text' ? 'New Text' : undefined,
         format: type === 'date' ? 'YYYYMMDD' : undefined,
+        pluginId: pluginInfo?.pluginId,
+        config: pluginInfo ? {} : undefined,
       };
 
       addComponentToPattern(activePattern.id, newComponent);
@@ -285,7 +299,7 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
   //   onChange(components.map(c => c.id === id ? { ...c, ...updates } : c));
   // }, [components, onChange]);
 
-  if (isLoading) {
+  if (isLoading || pluginsLoading) {
     return <PatternBuilderSkeleton />;
   }
 
@@ -436,6 +450,8 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
                         (component.value || 'Text')}
                       {component.type === PATTERN_COMPONENT_TYPES.PROJECT &&
                         (component.value || 'Project')}
+                      {component.type.startsWith('plugin:') &&
+                        (component.value || component.type.split(':')[1])}
                     </span>
                     <button
                       onClick={() => removeComponent(component.id)}
@@ -486,9 +502,17 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
           >
             {availableComponents.map(comp => (
               <button
-                key={comp.id}
-                onClick={() => addComponent(comp.type as RenameComponent['type'])}
+                key={comp.type}
+                onClick={() =>
+                  addComponent(
+                    comp.type as RenameComponent['type'],
+                    comp.pluginId
+                      ? { pluginId: comp.pluginId, description: comp.description }
+                      : undefined
+                  )
+                }
                 disabled={components.length >= MAX_COMPONENTS || activePattern?.isBuiltIn}
+                title={comp.description}
                 style={{
                   background:
                     components.length >= MAX_COMPONENTS || activePattern?.isBuiltIn

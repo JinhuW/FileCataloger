@@ -82,6 +82,12 @@ export class DragShakeDetector extends EventEmitter {
 
     try {
       this.dragMonitor = createDragMonitor();
+      this.logger.debug(`🔧 DEBUG: createDragMonitor() returned: ${this.dragMonitor ? 'instance' : 'null'}`);
+      if (this.dragMonitor) {
+        this.logger.debug(`🔧 DEBUG: dragMonitor type: ${this.dragMonitor.constructor.name}`);
+        this.logger.debug(`🔧 DEBUG: dragMonitor methods: ${Object.getOwnPropertyNames(Object.getPrototypeOf(this.dragMonitor)).join(', ')}`);
+        this.logger.debug(`🔧 DEBUG: start method type: ${typeof this.dragMonitor.start}`);
+      }
       this.logger.info('✅ Native drag monitor initialized');
     } catch (error: unknown) {
       this.logger.error('❌ FATAL: Native drag monitor could not be initialized');
@@ -239,7 +245,9 @@ export class DragShakeDetector extends EventEmitter {
 
     // Start native drag monitor
     if (this.dragMonitor) {
+      this.logger.debug('🔧 DEBUG: About to call dragMonitor.start()');
       const success = this.dragMonitor.start();
+      this.logger.debug(`🔧 DEBUG: dragMonitor.start() returned: ${success}`);
       if (success) {
         this.logger.info('✅ System ready');
         this.logger.info('📝 Instructions:');

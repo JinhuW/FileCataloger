@@ -52,7 +52,12 @@ export class ShelfManager extends EventEmitter {
    * Initialize dock position tracking
    */
   private initializeDockPositions(): void {
-    const positions: DockPosition[] = [DockPosition.TOP, DockPosition.RIGHT, DockPosition.BOTTOM, DockPosition.LEFT];
+    const positions: DockPosition[] = [
+      DockPosition.TOP,
+      DockPosition.RIGHT,
+      DockPosition.BOTTOM,
+      DockPosition.LEFT,
+    ];
     positions.forEach(pos => this.dockPositions.set(pos, []));
   }
 

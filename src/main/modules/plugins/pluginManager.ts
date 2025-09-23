@@ -1,4 +1,7 @@
 import { EventEmitter } from 'events';
+import * as path from 'path';
+import * as fs from 'fs-extra';
+import { app } from 'electron';
 import {
   NamingPlugin,
   LoadedPlugin,
@@ -7,7 +10,6 @@ import {
   PluginFileInfo,
   PluginRuntime,
   PluginError,
-  PluginExecutionError,
   PluginValidationError,
   ValidationResult,
   PluginUtils,
@@ -426,7 +428,7 @@ export class PluginManager extends EventEmitter {
             .replace(/mm/g, minute)
             .replace(/ss/g, second);
         },
-        number: (num: number, format: string) => {
+        number: (num: number, _format: string) => {
           return num.toLocaleString();
         },
         bytes: (bytes: number, precision = 2) => {
@@ -441,7 +443,7 @@ export class PluginManager extends EventEmitter {
 
           return `${size.toFixed(precision)} ${units[unitIndex]}`;
         },
-        duration: (ms: number, format?: string) => {
+        duration: (ms: number, _format?: string) => {
           const seconds = Math.floor(ms / 1000);
           const minutes = Math.floor(seconds / 60);
           const hours = Math.floor(minutes / 60);
@@ -511,18 +513,22 @@ export class PluginManager extends EventEmitter {
       // Crypto utilities
       crypto: {
         md5: (data: string | Buffer) => {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
           const crypto = require('crypto');
           return crypto.createHash('md5').update(data).digest('hex');
         },
         sha1: (data: string | Buffer) => {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
           const crypto = require('crypto');
           return crypto.createHash('sha1').update(data).digest('hex');
         },
         sha256: (data: string | Buffer) => {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
           const crypto = require('crypto');
           return crypto.createHash('sha256').update(data).digest('hex');
         },
         uuid: () => {
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
           const crypto = require('crypto');
           return crypto.randomUUID();
         },
@@ -540,30 +546,30 @@ export class PluginManager extends EventEmitter {
       // Data utilities (placeholder for future expansion)
       data: {
         parse: {
-          json: (text: string) => JSON.parse(text),
-          yaml: (text: string) => {
+          json: (_text: string) => JSON.parse(_text),
+          yaml: (_text: string) => {
             // TODO: Implement YAML parsing
             throw new Error('YAML parsing not yet implemented');
           },
-          csv: (text: string) => {
+          csv: (_text: string) => {
             // Simple CSV parsing
-            return text.split('\n').map(line => line.split(','));
+            return _text.split('\n').map(line => line.split(','));
           },
-          xml: (text: string) => {
+          xml: (_text: string) => {
             // TODO: Implement XML parsing
             throw new Error('XML parsing not yet implemented');
           },
         },
         stringify: {
-          json: (data: any, pretty = false) => JSON.stringify(data, null, pretty ? 2 : 0),
-          yaml: (data: any) => {
+          json: (_data: any, pretty = false) => JSON.stringify(_data, null, pretty ? 2 : 0),
+          yaml: (_data: any) => {
             // TODO: Implement YAML stringification
             throw new Error('YAML stringification not yet implemented');
           },
-          csv: (data: any[]) => {
-            return data.map(row => row.join(',')).join('\n');
+          csv: (_data: any[]) => {
+            return _data.map(row => row.join(',')).join('\n');
           },
-          xml: (data: any) => {
+          xml: (_data: any) => {
             // TODO: Implement XML stringification
             throw new Error('XML stringification not yet implemented');
           },
@@ -728,6 +734,200 @@ export class PluginManager extends EventEmitter {
 
     this.plugins.clear();
     this.removeAllListeners();
+  }
+
+  // ===== EXTERNAL PLUGIN SUPPORT =====
+
+  /**
+   * Load external plugin from file path
+   */
+  public async loadExternalPlugin(pluginPath: string): Promise<void> {
+    try {
+      logger.info(`Loading external plugin from: ${pluginPath}`);
+
+      // Check if path exists
+      if (!(await fs.pathExists(pluginPath))) {
+        throw new Error(`Plugin path does not exist: ${pluginPath}`);
+      }
+
+      // Clear require cache to ensure fresh load
+      delete require.cache[require.resolve(pluginPath)];
+
+      // Dynamic import of plugin module
+      const pluginModule = require(pluginPath);
+      const plugin = pluginModule.default || pluginModule;
+
+      // Validate plugin structure
+      const validation = this.validatePlugin(plugin);
+      if (!validation.valid) {
+        throw new PluginValidationError(plugin.id, validation.errors.join(', '));
+      }
+
+      // Register the plugin
+      await this.registerExternalPlugin(plugin, pluginPath);
+      logger.info(`External plugin loaded successfully: ${plugin.id}`);
+    } catch (error) {
+      logger.error(`Failed to load external plugin from ${pluginPath}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Register external plugin
+   */
+  private async registerExternalPlugin(plugin: NamingPlugin, pluginPath: string): Promise<void> {
+    try {
+      // Create loaded plugin entry
+      const loadedPlugin: LoadedPlugin = {
+        plugin,
+        path: pluginPath,
+        isActive: true,
+        isLoaded: true,
+        loadTime: Date.now(),
+        config: plugin.defaultConfig || {},
+        grantedPermissions: plugin.permissions || [],
+        errors: [],
+        usage: {
+          executions: 0,
+          lastUsed: 0,
+          totalTime: 0,
+          errorCount: 0,
+        },
+        isExternal: true, // Mark as external plugin
+      };
+
+      this.plugins.set(plugin.id, loadedPlugin);
+      this.emit('plugin-registered', plugin.id);
+
+      // Call onActivate lifecycle hook if present
+      if (plugin.lifecycle?.onActivate) {
+        try {
+          await plugin.lifecycle.onActivate();
+        } catch (error) {
+          logger.warn(`Plugin activation hook failed for ${plugin.id}:`, error);
+        }
+      }
+
+      logger.debug(`External plugin registered: ${plugin.id}`);
+    } catch (error) {
+      logger.error(`Failed to register external plugin ${plugin.id}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Scan plugins directory for external plugins
+   */
+  public async scanPluginsDirectory(): Promise<void> {
+    const pluginsDir = path.join(app.getPath('userData'), 'plugins');
+
+    try {
+      // Ensure directory exists
+      await fs.ensureDir(pluginsDir);
+
+      // Read directory contents
+      const entries = await fs.readdir(pluginsDir, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (entry.isDirectory()) {
+          const pluginPath = path.join(pluginsDir, entry.name);
+
+          // Look for package.json to find entry point
+          const packageJsonPath = path.join(pluginPath, 'package.json');
+
+          if (await fs.pathExists(packageJsonPath)) {
+            try {
+              const packageJson = await fs.readJson(packageJsonPath);
+
+              // Check if it's a FileCataloger plugin
+              if (packageJson.keywords?.includes('filecataloger-plugin')) {
+                const mainFile = path.join(pluginPath, packageJson.main || 'index.js');
+
+                if (await fs.pathExists(mainFile)) {
+                  await this.loadExternalPlugin(mainFile);
+                } else {
+                  logger.warn(`Plugin main file not found: ${mainFile}`);
+                }
+              }
+            } catch (error) {
+              logger.error(`Failed to load plugin from ${pluginPath}:`, error);
+            }
+          }
+        }
+      }
+
+      logger.info(
+        `Plugin directory scan complete. Loaded ${this.getExternalPlugins().length} external plugins`
+      );
+    } catch (error) {
+      logger.error('Failed to scan plugins directory:', error);
+    }
+  }
+
+  /**
+   * Get all external plugins
+   */
+  public getExternalPlugins(): LoadedPlugin[] {
+    return Array.from(this.plugins.values()).filter(p => p.isExternal);
+  }
+
+  /**
+   * Remove external plugin
+   */
+  public async removeExternalPlugin(pluginId: string): Promise<void> {
+    const loadedPlugin = this.plugins.get(pluginId);
+
+    if (!loadedPlugin) {
+      throw new PluginError(pluginId, 'NOT_FOUND', 'Plugin not found');
+    }
+
+    if (!loadedPlugin.isExternal) {
+      throw new PluginError(pluginId, 'NOT_EXTERNAL', 'Cannot remove built-in plugin');
+    }
+
+    // Call lifecycle hooks
+    if (loadedPlugin.plugin.component.cleanup) {
+      await loadedPlugin.plugin.component.cleanup(loadedPlugin.config);
+    }
+
+    if (loadedPlugin.plugin.lifecycle?.onDeactivate) {
+      await loadedPlugin.plugin.lifecycle.onDeactivate();
+    }
+
+    if (loadedPlugin.plugin.lifecycle?.onUninstall) {
+      await loadedPlugin.plugin.lifecycle.onUninstall();
+    }
+
+    // Remove from registry
+    this.plugins.delete(pluginId);
+    this.emit('plugin-removed', pluginId);
+
+    logger.info(`External plugin removed: ${pluginId}`);
+  }
+
+  /**
+   * Reload external plugin
+   */
+  public async reloadExternalPlugin(pluginId: string): Promise<void> {
+    const loadedPlugin = this.plugins.get(pluginId);
+
+    if (!loadedPlugin) {
+      throw new PluginError(pluginId, 'NOT_FOUND', 'Plugin not found');
+    }
+
+    if (!loadedPlugin.isExternal || !loadedPlugin.path) {
+      throw new PluginError(pluginId, 'NOT_EXTERNAL', 'Cannot reload built-in plugin');
+    }
+
+    const pluginPath = loadedPlugin.path;
+
+    // Remove the plugin
+    await this.removeExternalPlugin(pluginId);
+
+    // Load it again
+    await this.loadExternalPlugin(pluginPath);
+
+    logger.info(`External plugin reloaded: ${pluginId}`);
   }
 }
 

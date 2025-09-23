@@ -9,7 +9,8 @@ const projectRoot = path.resolve(__dirname, '../..');
 module.exports = merge(common, {
   entry: {
     shelf: path.resolve(projectRoot, 'src/renderer/pages/shelf/shelf.tsx'),
-    preferences: path.resolve(projectRoot, 'src/renderer/pages/preferences/preferences.ts')
+    preferences: path.resolve(projectRoot, 'src/renderer/pages/preferences/preferences.ts'),
+    plugins: path.resolve(projectRoot, 'src/renderer/pages/plugins/plugins.tsx')
   },
 
   output: {
@@ -80,6 +81,12 @@ module.exports = merge(common, {
       template: path.resolve(projectRoot, 'src/renderer/pages/preferences/preferences.html'),
       filename: 'preferences.html',
       chunks: ['preferences']
+    }),
+
+    new HtmlWebpackPlugin({
+      template: path.resolve(projectRoot, 'src/renderer/pages/plugins/plugins.html'),
+      filename: 'plugins.html',
+      chunks: ['plugins']
     })
   ]
 });

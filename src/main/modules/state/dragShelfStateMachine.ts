@@ -193,6 +193,64 @@ export class DragShelfStateMachine extends EventEmitter {
         ctx.autoHideScheduled = false;
       },
     },
+    {
+      from: DragShelfState.CLEANUP_IN_PROGRESS,
+      event: DragShelfEvent.START_DRAG,
+      to: DragShelfState.DRAG_STARTED,
+      action: ctx => {
+        ctx.isDragging = true;
+        // Don't reset other context - let cleanup complete naturally
+      },
+    },
+    {
+      from: DragShelfState.CLEANUP_IN_PROGRESS,
+      event: DragShelfEvent.END_DRAG,
+      to: DragShelfState.CLEANUP_IN_PROGRESS,
+      action: ctx => {
+        ctx.isDragging = false;
+      },
+    },
+    {
+      from: DragShelfState.SHELF_ACTIVE,
+      event: DragShelfEvent.START_DRAG,
+      to: DragShelfState.DRAG_STARTED,
+      action: ctx => {
+        ctx.isDragging = true;
+        // Keep activeShelfId to allow multiple shelves
+      },
+    },
+    {
+      from: DragShelfState.SHELF_AUTO_HIDE_SCHEDULED,
+      event: DragShelfEvent.SHAKE_DETECTED,
+      to: DragShelfState.SHELF_CREATING,
+      guard: ctx => ctx.isDragging,
+    },
+    {
+      from: DragShelfState.SHELF_ACTIVE,
+      event: DragShelfEvent.SHAKE_DETECTED,
+      to: DragShelfState.SHELF_CREATING,
+      guard: ctx => ctx.isDragging,
+    },
+    {
+      from: DragShelfState.SHELF_CREATING,
+      event: DragShelfEvent.END_DRAG,
+      to: DragShelfState.SHELF_AUTO_HIDE_SCHEDULED,
+      action: ctx => {
+        ctx.isDragging = false;
+      },
+    },
+    {
+      from: DragShelfState.SHELF_AUTO_HIDE_SCHEDULED,
+      event: DragShelfEvent.CLEANUP_COMPLETE,
+      to: DragShelfState.IDLE,
+      action: ctx => {
+        ctx.isDragging = false;
+        ctx.activeShelfId = null;
+        ctx.hasItems = false;
+        ctx.dropInProgress = false;
+        ctx.autoHideScheduled = false;
+      },
+    },
   ];
 
   private eventData: Record<string, unknown> = {};
@@ -333,10 +391,15 @@ export class DragShelfStateMachine extends EventEmitter {
   }
 
   public canCreateShelf(): boolean {
-    const canCreate =
-      this.currentState === DragShelfState.DRAG_STARTED && !this.context.activeShelfId;
+    // Allow shelf creation when dragging, regardless of existing shelves
+    // This supports multiple concurrent shelves (up to 5 total)
+    const canCreate = this.context.isDragging && (
+      this.currentState === DragShelfState.DRAG_STARTED ||
+      this.currentState === DragShelfState.SHELF_ACTIVE ||
+      this.currentState === DragShelfState.SHELF_AUTO_HIDE_SCHEDULED
+    );
     this.logger.debug(
-      `🔍 canCreateShelf(): ${canCreate} (state: ${this.currentState}, activeShelfId: ${this.context.activeShelfId})`
+      `🔍 canCreateShelf(): ${canCreate} (state: ${this.currentState}, isDragging: ${this.context.isDragging}, activeShelfId: ${this.context.activeShelfId})`
     );
     return canCreate;
   }

@@ -38,6 +38,8 @@ import { RenamePatternBuilder } from '../RenamePatternBuilder';
 import { FileRenamePreviewList } from '../FileRenamePreviewList';
 import { WarningDialog } from '@renderer/components/primitives';
 import { validateFileRenames, formatValidationWarning } from '@renderer/utils/fileValidation';
+import { useExternalPlugins } from '@renderer/hooks/useExternalPlugins';
+import { logger } from '@shared/logger';
 
 export interface FileRenameShelfProps {
   config: ShelfConfig;
@@ -61,6 +63,9 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
       message: string;
       details: React.ReactNode;
     } | null>(null);
+
+    // Get external plugin executor
+    const { executePlugin } = useExternalPlugins();
 
     // Generate preview names based on current pattern
     const filePreview = useMemo((): FileRenamePreview[] => {
@@ -92,6 +97,14 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
               break;
             case 'project':
               newName += component.value || 'Project';
+              break;
+            default:
+              // Handle plugin components
+              if (component.type.startsWith('plugin:') && component.pluginId) {
+                // For now, use a placeholder - actual plugin execution would be async
+                // and should be handled differently in production
+                newName += component.value || `[${component.pluginId}]`;
+              }
               break;
           }
         });
@@ -133,13 +146,120 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
     );
 
     // Perform the actual rename operation
-    const performRename = useCallback(() => {
-      // TODO: Implement actual file renaming logic
+    const performRename = useCallback(async () => {
+      try {
+        // Process each file
+        for (let i = 0; i < selectedFiles.length; i++) {
+          const file = selectedFiles[i];
+          const preview = filePreview[i];
+          if (preview) {
+            let finalName = '';
 
-      // For now, just clear the files after rename
-      selectedFiles.forEach(file => onItemRemove(file.id));
-      setSelectedFiles([]);
-    }, [selectedFiles, onItemRemove]);
+            // Process each component
+            for (let j = 0; j < renameComponents.length; j++) {
+              const component = renameComponents[j];
+              if (j > 0) finalName += '_';
+
+              if (component.type.startsWith('plugin:') && component.pluginId) {
+                // Execute plugin component
+                try {
+                  const extension = file.name.match(/\.[^/.]+$/)?.[0] || '';
+                  const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+
+                  const result = await executePlugin(
+                    component.pluginId,
+                    nameWithoutExt,
+                    extension,
+                    i,
+                    component.config
+                  );
+                  finalName += result;
+                } catch (error) {
+                  logger.error(`Plugin execution failed for ${component.pluginId}:`, error);
+                  finalName += `[${component.pluginId}-error]`;
+                }
+              } else {
+                // Handle built-in components (same as preview logic)
+                switch (component.type) {
+                  case 'date': {
+                    const now = new Date();
+                    const year = now.getFullYear();
+                    const month = String(now.getMonth() + 1).padStart(2, '0');
+                    const day = String(now.getDate()).padStart(2, '0');
+                    finalName += `${year}${month}${day}`;
+                    break;
+                  }
+                  case 'fileName': {
+                    const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+                    finalName += component.value || nameWithoutExt;
+                    break;
+                  }
+                  case 'text':
+                    finalName += component.value || '';
+                    break;
+                  case 'counter':
+                    finalName += String(i + 1).padStart(3, '0');
+                    break;
+                  case 'project':
+                    finalName += component.value || 'Project';
+                    break;
+                }
+              }
+            }
+
+            // Add extension
+            if (file.type !== 'folder') {
+              const ext = file.name.match(/\.[^/.]+$/)?.[0];
+              if (ext) finalName += ext;
+            }
+
+            // Actually rename the file using Electron APIs
+            logger.debug(`🔧 DEBUG: File object structure:`, {
+              id: file.id,
+              name: file.name,
+              path: file.path,
+              type: file.type,
+              keys: Object.keys(file)
+            });
+
+            // Validate that the file has a valid path
+            if (!file.path || !file.path.includes('/')) {
+              logger.error(`❌ Cannot rename ${file.name}: No valid file path available`);
+              logger.info('💡 Tip: Drag files from Finder to ensure full paths are captured');
+              continue; // Skip this file
+            }
+
+            const oldPath = file.path;
+            const directory = oldPath.substring(0, oldPath.lastIndexOf('/'));
+            const newPath = directory + '/' + finalName;
+
+            try {
+              const result = await window.api.invoke('fs:rename-file', oldPath, newPath);
+              if (result.success) {
+                logger.info(`✅ File renamed: ${file.name} → ${finalName}`);
+                // Update the file item with new name and path
+                onItemRemove(file.id);
+                onItemAdd({
+                  ...file,
+                  name: finalName,
+                  path: newPath
+                });
+              } else {
+                logger.error(`❌ Failed to rename ${file.name}:`, result.error);
+              }
+            } catch (error) {
+              logger.error(`❌ Rename failed for ${file.name}:`, error);
+            }
+          }
+        }
+
+        // Clear files after rename
+        selectedFiles.forEach(file => onItemRemove(file.id));
+        setSelectedFiles([]);
+      } catch (error) {
+        logger.error('Rename operation failed:', error);
+      }
+    }, [selectedFiles, filePreview, renameComponents, executePlugin, onItemRemove, onItemAdd]);
 
     // Handle rename action
     const handleRename = useCallback(() => {

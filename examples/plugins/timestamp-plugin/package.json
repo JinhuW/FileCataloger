@@ -1,0 +1,23 @@
+{
+  "name": "@filecataloger/plugin-timestamp",
+  "version": "1.0.0",
+  "description": "Adds customizable timestamp components to FileCataloger rename patterns",
+  "main": "index.js",
+  "keywords": [
+    "filecataloger",
+    "plugin",
+    "rename",
+    "timestamp",
+    "date",
+    "time"
+  ],
+  "filecataloger": {
+    "version": "^1.0.0",
+    "type": "naming"
+  },
+  "author": "FileCataloger Team",
+  "license": "MIT",
+  "peerDependencies": {
+    "@filecataloger/plugin-sdk": "^1.0.0"
+  }
+}

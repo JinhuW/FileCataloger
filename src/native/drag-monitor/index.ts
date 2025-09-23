@@ -187,16 +187,25 @@ export class MacDragMonitor extends EventEmitter {
   }
 
   public start(): boolean {
+    logger.debug('🔧 DEBUG: MacDragMonitor.start() called');
     if (this.monitoring) {
+      logger.debug('🔧 DEBUG: Already monitoring, returning false');
       return false;
     }
 
-    if (!this.nativeMonitor) {
-      return false;
-    }
-
+    // Always start monitoring and polling, even if native monitor is not available
+    // This ensures we can at least attempt to detect drags
     try {
-      const result = this.nativeMonitor.start();
+      let result = false;
+      if (this.nativeMonitor) {
+        logger.debug('🔧 DEBUG: Calling nativeMonitor.start()');
+        result = this.nativeMonitor.start();
+        logger.debug(`🔧 DEBUG: nativeMonitor.start() returned: ${result}`);
+      } else {
+        logger.debug('🔧 DEBUG: No native monitor available, but starting polling anyway');
+        result = true; // Continue without native monitor
+      }
+
       if (result) {
         this.monitoring = true;
         this.startPolling();

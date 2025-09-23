@@ -29,6 +29,7 @@ export interface FileValidationResult {
   filenameTooLong: boolean;
   pathLength: number;
   filenameLength: number;
+  missingPath?: boolean;
 }
 
 /**
@@ -39,6 +40,7 @@ export interface ValidationSummary {
   totalFiles: number;
   pathIssues: FileValidationResult[];
   filenameIssues: FileValidationResult[];
+  missingPathIssues: FileValidationResult[];
   allResults: FileValidationResult[];
 }
 
@@ -57,10 +59,14 @@ export function validateFileRenames(
   const results: FileValidationResult[] = [];
   const pathIssues: FileValidationResult[] = [];
   const filenameIssues: FileValidationResult[] = [];
+  const missingPathIssues: FileValidationResult[] = [];
 
   for (const file of files) {
     const newName = newNames.get(file.id);
     if (!newName) continue;
+
+    // Check if the file has a valid path
+    const missingPath = !file.path || !file.path.includes('/');
 
     // Construct the full new path
     const newPath = `${destinationPath}/${newName}`;
@@ -73,17 +79,21 @@ export function validateFileRenames(
 
     const result: FileValidationResult = {
       file,
-      originalPath: file.path,
+      originalPath: file.path || '',
       newPath,
       newFilename: newName,
       pathTooLong,
       filenameTooLong,
       pathLength,
       filenameLength,
+      missingPath,
     };
 
     results.push(result);
 
+    if (missingPath) {
+      missingPathIssues.push(result);
+    }
     if (pathTooLong) {
       pathIssues.push(result);
     }
@@ -93,10 +103,11 @@ export function validateFileRenames(
   }
 
   return {
-    isValid: pathIssues.length === 0 && filenameIssues.length === 0,
+    isValid: pathIssues.length === 0 && filenameIssues.length === 0 && missingPathIssues.length === 0,
     totalFiles: files.length,
     pathIssues,
     filenameIssues,
+    missingPathIssues,
     allResults: results,
   };
 }
@@ -112,6 +123,12 @@ export function formatValidationWarning(summary: ValidationSummary): {
 } {
   const issues: string[] = [];
 
+  if (summary.missingPathIssues.length > 0) {
+    issues.push(
+      `${summary.missingPathIssues.length} file${summary.missingPathIssues.length > 1 ? 's have' : ' has'} no valid path information`
+    );
+  }
+
   if (summary.pathIssues.length > 0) {
     issues.push(
       `${summary.pathIssues.length} file${summary.pathIssues.length > 1 ? 's' : ''} exceed the maximum path length of ${MAX_PATH_LENGTH} characters`
@@ -124,11 +141,48 @@ export function formatValidationWarning(summary: ValidationSummary): {
     );
   }
 
-  const message =
-    issues.join(' and ') + '. These files may not be renamed successfully on some file systems.';
+  const message = summary.missingPathIssues.length > 0
+    ? issues.join(' and ') + '. Files without paths cannot be renamed.'
+    : issues.join(' and ') + '. These files may not be renamed successfully on some file systems.';
 
   const details = (
     <div>
+      {summary.missingPathIssues.length > 0 && (
+        <div style={{ marginBottom: (summary.pathIssues.length > 0 || summary.filenameIssues.length > 0) ? '16px' : 0 }}>
+          <h4
+            style={{
+              margin: '0 0 8px',
+              fontSize: '12px',
+              color: 'rgba(239, 68, 68, 0.9)',
+              textTransform: 'uppercase',
+            }}
+          >
+            Missing Path Information ({summary.missingPathIssues.length} file
+            {summary.missingPathIssues.length > 1 ? 's' : ''})
+          </h4>
+          <ul style={{ margin: 0, paddingLeft: '20px', fontSize: '12px' }}>
+            {summary.missingPathIssues.slice(0, 5).map((issue, index) => (
+              <li
+                key={index}
+                style={{ marginBottom: '8px', wordBreak: 'break-all', lineHeight: 1.4 }}
+              >
+                <div style={{ color: 'rgba(255, 255, 255, 0.6)' }}>{issue.file.name}</div>
+                <div
+                  style={{ color: 'rgba(255, 255, 255, 0.4)', fontSize: '11px', marginTop: '2px' }}
+                >
+                  Drag files from Finder to ensure full paths are captured
+                </div>
+              </li>
+            ))}
+            {summary.missingPathIssues.length > 5 && (
+              <li style={{ color: 'rgba(255, 255, 255, 0.4)', fontStyle: 'italic' }}>
+                ...and {summary.missingPathIssues.length - 5} more
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+
       {summary.pathIssues.length > 0 && (
         <div style={{ marginBottom: summary.filenameIssues.length > 0 ? '16px' : 0 }}>
           <h4

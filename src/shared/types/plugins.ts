@@ -333,6 +333,7 @@ export interface LoadedPlugin {
     totalTime: number;
     errorCount: number;
   };
+  isExternal?: boolean; // True for npm-installed plugins, false/undefined for built-in
 }
 
 // Plugin Execution

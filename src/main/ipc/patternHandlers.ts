@@ -133,6 +133,32 @@ export function registerPatternHandlers(): void {
     }, 'pattern:get-stats');
   });
 
+  // Get all plugins (built-in and external)
+  ipcMain.handle('pattern:get-plugins', async (): Promise<IPCResponse<any[]>> => {
+    return handleAsyncIPC(async () => {
+      const { pluginManager } = await import('../modules/plugins/pluginManager');
+      const plugins = pluginManager.getPlugins();
+
+      // Serialize plugins for IPC transfer (remove functions)
+      return plugins.map(loadedPlugin => ({
+        plugin: {
+          id: loadedPlugin.plugin.id,
+          name: loadedPlugin.plugin.name,
+          version: loadedPlugin.plugin.version,
+          icon: loadedPlugin.plugin.icon,
+          description: loadedPlugin.plugin.description,
+          type: loadedPlugin.plugin.type,
+          category: loadedPlugin.plugin.category,
+          permissions: loadedPlugin.plugin.permissions
+        },
+        path: loadedPlugin.path,
+        isActive: loadedPlugin.isActive,
+        isLoaded: loadedPlugin.isLoaded,
+        isExternal: loadedPlugin.isExternal || false
+      }));
+    }, 'pattern:get-plugins');
+  });
+
   // Batch operations
   ipcMain.handle(
     'pattern:save-multiple',
@@ -354,6 +380,7 @@ export function unregisterPatternHandlers(): void {
     'pattern:get-favorites',
     'pattern:increment-usage',
     'pattern:get-stats',
+    'pattern:get-plugins',
     'pattern:save-multiple',
     'pattern:delete-multiple',
     'pattern:export',
