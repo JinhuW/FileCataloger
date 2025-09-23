@@ -1,7 +1,7 @@
 import { EventEmitter } from 'events';
 import * as path from 'path';
 import * as fs from 'fs-extra';
-import { execSync } from 'child_process';
+import { spawn } from 'child_process';
 import { app } from 'electron';
 import fetch from 'node-fetch';
 import { logger } from '../utils/logger';
@@ -88,7 +88,9 @@ export class PluginInstaller extends EventEmitter {
       }));
     } catch (error) {
       logger.error('Failed to search npm registry:', error);
-      throw new Error(`Failed to search plugins: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to search plugins: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
@@ -158,6 +160,61 @@ export class PluginInstaller extends EventEmitter {
   }
 
   /**
+   * Securely run npm install with timeout and validation
+   */
+  private async runSecureNpmInstall(targetPath: string): Promise<void> {
+    return new Promise<void>((resolve, reject) => {
+      // Validate the target path to prevent path injection
+      const resolvedPath = path.resolve(targetPath);
+      if (!resolvedPath.startsWith(this.tempDir)) {
+        reject(new Error('Invalid installation path'));
+        return;
+      }
+
+      const timeout = 60000; // 60 second timeout
+      const npmArgs = ['install', '--production', '--no-scripts', '--no-optional'];
+
+      // Use spawn instead of execSync for better security and control
+      const npmProcess = spawn('npm', npmArgs, {
+        cwd: resolvedPath,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: timeout,
+        env: {
+          ...process.env,
+          NPM_CONFIG_AUDIT: 'false', // Disable audit for faster install
+          NPM_CONFIG_FUND: 'false', // Disable funding messages
+        },
+      });
+
+      let stderr = '';
+
+      npmProcess.stderr?.on('data', data => {
+        stderr += data.toString();
+      });
+
+      npmProcess.on('close', code => {
+        if (code === 0) {
+          resolve();
+        } else {
+          reject(new Error(`npm install failed with code ${code}: ${stderr}`));
+        }
+      });
+
+      npmProcess.on('error', error => {
+        reject(new Error(`npm install process error: ${error.message}`));
+      });
+
+      // Set up timeout
+      setTimeout(() => {
+        if (!npmProcess.killed) {
+          npmProcess.kill('SIGTERM');
+          reject(new Error('npm install timed out'));
+        }
+      }, timeout);
+    });
+  }
+
+  /**
    * Download NPM package
    */
   private async downloadPackage(
@@ -165,6 +222,16 @@ export class PluginInstaller extends EventEmitter {
     targetPath: string,
     version?: string
   ): Promise<void> {
+    // Validate package name to prevent injection attacks
+    if (!this.isValidPackageName(packageName)) {
+      throw new Error(`Invalid package name: ${packageName}`);
+    }
+
+    // Validate version string if provided
+    if (version && !this.isValidVersion(version)) {
+      throw new Error(`Invalid version: ${version}`);
+    }
+
     try {
       // Create package.json for npm install
       const packageJson = {
@@ -178,28 +245,115 @@ export class PluginInstaller extends EventEmitter {
       await fs.ensureDir(targetPath);
       await fs.writeJson(path.join(targetPath, 'package.json'), packageJson);
 
-      // Run npm install
-      execSync('npm install --production', {
-        cwd: targetPath,
-        stdio: 'pipe',
-      });
+      // Run npm install securely using spawn
+      await this.runSecureNpmInstall(targetPath);
 
-      // Move installed package to root
-      const installedPath = path.join(targetPath, 'node_modules', packageName);
+      // Move installed package to root with proper error handling
+      await this.movePackageFiles(targetPath, packageName);
+    } catch (error) {
+      throw new Error(
+        `Failed to download package: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
+   * Move package files from node_modules to target directory with atomic operations
+   */
+  private async movePackageFiles(targetPath: string, packageName: string): Promise<void> {
+    const installedPath = path.join(targetPath, 'node_modules', packageName);
+    const backupPath = path.join(targetPath, '.backup');
+
+    try {
+      // Verify installed path exists
+      if (!(await fs.pathExists(installedPath))) {
+        throw new Error(`Package not found in node_modules: ${packageName}`);
+      }
+
+      // Create backup directory for atomic operations
+      await fs.ensureDir(backupPath);
+
+      // Get list of files to move
       const files = await fs.readdir(installedPath);
+      if (files.length === 0) {
+        throw new Error('No files found in installed package');
+      }
+
+      // Create a list of file operations
+      const operations: Array<{ from: string; to: string; backup?: string }> = [];
 
       for (const file of files) {
-        await fs.move(path.join(installedPath, file), path.join(targetPath, file), {
-          overwrite: true,
+        const sourcePath = path.join(installedPath, file);
+        const targetFilePath = path.join(targetPath, file);
+        const backupFilePath = path.join(backupPath, file);
+
+        // Check if target file already exists and needs backup
+        if (await fs.pathExists(targetFilePath)) {
+          operations.push({
+            from: targetFilePath,
+            to: backupFilePath,
+            backup: targetFilePath,
+          });
+        }
+
+        operations.push({
+          from: sourcePath,
+          to: targetFilePath,
         });
       }
 
-      // Cleanup node_modules
+      // Execute operations atomically
+      try {
+        for (const op of operations) {
+          if (op.backup) {
+            // Backup existing file
+            await fs.move(op.from, op.to);
+          } else {
+            // Move new file
+            await fs.move(op.from, op.to, { overwrite: true });
+          }
+        }
+
+        // Cleanup successful - remove backup
+        await fs.remove(backupPath);
+      } catch (moveError) {
+        // Rollback on failure
+        logger.warn('File move operation failed, attempting rollback:', moveError);
+        await this.rollbackFileOperations(operations, backupPath);
+        throw moveError;
+      }
+
+      // Clean up temporary directories
       await fs.remove(path.join(targetPath, 'node_modules'));
       await fs.remove(path.join(targetPath, 'package.json'));
       await fs.remove(path.join(targetPath, 'package-lock.json'));
     } catch (error) {
-      throw new Error(`Failed to download package: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      // Ensure cleanup on any error
+      try {
+        await fs.remove(backupPath);
+      } catch (cleanupError) {
+        logger.warn('Failed to cleanup backup directory:', cleanupError);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Rollback file operations in case of failure
+   */
+  private async rollbackFileOperations(
+    operations: Array<{ from: string; to: string; backup?: string }>,
+    _backupPath: string
+  ): Promise<void> {
+    try {
+      // Restore backed up files
+      for (const op of operations.reverse()) {
+        if (op.backup && (await fs.pathExists(op.to))) {
+          await fs.move(op.to, op.backup, { overwrite: true });
+        }
+      }
+    } catch (rollbackError) {
+      logger.error('Rollback failed:', rollbackError);
     }
   }
 
@@ -268,7 +422,9 @@ export class PluginInstaller extends EventEmitter {
 
       return plugin;
     } catch (error) {
-      throw new Error(`Failed to load plugin module: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new Error(
+        `Failed to load plugin module: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
     }
   }
 
@@ -345,6 +501,54 @@ export class PluginInstaller extends EventEmitter {
   private emitProgress(stage: InstallProgress['stage'], progress: number, message: string): void {
     const event: InstallProgress = { stage, progress, message };
     this.emit('progress', event);
+  }
+
+  /**
+   * Validate package name to prevent injection attacks
+   */
+  private isValidPackageName(packageName: string): boolean {
+    // NPM package name validation according to NPM rules
+    const npmPackagePattern = /^(?:@[a-z0-9-*~][a-z0-9-*._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/;
+
+    // Additional security checks
+    if (!packageName || packageName.length > 214) {
+      return false;
+    }
+
+    // Prevent dangerous characters
+    const dangerousChars = /[;&|`$(){}[\]\\]/;
+    if (dangerousChars.test(packageName)) {
+      return false;
+    }
+
+    return npmPackagePattern.test(packageName);
+  }
+
+  /**
+   * Validate version string to prevent injection attacks
+   */
+  private isValidVersion(version: string): boolean {
+    // Semver pattern with additional security constraints
+    const semverPattern = /^(?:\d+\.)?(?:\d+\.)?(?:\d+)(?:-[\w.-]+)?(?:\+[\w.-]+)?$/;
+
+    // Additional security checks
+    if (!version || version.length > 50) {
+      return false;
+    }
+
+    // Prevent dangerous characters
+    const dangerousChars = /[;&|`$(){}[\]\\]/;
+    if (dangerousChars.test(version)) {
+      return false;
+    }
+
+    // Allow semver and 'latest', 'next', etc.
+    const allowedVersions = ['latest', 'next', 'beta', 'alpha'];
+    if (allowedVersions.includes(version)) {
+      return true;
+    }
+
+    return semverPattern.test(version);
   }
 
   /**

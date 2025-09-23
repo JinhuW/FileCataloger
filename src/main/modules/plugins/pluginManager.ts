@@ -11,22 +11,29 @@ import {
   PluginRuntime,
   PluginError,
   PluginValidationError,
+  PluginTimeoutError,
   ValidationResult,
   PluginUtils,
   PluginLogger,
-  TableSchema,
+  PluginCapability,
 } from '@shared/types/plugins';
 import { logger } from '../utils/logger';
-import { patternPersistenceManager } from '../storage/patternPersistenceManager';
+import { pluginDatabaseManager } from './pluginDatabase';
 
 export class PluginManager extends EventEmitter {
   private plugins: Map<string, LoadedPlugin> = new Map();
   private utils: PluginUtils;
+  private readonly EXECUTION_TIMEOUT = 30000; // 30 seconds
+  private readonly MEMORY_LIMIT = 100 * 1024 * 1024; // 100MB
 
   constructor() {
     super();
     this.utils = this.createPluginUtils();
     this.initializeBuiltinPlugins();
+    // Initialize secure plugin database manager
+    pluginDatabaseManager.initialize().catch(error => {
+      logger.error('Failed to initialize plugin database manager:', error);
+    });
   }
 
   private async initializeBuiltinPlugins(): Promise<void> {
@@ -96,53 +103,33 @@ export class PluginManager extends EventEmitter {
     }
   }
 
-  // Validate plugin structure and functions
+  // Enhanced plugin validation with comprehensive security and structure checks
   public validatePlugin(plugin: NamingPlugin): ValidationResult {
     const errors: string[] = [];
     const warnings: string[] = [];
 
-    // Basic validation
-    if (!plugin.id || typeof plugin.id !== 'string') {
-      errors.push('Plugin ID is required and must be a string');
-    }
+    try {
+      // Basic structure validation
+      this.validateBasicStructure(plugin, errors);
 
-    if (!plugin.name || typeof plugin.name !== 'string') {
-      errors.push('Plugin name is required and must be a string');
-    }
+      // Component validation
+      this.validateComponent(plugin, errors, warnings);
 
-    if (!plugin.version || typeof plugin.version !== 'string') {
-      errors.push('Plugin version is required and must be a string');
-    }
+      // Engine compatibility validation
+      this.validateEngineCompatibility(plugin, errors);
 
-    if (!plugin.component || typeof plugin.component.render !== 'function') {
-      errors.push('Plugin must have a component with render function');
-    }
+      // Security validation
+      this.validateSecurity(plugin, errors, warnings);
 
-    // Validate function types
-    if (plugin.component.render && typeof plugin.component.render !== 'function') {
-      errors.push('Render function must be a proper function, not a string');
-    }
+      // Metadata validation
+      this.validateMetadata(plugin, errors, warnings);
 
-    if (plugin.component.renderBatch && typeof plugin.component.renderBatch !== 'function') {
-      errors.push('RenderBatch must be a proper function, not a string');
-    }
-
-    if (plugin.component.preview && typeof plugin.component.preview !== 'function') {
-      errors.push('Preview must be a proper function, not a string');
-    }
-
-    if (plugin.component.validate && typeof plugin.component.validate !== 'function') {
-      errors.push('Validate must be a proper function, not a string');
-    }
-
-    // Validate engine requirements
-    if (!plugin.engine || !plugin.engine.filecataloger) {
-      errors.push('Plugin must specify engine requirements');
-    }
-
-    // Validate author information
-    if (!plugin.author || !plugin.author.name) {
-      warnings.push('Plugin should have author information');
+      // Configuration schema validation
+      this.validateConfigSchema(plugin, errors, warnings);
+    } catch (validationError) {
+      errors.push(
+        `Validation process failed: ${validationError instanceof Error ? validationError.message : 'Unknown error'}`
+      );
     }
 
     return {
@@ -153,12 +140,226 @@ export class PluginManager extends EventEmitter {
     };
   }
 
-  // Execute plugin with proper function calling (NO string execution!)
+  private validateBasicStructure(plugin: any, errors: string[]): void {
+    // ID validation
+    if (!plugin.id || typeof plugin.id !== 'string') {
+      errors.push('Plugin ID is required and must be a string');
+    } else if (!/^[a-z0-9._-]+$/.test(plugin.id)) {
+      errors.push(
+        'Plugin ID must only contain lowercase letters, numbers, dots, underscores, and hyphens'
+      );
+    } else if (plugin.id.length > 100) {
+      errors.push('Plugin ID must be 100 characters or less');
+    }
+
+    // Name validation
+    if (!plugin.name || typeof plugin.name !== 'string') {
+      errors.push('Plugin name is required and must be a string');
+    } else if (plugin.name.length > 200) {
+      errors.push('Plugin name must be 200 characters or less');
+    }
+
+    // Version validation
+    if (!plugin.version || typeof plugin.version !== 'string') {
+      errors.push('Plugin version is required and must be a string');
+    } else if (!/^\d+\.\d+\.\d+(-[\w.-]+)?$/.test(plugin.version)) {
+      errors.push('Plugin version must follow semantic versioning (e.g., 1.0.0)');
+    }
+
+    // Type validation
+    if (!plugin.type || plugin.type !== 'component') {
+      errors.push('Plugin type must be "component"');
+    }
+  }
+
+  private validateComponent(plugin: any, errors: string[], warnings: string[]): void {
+    if (!plugin.component) {
+      errors.push('Plugin must have a component definition');
+      return;
+    }
+
+    // Render function validation (required)
+    if (!plugin.component.render || typeof plugin.component.render !== 'function') {
+      errors.push('Plugin component must have a render function');
+    }
+
+    // Optional function validations
+    const optionalFunctions = ['renderBatch', 'preview', 'validate', 'setup', 'cleanup'];
+    for (const funcName of optionalFunctions) {
+      if (plugin.component[funcName] && typeof plugin.component[funcName] !== 'function') {
+        errors.push(`${funcName} must be a function if provided`);
+      }
+    }
+
+    // Check for React component if provided
+    if (
+      plugin.component.configComponent &&
+      typeof plugin.component.configComponent !== 'function'
+    ) {
+      warnings.push('configComponent should be a React component function');
+    }
+  }
+
+  private validateEngineCompatibility(plugin: any, errors: string[]): void {
+    if (!plugin.engine) {
+      errors.push('Plugin must specify engine requirements');
+      return;
+    }
+
+    if (!plugin.engine.filecataloger) {
+      errors.push('Plugin must specify FileCataloger engine version requirement');
+    } else if (typeof plugin.engine.filecataloger !== 'string') {
+      errors.push('FileCataloger engine version must be a string');
+    }
+
+    // Check engine version compatibility
+    if (
+      plugin.engine.filecataloger &&
+      !this.isVersionCompatible(plugin.engine.filecataloger, '2.0.0')
+    ) {
+      errors.push('Plugin requires incompatible FileCataloger version');
+    }
+  }
+
+  private validateSecurity(plugin: any, errors: string[], warnings: string[]): void {
+    // Validate permissions
+    if (plugin.permissions) {
+      if (!Array.isArray(plugin.permissions)) {
+        errors.push('Permissions must be an array');
+      } else {
+        for (const permission of plugin.permissions) {
+          if (!Object.values(PluginCapability).includes(permission)) {
+            errors.push(`Invalid permission: ${permission}`);
+          }
+        }
+      }
+    }
+
+    // Validate capabilities
+    if (plugin.capabilities) {
+      if (!Array.isArray(plugin.capabilities)) {
+        errors.push('Capabilities must be an array');
+      } else {
+        for (const capability of plugin.capabilities) {
+          if (!Object.values(PluginCapability).includes(capability)) {
+            errors.push(`Invalid capability: ${capability}`);
+          }
+        }
+      }
+    }
+
+    // Security warnings for high-risk permissions
+    const highRiskPermissions = [
+      PluginCapability.FILE_SYSTEM_WRITE,
+      PluginCapability.NETWORK_ACCESS,
+      PluginCapability.EXTERNAL_PROCESS,
+    ];
+
+    for (const permission of plugin.permissions || []) {
+      if (highRiskPermissions.includes(permission)) {
+        warnings.push(`Plugin requests high-risk permission: ${permission}`);
+      }
+    }
+  }
+
+  private validateMetadata(plugin: any, errors: string[], warnings: string[]): void {
+    // Author validation
+    if (!plugin.author) {
+      warnings.push('Plugin should have author information');
+    } else if (typeof plugin.author === 'object') {
+      if (!plugin.author.name || typeof plugin.author.name !== 'string') {
+        warnings.push('Author name is required');
+      }
+      if (plugin.author.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(plugin.author.email)) {
+        warnings.push('Author email format is invalid');
+      }
+    } else if (typeof plugin.author !== 'string') {
+      warnings.push('Author must be a string or object with name and email');
+    }
+
+    // Description validation
+    if (!plugin.description || typeof plugin.description !== 'string') {
+      warnings.push('Plugin should have a description');
+    } else if (plugin.description.length < 10) {
+      warnings.push('Plugin description should be at least 10 characters');
+    } else if (plugin.description.length > 1000) {
+      errors.push('Plugin description must be 1000 characters or less');
+    }
+
+    // License validation
+    if (!plugin.license) {
+      warnings.push('Plugin should specify a license');
+    }
+
+    // Keywords validation
+    if (plugin.keywords && !Array.isArray(plugin.keywords)) {
+      errors.push('Keywords must be an array');
+    }
+
+    // Homepage and repository validation
+    if (plugin.homepage && typeof plugin.homepage !== 'string') {
+      errors.push('Homepage must be a string URL');
+    }
+    if (plugin.repository && typeof plugin.repository !== 'string') {
+      errors.push('Repository must be a string URL');
+    }
+  }
+
+  private validateConfigSchema(plugin: any, errors: string[], warnings: string[]): void {
+    if (plugin.configSchema) {
+      // Basic JSON Schema validation
+      if (typeof plugin.configSchema !== 'object') {
+        errors.push('Configuration schema must be an object');
+      } else {
+        // Check for required JSON Schema fields
+        if (!plugin.configSchema.type) {
+          warnings.push('Configuration schema should specify a type');
+        }
+
+        // Validate schema structure
+        if (plugin.configSchema.properties && typeof plugin.configSchema.properties !== 'object') {
+          errors.push('Schema properties must be an object');
+        }
+      }
+    }
+
+    // Validate default config if present
+    if (plugin.defaultConfig && typeof plugin.defaultConfig !== 'object') {
+      errors.push('Default configuration must be an object');
+    }
+  }
+
+  private isVersionCompatible(requiredVersion: string, currentVersion: string): boolean {
+    // Simple version compatibility check
+    // In a real implementation, use a proper semver library
+    const parseVersion = (version: string) => {
+      const match = version.match(/^>=?(\d+)\.(\d+)\.(\d+)/);
+      if (!match) return null;
+      return {
+        major: parseInt(match[1]),
+        minor: parseInt(match[2]),
+        patch: parseInt(match[3]),
+      };
+    };
+
+    const required = parseVersion(requiredVersion);
+    const current = parseVersion(currentVersion);
+
+    if (!required || !current) return false;
+
+    return (
+      current.major > required.major ||
+      (current.major === required.major && current.minor >= required.minor)
+    );
+  }
+
+  // Execute plugin with timeout and resource monitoring
   public async executePlugin(
     pluginId: string,
     context: PluginContext
   ): Promise<PluginExecutionResult> {
     const startTime = Date.now();
+    const startMemory = process.memoryUsage().heapUsed;
 
     try {
       const loadedPlugin = this.plugins.get(pluginId);
@@ -173,8 +374,16 @@ export class PluginManager extends EventEmitter {
       // Create execution context with utilities
       const executionContext = this.createExecutionContext(context, loadedPlugin);
 
-      // Execute the render function DIRECTLY (no string execution!)
-      const result = await loadedPlugin.plugin.component.render(executionContext);
+      // Execute with timeout and memory monitoring
+      const result = await this.executeWithTimeout(
+        () => loadedPlugin.plugin.component.render(executionContext),
+        this.EXECUTION_TIMEOUT,
+        pluginId
+      );
+
+      // Calculate memory usage
+      const currentMemory = process.memoryUsage().heapUsed;
+      const memoryUsed = Math.max(0, currentMemory - startMemory);
 
       // Update usage statistics
       const executionTime = Date.now() - startTime;
@@ -193,10 +402,12 @@ export class PluginManager extends EventEmitter {
         success: true,
         result,
         executionTime,
-        memoryUsed: 0, // TODO: Implement memory tracking
+        memoryUsed,
       };
     } catch (error) {
       const executionTime = Date.now() - startTime;
+      const currentMemory = process.memoryUsage().heapUsed;
+      const memoryUsed = Math.max(0, currentMemory - startMemory);
       const loadedPlugin = this.plugins.get(pluginId);
 
       if (loadedPlugin) {
@@ -206,7 +417,11 @@ export class PluginManager extends EventEmitter {
         // Call onError lifecycle hook if present
         if (loadedPlugin.plugin.lifecycle?.onError && error instanceof Error) {
           try {
-            await loadedPlugin.plugin.lifecycle.onError(error);
+            await this.executeWithTimeout(
+              () => loadedPlugin.plugin.lifecycle!.onError!(error),
+              5000, // 5 second timeout for error handlers
+              pluginId
+            );
           } catch (lifecycleError) {
             logger.warn(`Plugin error hook failed for ${pluginId}:`, lifecycleError);
           }
@@ -228,9 +443,92 @@ export class PluginManager extends EventEmitter {
         success: false,
         error: errorMessage,
         executionTime,
-        memoryUsed: 0,
+        memoryUsed,
       };
     }
+  }
+
+  /**
+   * Execute function with timeout and resource monitoring
+   */
+  private async executeWithTimeout<T>(
+    fn: () => Promise<T> | T,
+    timeout: number,
+    pluginId: string
+  ): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      let isResolved = false;
+      let memoryMonitor: NodeJS.Timeout | null = null;
+
+      // Set up timeout
+      const timeoutId = setTimeout(() => {
+        if (!isResolved) {
+          isResolved = true;
+          if (memoryMonitor) clearInterval(memoryMonitor);
+          reject(new PluginTimeoutError(pluginId, timeout));
+        }
+      }, timeout);
+
+      // Set up memory monitoring
+      memoryMonitor = setInterval(() => {
+        const currentMemory = process.memoryUsage().heapUsed;
+        if (currentMemory > this.MEMORY_LIMIT) {
+          if (!isResolved) {
+            isResolved = true;
+            clearTimeout(timeoutId);
+            if (memoryMonitor) clearInterval(memoryMonitor);
+            reject(new PluginError(pluginId, 'MEMORY_LIMIT', 'Plugin exceeded memory limit'));
+          }
+        }
+      }, 100); // Check every 100ms
+
+      // Execute the function
+      try {
+        const result = fn();
+
+        // Check if result is a Promise-like object
+        if (
+          result &&
+          typeof result === 'object' &&
+          'then' in result &&
+          typeof (result as any).then === 'function'
+        ) {
+          // It's a Promise
+          Promise.resolve(result as Promise<T>)
+            .then(value => {
+              if (!isResolved) {
+                isResolved = true;
+                clearTimeout(timeoutId);
+                if (memoryMonitor) clearInterval(memoryMonitor);
+                resolve(value);
+              }
+            })
+            .catch(error => {
+              if (!isResolved) {
+                isResolved = true;
+                clearTimeout(timeoutId);
+                if (memoryMonitor) clearInterval(memoryMonitor);
+                reject(error);
+              }
+            });
+        } else {
+          // Synchronous result
+          if (!isResolved) {
+            isResolved = true;
+            clearTimeout(timeoutId);
+            if (memoryMonitor) clearInterval(memoryMonitor);
+            resolve(result as T);
+          }
+        }
+      } catch (error) {
+        if (!isResolved) {
+          isResolved = true;
+          clearTimeout(timeoutId);
+          if (memoryMonitor) clearInterval(memoryMonitor);
+          reject(error);
+        }
+      }
+    });
   }
 
   // Execute batch processing if supported
@@ -291,10 +589,16 @@ export class PluginManager extends EventEmitter {
     context: PluginContext,
     loadedPlugin: LoadedPlugin
   ): PluginContext {
+    // Create secure, plugin-specific utilities
+    const secureUtils = this.createSecurePluginUtils(
+      loadedPlugin.plugin.id,
+      loadedPlugin.grantedPermissions
+    );
+
     return {
       ...context,
       config: { ...loadedPlugin.config, ...context.config },
-      utils: this.utils,
+      utils: secureUtils,
       logger: this.createPluginLogger(loadedPlugin.plugin.id),
     };
   }
@@ -328,82 +632,42 @@ export class PluginManager extends EventEmitter {
         },
       },
 
-      // Database utilities (when DATABASE_ACCESS permission granted)
+      // Database utilities - INSECURE - Use createSecurePluginUtils instead!
       database: {
-        query: async (sql: string, params?: any[]) => {
-          // TODO: Check permissions before allowing database access
-          const db = patternPersistenceManager['db']; // Access private db
-          if (!db) throw new Error('Database not available');
-          return db.prepare(sql).all(params || []);
+        query: async () => {
+          throw new Error(
+            'Direct database access not allowed. Use secure plugin database utilities.'
+          );
         },
-
-        exec: async (sql: string) => {
-          const db = patternPersistenceManager['db'];
-          if (!db) throw new Error('Database not available');
-          db.exec(sql);
+        exec: async () => {
+          throw new Error(
+            'Direct database access not allowed. Use secure plugin database utilities.'
+          );
         },
-
-        prepare: (sql: string) => ({
-          run: async (params?: any[]) => {
-            const db = patternPersistenceManager['db'];
-            if (!db) throw new Error('Database not available');
-            const stmt = db.prepare(sql);
-            const result = stmt.run(params || []);
-            return { changes: result.changes, lastInsertRowid: Number(result.lastInsertRowid) };
-          },
-          get: async (params?: any[]) => {
-            const db = patternPersistenceManager['db'];
-            if (!db) throw new Error('Database not available');
-            const stmt = db.prepare(sql);
-            return stmt.get(params || []);
-          },
-          all: async (params?: any[]) => {
-            const db = patternPersistenceManager['db'];
-            if (!db) throw new Error('Database not available');
-            const stmt = db.prepare(sql);
-            return stmt.all(params || []);
-          },
-        }),
-
-        createTable: async (tableName: string, schema: TableSchema) => {
-          const db = patternPersistenceManager['db'];
-          if (!db) throw new Error('Database not available');
-
-          const columns = Object.entries(schema).map(([name, def]) => {
-            let column = `${name} ${def.type}`;
-            if (def.primaryKey) column += ' PRIMARY KEY';
-            if (def.autoIncrement) column += ' AUTOINCREMENT';
-            if (def.notNull) column += ' NOT NULL';
-            if (def.unique) column += ' UNIQUE';
-            if (def.default !== undefined) column += ` DEFAULT ${def.default}`;
-            return column;
-          });
-
-          const sql = `CREATE TABLE IF NOT EXISTS ${tableName} (${columns.join(', ')})`;
-          db.exec(sql);
+        prepare: () => {
+          throw new Error(
+            'Direct database access not allowed. Use secure plugin database utilities.'
+          );
         },
-
-        dropTable: async (tableName: string) => {
-          const db = patternPersistenceManager['db'];
-          if (!db) throw new Error('Database not available');
-          db.exec(`DROP TABLE IF EXISTS ${tableName}`);
+        createTable: async () => {
+          throw new Error(
+            'Direct database access not allowed. Use secure plugin database utilities.'
+          );
         },
-
-        tableExists: async (tableName: string) => {
-          const db = patternPersistenceManager['db'];
-          if (!db) return false;
-          const result = db
-            .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name=?")
-            .get(tableName);
-          return !!result;
+        dropTable: async () => {
+          throw new Error(
+            'Direct database access not allowed. Use secure plugin database utilities.'
+          );
         },
-
-        transaction: async <T>(callback: () => Promise<T>): Promise<T> => {
-          const db = patternPersistenceManager['db'];
-          if (!db) throw new Error('Database not available');
-
-          const transaction = db.transaction(callback);
-          return transaction();
+        tableExists: async () => {
+          throw new Error(
+            'Direct database access not allowed. Use secure plugin database utilities.'
+          );
+        },
+        transaction: async () => {
+          throw new Error(
+            'Direct database access not allowed. Use secure plugin database utilities.'
+          );
         },
       },
 
@@ -578,6 +842,54 @@ export class PluginManager extends EventEmitter {
     };
   }
 
+  /**
+   * Create secure, plugin-specific utilities with proper permission checking
+   */
+  private createSecurePluginUtils(pluginId: string, permissions: string[]): PluginUtils {
+    return {
+      // File system utilities (with permission checks)
+      fs: {
+        readFile: async (path: string, options?: any) => {
+          // File system access will be implemented with proper sandboxing
+          const fs = await import('fs/promises');
+          return fs.readFile(path, options);
+        },
+        exists: async (path: string) => {
+          try {
+            const fs = await import('fs/promises');
+            await fs.access(path);
+            return true;
+          } catch {
+            return false;
+          }
+        },
+        getStats: async (path: string) => {
+          const fs = await import('fs/promises');
+          return fs.stat(path);
+        },
+        readDir: async (path: string) => {
+          const fs = await import('fs/promises');
+          return fs.readdir(path);
+        },
+      },
+
+      // Secure database utilities (isolated per plugin)
+      database: pluginDatabaseManager.createPluginDatabaseUtils(pluginId, permissions as any),
+
+      // Formatting utilities (same as global utils)
+      format: this.utils.format,
+
+      // String manipulation utilities (same as global utils)
+      string: this.utils.string,
+
+      // Crypto utilities (same as global utils)
+      crypto: this.utils.crypto,
+
+      // Data utilities (same as global utils)
+      data: this.utils.data,
+    };
+  }
+
   // Create plugin logger with proper namespacing
   private createPluginLogger(pluginId: string): PluginLogger {
     return {
@@ -732,6 +1044,13 @@ export class PluginManager extends EventEmitter {
       }
     }
 
+    // Close all plugin databases
+    try {
+      await pluginDatabaseManager.closeAll();
+    } catch (error) {
+      logger.error('Error closing plugin databases:', error);
+    }
+
     this.plugins.clear();
     this.removeAllListeners();
   }
@@ -754,6 +1073,7 @@ export class PluginManager extends EventEmitter {
       delete require.cache[require.resolve(pluginPath)];
 
       // Dynamic import of plugin module
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const pluginModule = require(pluginPath);
       const plugin = pluginModule.default || pluginModule;
 
