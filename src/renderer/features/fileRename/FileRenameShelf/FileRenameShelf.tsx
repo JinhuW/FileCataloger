@@ -39,6 +39,7 @@ import { FileRenamePreviewList } from '../FileRenamePreviewList';
 import { WarningDialog } from '@renderer/components/primitives';
 import { validateFileRenames, formatValidationWarning } from '@renderer/utils/fileValidation';
 import { useExternalPlugins } from '@renderer/hooks/useExternalPlugins';
+import { useToast } from '@renderer/stores/toastStore';
 import { logger } from '@shared/logger';
 
 export interface FileRenameShelfProps {
@@ -66,6 +67,9 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
 
     // Get external plugin executor
     const { executePlugin } = useExternalPlugins();
+
+    // Get toast notification system
+    const toast = useToast();
 
     // Generate preview names based on current pattern
     const filePreview = useMemo((): FileRenamePreview[] => {
@@ -127,10 +131,35 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
     // Handle file drop
     const handleFileDrop = useCallback(
       (items: ShelfItem[]) => {
-        setSelectedFiles(prev => [...prev, ...items]);
-        items.forEach(item => onItemAdd(item));
+        // Check for duplicates against existing files
+        const existingPaths = new Set(selectedFiles.map(file => file.path).filter(Boolean));
+        const newItems = items.filter(item => {
+          if (item.path && existingPaths.has(item.path)) {
+            logger.info(`📋 Skipping duplicate file/folder: ${item.name} (${item.path})`);
+            return false;
+          }
+          return true;
+        });
+
+        if (newItems.length < items.length) {
+          const duplicateCount = items.length - newItems.length;
+          logger.info(`📋 Filtered out ${duplicateCount} duplicate items from drop`);
+
+          // Show user feedback about duplicates
+          toast.warning(
+            'Duplicate Files Skipped',
+            `${duplicateCount} file${duplicateCount === 1 ? '' : 's'} already exist${duplicateCount === 1 ? 's' : ''} on this shelf and ${duplicateCount === 1 ? 'was' : 'were'} skipped.`,
+            4000
+          );
+        }
+
+        // Only add new (non-duplicate) items
+        if (newItems.length > 0) {
+          setSelectedFiles(prev => [...prev, ...newItems]);
+          newItems.forEach(item => onItemAdd(item));
+        }
       },
-      [onItemAdd]
+      [onItemAdd, selectedFiles, toast]
     );
 
     // Handle file removal
@@ -320,9 +349,8 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
             <ShelfHeader
               config={config}
               itemCount={selectedFiles.length}
-              onTogglePin={() => onConfigChange({ isPinned: !config.isPinned })}
               onClose={onClose}
-              title="Rename Files"
+              title="FileCataloger"
             />
           </div>
 

@@ -18,16 +18,17 @@
  * ```
  */
 
-import { ShelfItem } from '@shared/types';
+import { ShelfItem, ShelfItemType } from '@shared/types';
 import { SHELF_CONSTANTS, isImageTypeSupported, isTextFileExtension } from '../constants/shelf';
 import { logger } from '@shared/logger';
 
 /**
  * Generate a unique ID for a shelf item
  */
-const generateItemId = (type: string, index: number): string => {
+const generateItemId = (type: string | ShelfItemType, index: number): string => {
   // Use crypto.randomUUID for better uniqueness and security
-  return `${type}-${Date.now()}-${index}-${crypto.randomUUID()}`;
+  const typeStr = typeof type === 'string' ? type : type.toLowerCase();
+  return `${typeStr}-${Date.now()}-${index}-${crypto.randomUUID()}`;
 };
 
 /**
@@ -36,21 +37,21 @@ const generateItemId = (type: string, index: number): string => {
 export function determineFileType(file: File): ShelfItem['type'] {
   // Check for image types first (most specific)
   if (isImageTypeSupported(file.type)) {
-    return 'image';
+    return ShelfItemType.IMAGE;
   }
 
   // Check for text MIME types
   if (file.type.startsWith('text/')) {
-    return 'text';
+    return ShelfItemType.TEXT;
   }
 
   // Check for specific text file extensions
   if (isTextFileExtension(file.name)) {
-    return 'text';
+    return ShelfItemType.TEXT;
   }
 
   // Default to generic file type
-  return 'file';
+  return ShelfItemType.FILE;
 }
 
 /**
@@ -59,9 +60,9 @@ export function determineFileType(file: File): ShelfItem['type'] {
 export function createShelfItem(
   file: File,
   index: number,
-  baseType: 'file' | 'text' | 'url' | 'image' = 'file'
+  baseType: ShelfItemType = ShelfItemType.FILE
 ): ShelfItem {
-  const type = baseType === 'file' ? determineFileType(file) : baseType;
+  const type = baseType === ShelfItemType.FILE ? determineFileType(file) : baseType;
   const id = generateItemId(type, index);
 
   // Extract file path if available (Electron-specific)
@@ -86,7 +87,7 @@ export function createShelfItem(
   }
 
   // Create thumbnail for images
-  if (type === 'image' && file.size < SHELF_CONSTANTS.MAX_FILE_SIZE) {
+  if (type === ShelfItemType.IMAGE && file.size < SHELF_CONSTANTS.MAX_FILE_SIZE) {
     try {
       item.thumbnail = URL.createObjectURL(file);
     } catch (error) {
@@ -103,10 +104,11 @@ export function createShelfItem(
 export function createTextItem(text: string, index: number = 0): ShelfItem {
   const isUrl = /^https?:\/\//i.test(text);
   const truncatedText = text.length > 100 ? text.substring(0, 97) + '...' : text;
+  const type = isUrl ? ShelfItemType.URL : ShelfItemType.TEXT;
 
   return {
-    id: generateItemId(isUrl ? 'url' : 'text', index),
-    type: isUrl ? 'url' : 'text',
+    id: generateItemId(type, index),
+    type,
     name: isUrl ? new URL(text).hostname : truncatedText,
     content: text.substring(0, SHELF_CONSTANTS.MAX_TEXT_LENGTH),
     createdAt: Date.now(),

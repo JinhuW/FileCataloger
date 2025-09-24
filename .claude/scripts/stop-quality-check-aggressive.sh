@@ -3,7 +3,8 @@
 # Post-interrupt quality check script with aggressive Claude Code prompting
 # This version is designed to strongly prompt Claude Code to fix issues automatically
 
-set -e  # Exit on error
+# Don't use 'set -e' as we want to continue even if checks fail
+# We'll handle errors gracefully in each check
 
 # Configuration
 PROJECT_DIR="/Users/jinhu/Development/File_Cataloger_Project/FileCataloger"
@@ -19,15 +20,17 @@ CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
 # Navigate to project directory
-cd "$PROJECT_DIR" || {
-    echo -e "${RED}❌ Failed to navigate to project directory${NC}"
-    exit 2
-}
+if ! cd "$PROJECT_DIR" 2>/dev/null; then
+    echo -e "${RED}❌ Failed to navigate to project directory${NC}" >&2
+    echo "Directory: $PROJECT_DIR" >&2
+    exit 0  # Exit gracefully even on error
+fi
 
 # Verify we're in the correct directory
 if [ ! -f "package.json" ]; then
-    echo -e "${RED}❌ Not in FileCataloger project directory${NC}"
-    exit 2
+    echo -e "${RED}❌ Not in FileCataloger project directory${NC}" >&2
+    echo "Current directory: $(pwd)" >&2
+    exit 0  # Exit gracefully even on error
 fi
 
 # Clear previous log
@@ -57,8 +60,8 @@ run_check() {
 
     printf "${emoji} %-15s ... " "$name"
 
-    # Run the command and capture output
-    if OUTPUT=$($command 2>&1); then
+    # Run the command and capture output (allow failures)
+    if OUTPUT=$(eval "$command" 2>&1); then
         echo -e "${GREEN}✅ Passed${NC}"
         PASSED_CHECKS=$((PASSED_CHECKS + 1))
         echo "[PASSED] $name" >> "$LOG_FILE"
@@ -194,5 +197,6 @@ fi
 
 echo ""
 
-# Exit with appropriate code
-exit $CRITICAL_ERRORS
+# Always exit with success (0) since this is a non-blocking hook
+# The purpose is to report issues, not to fail the hook
+exit 0

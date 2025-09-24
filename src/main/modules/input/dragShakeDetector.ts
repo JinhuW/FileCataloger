@@ -175,6 +175,10 @@ export class DragShakeDetector extends EventEmitter {
       files: items.map(i => i.name),
     });
 
+    // PERFORMANCE OPTIMIZATION: Start shake detection only when dragging
+    this.logger.debug('🚀 Starting shake detection (drag active)');
+    this.shakeDetector.start();
+
     // Emit drag start event for state machine
     this.logger.info('📡 EMITTING: drag-start event to ApplicationController');
     this.emit('drag-start', items);
@@ -223,6 +227,10 @@ export class DragShakeDetector extends EventEmitter {
   private handleDragEnd(): void {
     this.logger.info('📁 Drag ended');
 
+    // PERFORMANCE OPTIMIZATION: Stop shake detection when not dragging
+    this.logger.debug('⏸️ Stopping shake detection (drag ended)');
+    this.shakeDetector.stop();
+
     this.isDragging = false;
     this.draggedItems = [];
 
@@ -239,9 +247,8 @@ export class DragShakeDetector extends EventEmitter {
     this.mouseBatcher.start();
     this.logger.info('✅ Mouse event batcher started');
 
-    // Start shake detector
-    this.shakeDetector.start();
-    this.logger.info('✅ Shake detector started');
+    // PERFORMANCE OPTIMIZATION: Don't start shake detector until drag begins
+    this.logger.info('✅ Shake detector initialized (will start on drag)');
 
     // Start native drag monitor
     if (this.dragMonitor) {
@@ -268,7 +275,11 @@ export class DragShakeDetector extends EventEmitter {
     this.logger.info('Stopping drag-shake detector');
 
     this.mouseBatcher.stop();
-    this.shakeDetector.stop();
+
+    // PERFORMANCE OPTIMIZATION: Ensure shake detector is stopped
+    if (this.shakeDetector) {
+      this.shakeDetector.stop();
+    }
 
     if (this.dragMonitor) {
       this.dragMonitor.stop();
@@ -281,10 +292,15 @@ export class DragShakeDetector extends EventEmitter {
   }
 
   public processPosition(position: MousePosition): void {
+    // PERFORMANCE OPTIMIZATION: Only process positions during drag operations
+    if (!this.isDragging) {
+      return; // Skip all processing when not dragging - MAJOR CPU savings
+    }
+
     // Debug logging to trace position structure (very minimal)
     if (Math.random() < 0.001) {
       // 0.1% chance to avoid spam
-      this.logger.debug('📍 Position received:', {
+      this.logger.debug('📍 Position received during drag:', {
         x: position.x,
         y: position.y,
         isDragging: this.isDragging,

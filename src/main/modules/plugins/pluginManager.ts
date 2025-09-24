@@ -213,11 +213,14 @@ export class PluginManager extends EventEmitter {
     }
 
     // Check engine version compatibility
-    if (
-      plugin.engine.filecataloger &&
-      !this.isVersionCompatible(plugin.engine.filecataloger, '2.0.0')
-    ) {
-      errors.push('Plugin requires incompatible FileCataloger version');
+    const currentVersion = '1.0.0'; // TODO: Import from package.json properly
+    if (plugin.engine.filecataloger) {
+      const isCompatible = this.isVersionCompatible(plugin.engine.filecataloger, currentVersion);
+      logger.debug(`Plugin ${plugin.id} version check: required=${plugin.engine.filecataloger}, current=${currentVersion}, compatible=${isCompatible}`);
+
+      if (!isCompatible) {
+        errors.push(`Plugin requires incompatible FileCataloger version: required ${plugin.engine.filecataloger}, current ${currentVersion}`);
+      }
     }
   }
 
@@ -333,7 +336,9 @@ export class PluginManager extends EventEmitter {
     // Simple version compatibility check
     // In a real implementation, use a proper semver library
     const parseVersion = (version: string) => {
-      const match = version.match(/^>=?(\d+)\.(\d+)\.(\d+)/);
+      // Handle both ">=1.0.0" and "1.0.0" formats
+      const cleanVersion = version.replace(/^>=?/, ''); // Remove >= prefix
+      const match = cleanVersion.match(/^(\d+)\.(\d+)\.(\d+)/);
       if (!match) return null;
       return {
         major: parseInt(match[1]),
@@ -347,9 +352,11 @@ export class PluginManager extends EventEmitter {
 
     if (!required || !current) return false;
 
+    // Fix the version comparison logic to handle >= requirements correctly
     return (
       current.major > required.major ||
-      (current.major === required.major && current.minor >= required.minor)
+      (current.major === required.major && current.minor > required.minor) ||
+      (current.major === required.major && current.minor === required.minor && current.patch >= required.patch)
     );
   }
 

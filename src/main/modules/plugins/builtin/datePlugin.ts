@@ -71,7 +71,7 @@ export const datePlugin: NamingPlugin = {
     'Adds date and time information to file names with flexible formatting options and full TypeScript support',
   type: 'component',
   engine: {
-    filecataloger: '>=2.0.0',
+    filecataloger: '>=1.0.0',
   },
   capabilities: [],
   permissions: [],

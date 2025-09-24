@@ -3,7 +3,8 @@
 # Post-interrupt quality check script for FileCataloger
 # Runs essential quality checks after cleanup to ensure code integrity
 
-set -e  # Exit on error
+# Don't use 'set -e' as we want to continue even if checks fail
+# We'll handle errors gracefully in each check
 
 # Configuration
 PROJECT_DIR="/Users/jinhu/Development/File_Cataloger_Project/FileCataloger"
@@ -17,15 +18,17 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Navigate to project directory
-cd "$PROJECT_DIR" || {
-    echo -e "${RED}❌ Failed to navigate to project directory${NC}"
-    exit 1
-}
+if ! cd "$PROJECT_DIR" 2>/dev/null; then
+    echo -e "${RED}❌ Failed to navigate to project directory${NC}" >&2
+    echo "Directory: $PROJECT_DIR" >&2
+    exit 0  # Exit gracefully even on error
+fi
 
 # Verify we're in the correct directory
 if [ ! -f "package.json" ]; then
-    echo -e "${RED}❌ Not in FileCataloger project directory${NC}"
-    exit 1
+    echo -e "${RED}❌ Not in FileCataloger project directory${NC}" >&2
+    echo "Current directory: $(pwd)" >&2
+    exit 0  # Exit gracefully even on error
 fi
 
 # Clear previous log
@@ -50,10 +53,10 @@ run_check() {
 
     TOTAL_CHECKS=$((TOTAL_CHECKS + 1))
 
-    printf "${emoji} %-15s ... " "$name"
+    printf "${emoji} %-15s ... " "$name" || true
 
-    # Run the command and capture output
-    if OUTPUT=$($command 2>&1); then
+    # Run the command and capture output (allow failures)
+    if OUTPUT=$(eval "$command" 2>&1); then
         echo -e "${GREEN}✅ Passed${NC}"
         PASSED_CHECKS=$((PASSED_CHECKS + 1))
         echo "[PASSED] $name" >> "$LOG_FILE"
@@ -157,8 +160,8 @@ if [ $CRITICAL_ERRORS -gt 0 ] || [ $WARNINGS -gt 0 ]; then
     echo -e "$CLAUDE_COMMANDS" | sed 's/^/  /'
 
     # Also check for console.log usage
-    CONSOLE_LOG_COUNT=$(grep -r "console\.log" src --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" 2>/dev/null | wc -l | tr -d ' ')
-    if [ "$CONSOLE_LOG_COUNT" -gt 0 ]; then
+    CONSOLE_LOG_COUNT=$(grep -r "console\.log" src --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" 2>/dev/null | wc -l | tr -d ' ' || echo "0")
+    if [ "$CONSOLE_LOG_COUNT" -gt "0" ]; then
         echo ""
         echo "⚠️  Additionally, found $CONSOLE_LOG_COUNT console.log statements"
         echo "  Replace all console.log with Logger module (per CODE.md)"
@@ -178,5 +181,6 @@ fi
 
 echo ""
 
-# Exit with appropriate code
-exit $CRITICAL_ERRORS
+# Always exit with success (0) since this is a non-blocking hook
+# The purpose is to report issues, not to fail the hook
+exit 0

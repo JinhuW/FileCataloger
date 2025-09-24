@@ -29,9 +29,10 @@
 
 import React, { useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShelfItem } from '@shared/types';
+import { ShelfItem, ShelfItemType } from '@shared/types';
 import { useShelfItemAccessibility } from '@renderer/hooks/useAccessibility';
 import { getFileIcon, getTypeIcon } from '@renderer/utils/fileTypeIcons';
+import { logger } from '@shared/logger';
 
 export interface ShelfItemComponentProps {
   item: ShelfItem;
@@ -75,10 +76,31 @@ export const ShelfItemComponent = React.memo<ShelfItemComponentProps>(
 
     // Get item icon based on type
     const getItemIcon = useCallback((item: ShelfItem): string => {
-      if (item.type === 'file' && item.path) {
+      logger.debug('Getting icon for shelf item', {
+        name: item.name,
+        type: item.type,
+        typeOfType: typeof item.type,
+        isFolder: item.type === ShelfItemType.FOLDER,
+        isFolderString: item.type === 'folder',
+        path: item.path
+      });
+
+      // Handle different item types properly using enum values
+      // Also check for string 'folder' in case the enum value isn't being used correctly
+      if (item.type === ShelfItemType.FOLDER || item.type === 'folder') {
+        logger.debug('FOLDER type detected, using folder icon');
+        const folderIcon = getTypeIcon(ShelfItemType.FOLDER);
+        logger.debug('Folder icon resolved', { iconPath: folderIcon });
+        return folderIcon;
+      }
+      if (item.type === ShelfItemType.FILE && item.path) {
+        logger.debug('FILE type detected with path, using file extension icon', { path: item.path });
         return getFileIcon(item.path);
       }
-      return getTypeIcon(item.type);
+      logger.debug('Using generic type icon', { type: item.type });
+      const typeIcon = getTypeIcon(item.type);
+      logger.debug('Type icon resolved', { iconPath: typeIcon });
+      return typeIcon;
     }, []);
 
     // Format item size

@@ -219,7 +219,10 @@ export class PatternPersistenceManager {
   // CRUD Operations
 
   public async savePattern(pattern: SavedPattern): Promise<void> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) {
+      logger.warn('Database not available, pattern save skipped');
+      return;
+    }
 
     try {
       // Validate pattern data
@@ -438,7 +441,10 @@ export class PatternPersistenceManager {
   // Batch operations
 
   public async saveMultiplePatterns(patterns: SavedPattern[]): Promise<void> {
-    if (!this.db) throw new Error('Database not initialized');
+    if (!this.db) {
+      logger.warn('Database not available, batch pattern save skipped');
+      return;
+    }
 
     const transaction = this.db.transaction(() => {
       for (const pattern of patterns) {

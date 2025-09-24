@@ -66,18 +66,18 @@ export class PerformanceMonitor extends EventEmitter {
   private isMonitoring: boolean = false;
   private monitorInterval: NodeJS.Timeout | null = null;
   private metricsHistory: PerformanceMetrics[] = [];
-  private maxHistorySize: number = 100;
-  private updateInterval: number = 10000; // 10 seconds - reduced from 1 second
+  private maxHistorySize: number = 10; // Reduced from 100 to 10 to prevent memory accumulation
+  private updateInterval: number = 30000; // 30 seconds - further reduced to minimize overhead
   private adaptiveInterval: boolean = true;
   private minInterval: number = 5000; // 5 seconds minimum
   private maxInterval: number = 30000; // 30 seconds maximum
 
   private thresholds: PerformanceThresholds = {
-    cpuWarning: 70,
-    cpuCritical: 90,
-    memoryWarning: 90, // Increased from 80 to 90 - macOS typically uses high memory
-    memoryCritical: 95,
-    appMemoryLimit: 500,
+    cpuWarning: 80,
+    cpuCritical: 95,
+    memoryWarning: 95, // macOS commonly uses 95%+ memory normally
+    memoryCritical: 99, // Only alert at extreme levels
+    appMemoryLimit: 200, // Reduced from 500MB to 200MB for this app
   };
 
   private lastCpuInfo: any = null;

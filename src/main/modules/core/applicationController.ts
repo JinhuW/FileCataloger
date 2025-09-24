@@ -94,6 +94,7 @@ export class ApplicationController extends EventEmitter {
 
     this.setupEventHandlers();
     this.setupErrorHandling();
+    this.setupPreferenceHandlers();
 
     // Test shelf creation removed - shelves are created on demand via shake/drag
   }
@@ -236,6 +237,43 @@ export class ApplicationController extends EventEmitter {
         category: ErrorCategory.NATIVE,
         context: { module: 'mouse-tracker' },
       });
+    });
+  }
+
+  /**
+   * Set up preference change handlers
+   */
+  private setupPreferenceHandlers(): void {
+    // Listen for preference changes
+    this.preferencesManager.on('preferences-changed', (preferences) => {
+      this.logger.info('🔧 Preferences changed, checking autoHideEmpty setting');
+
+      // If auto-hide was disabled, cancel all existing auto-hide timers
+      if (!preferences.shelf.autoHideEmpty) {
+        this.logger.info('🚫 Auto-hide disabled - cancelling all existing auto-hide timers');
+        for (const shelfId of this.activeShelves) {
+          this.cancelShelfAutoHide(shelfId);
+        }
+      } else {
+        this.logger.info('✅ Auto-hide enabled - re-evaluating empty shelves');
+        // If auto-hide was enabled, re-evaluate empty shelves
+        this.reevaluateEmptyShelvesForAutoHide();
+      }
+    });
+
+    // Listen for specific shelf setting changes
+    this.preferencesManager.on('shelf-settings-changed', (shelfSettings) => {
+      this.logger.info('🏠 Shelf settings changed:', { autoHideEmpty: shelfSettings.autoHideEmpty });
+
+      if (!shelfSettings.autoHideEmpty) {
+        // Cancel auto-hide timers if disabled
+        for (const shelfId of this.activeShelves) {
+          this.cancelShelfAutoHide(shelfId);
+        }
+      } else {
+        // Re-evaluate empty shelves if enabled
+        this.reevaluateEmptyShelvesForAutoHide();
+      }
     });
   }
 
@@ -536,6 +574,13 @@ export class ApplicationController extends EventEmitter {
    * Schedule auto-hide for empty shelf
    */
   private scheduleEmptyShelfAutoHide(shelfId: string, customTimeout?: number): void {
+    // Check if auto-hide is enabled in preferences
+    const preferences = this.preferencesManager.getPreferences();
+    if (!preferences.shelf.autoHideEmpty) {
+      this.logger.info(`🚫 Auto-hide disabled in preferences - skipping auto-hide for shelf: ${shelfId}`);
+      return;
+    }
+
     // Cancel any existing timer for this shelf
     this.cancelShelfAutoHide(shelfId);
 
@@ -683,6 +728,13 @@ export class ApplicationController extends EventEmitter {
     this.logger.info(
       `🔍 clearEmptyShelves called - isDragging: ${context.isDragging}, activeDropOps: ${this.activeDropOperations.size}, activeShelves: ${this.activeShelves.size}, activeShelfId: ${context.activeShelfId}`
     );
+
+    // Check if auto-hide is enabled in preferences
+    const preferences = this.preferencesManager.getPreferences();
+    if (!preferences.shelf.autoHideEmpty) {
+      this.logger.info('🚫 Auto-hide disabled in preferences - skipping empty shelf cleanup');
+      return;
+    }
 
     // Don't clear shelves that are actively receiving drops
     if (this.activeDropOperations.size > 0) {
@@ -930,19 +982,99 @@ export class ApplicationController extends EventEmitter {
       // Cancel any auto-hide timer since shelf now has files
       this.cancelShelfAutoHide(shelfId);
 
-      // Convert file paths to shelf items
-      const items = filePaths.map(filePath => ({
-        id: `file_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
-        type: ShelfItemType.FILE,
-        name: filePath.split('/').pop() || filePath,
-        path: filePath,
-        createdAt: Date.now(),
-      }));
+      // Convert file paths to shelf items using system metadata
+      const items: any[] = [];
 
-      this.logger.info(`📁 Adding ${items.length} items to shelf ${shelfId}`);
+      for (const filePath of filePaths) {
+        let itemType = ShelfItemType.FILE;
+        let size: number | undefined;
+        const fileName = filePath.split('/').pop() || filePath;
+
+        // Try to get the full path from native drag data
+        let fullPath = filePath;
+        if (!filePath.startsWith('/')) {
+          // This is just a filename, try to find the full path from native drag data
+          const nativeFile = this.nativeDraggedFiles.find(f => f.name === filePath || f.path.endsWith(filePath));
+          if (nativeFile) {
+            fullPath = nativeFile.path;
+            this.logger.debug(`📂 Resolved full path from native drag data: ${filePath} -> ${fullPath}`);
+          }
+        }
+
+        try {
+          const fs = require('fs');
+          this.logger.debug(`Checking path: "${fullPath}" (exists: ${fs.existsSync(fullPath)})`);
+          const stats = fs.statSync(fullPath);
+
+          this.logger.debug(`Stats for ${fileName}:`, {
+            isDirectory: stats.isDirectory(),
+            isFile: stats.isFile(),
+            isSymbolicLink: stats.isSymbolicLink(),
+            mode: stats.mode,
+            size: stats.size
+          });
+
+          if (stats.isDirectory()) {
+            itemType = ShelfItemType.FOLDER;
+            this.logger.info(`✅ System metadata: ${fileName} -> FOLDER (isDirectory: true)`);
+          } else if (stats.isFile()) {
+            itemType = ShelfItemType.FILE;
+            size = stats.size;
+            this.logger.info(`📄 System metadata: ${fileName} -> FILE (size: ${size})`);
+          } else {
+            // Handle special cases (symlinks, etc.)
+            itemType = ShelfItemType.FILE;
+            this.logger.info(`📄 System metadata: ${fileName} -> FILE (special type)`);
+          }
+        } catch (error) {
+          // Fallback to extension-based detection if fs.stat fails
+          const hasExtension = fileName.includes('.') && !fileName.startsWith('.');
+          itemType = hasExtension ? ShelfItemType.FILE : ShelfItemType.FOLDER;
+          this.logger.error(`❌ Fallback detection: ${fileName} -> ${itemType} (stat failed: ${error})`);
+        }
+
+        items.push({
+          id: `file_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+          type: itemType,
+          name: fileName,
+          path: fullPath,
+          size,
+          createdAt: Date.now(),
+        });
+      }
+
+      this.logger.info(`📁 Processing ${items.length} items for shelf ${shelfId}`);
+
+      // Check for duplicates against existing items in the shelf
+      const existingConfig = this.shelfManager.getShelfConfig(shelfId);
+      const existingPaths = new Set<string>();
+      if (existingConfig && existingConfig.items) {
+        existingConfig.items.forEach(existingItem => {
+          if (existingItem.path) {
+            existingPaths.add(existingItem.path);
+          }
+        });
+      }
+
+      // Filter out duplicate items
+      const newItems = items.filter(item => {
+        if (item.path && existingPaths.has(item.path)) {
+          this.logger.info(`📋 Skipping duplicate file/folder: ${item.name} (${item.path})`);
+          return false;
+        }
+        return true;
+      });
+
+      this.logger.info(`📁 Adding ${newItems.length} new items to shelf ${shelfId} (${items.length - newItems.length} duplicates skipped)`);
+
+      // EMERGENCY: Force garbage collection to prevent memory accumulation
+      if (global.gc) {
+        global.gc();
+        this.logger.debug('🗑️ Forced garbage collection after file processing');
+      }
       this.logger.debug(
         `🔧 DEBUG: Created items with paths:`,
-        items.map(item => ({
+        newItems.map(item => ({
           id: item.id,
           name: item.name,
           path: item.path,
@@ -951,7 +1083,7 @@ export class ApplicationController extends EventEmitter {
       );
 
       // Add items to shelf
-      for (const item of items) {
+      for (const item of newItems) {
         const success = this.shelfManager.addItemToShelf(shelfId, item);
         this.logger.debug(
           `📁 Added item ${item.name} to shelf ${shelfId}: ${success ? 'SUCCESS' : 'FAILED'}`
@@ -960,13 +1092,15 @@ export class ApplicationController extends EventEmitter {
 
       // Mark shelf as pinned since it now has content
       const config = this.shelfManager.getShelfConfig(shelfId);
-      if (config) {
+      if (config && newItems.length > 0) {
         config.isPinned = true;
         this.logger.info(
-          `📌 SHELF PINNED: ${shelfId} with ${items.length} files (items.length: ${config.items.length})`
+          `📌 SHELF PINNED: ${shelfId} with ${newItems.length} new files (total items: ${config.items.length})`
         );
-      } else {
+      } else if (!config) {
         this.logger.error(`📌 ERROR: Could not find config for shelf ${shelfId} to pin it`);
+      } else if (newItems.length === 0) {
+        this.logger.info(`📌 No new items added to shelf ${shelfId} - all were duplicates`);
       }
 
       // Remove from active drop operations

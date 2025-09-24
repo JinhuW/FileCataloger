@@ -155,9 +155,10 @@ bool DarwinDragMonitor::CheckForFileDrag() {
         if (!dragPasteboard) return false;
         
         NSInteger currentChangeCount = [dragPasteboard changeCount];
-        
-        // Only process if pasteboard has changed
-        if (currentChangeCount <= lastPasteboardChangeCount.load()) {
+
+        // Process if pasteboard has changed OR if no drag is active (force refresh)
+        // This ensures new drags are detected even with same changeCount
+        if (currentChangeCount <= lastPasteboardChangeCount.load() && hasActiveDrag.load()) {
             return false;
         }
         
@@ -353,7 +354,10 @@ CGEventRef DarwinDragMonitor::DragEventCallback(CGEventTapProxy proxy,
             // Clear drag state for polling
             monitor->hasActiveDrag.store(false);
             monitor->fileCount.store(0);
-            
+
+            // Reset pasteboard change count to force fresh detection on next drag
+            monitor->lastPasteboardChangeCount.store(-1);
+
             std::lock_guard<std::mutex> lock(monitor->filePathsMutex);
             monitor->draggedFilePaths.clear();
         }

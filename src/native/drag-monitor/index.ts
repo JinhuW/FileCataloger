@@ -255,7 +255,26 @@ export class MacDragMonitor extends EventEmitter {
   }
 
   public getDraggedItems(): DraggedItem[] {
-    return [];
+    if (!this.nativeMonitor) {
+      return [];
+    }
+
+    try {
+      const files = this.nativeMonitor.getDraggedFiles();
+      return files.map((file: any) => ({
+        path: file.path,
+        name: file.name || path.basename(file.path),
+        type: file.type as 'file' | 'folder',
+        isDirectory: file.isDirectory,
+        isFile: file.isFile,
+        size: file.size,
+        extension: file.extension,
+        exists: file.exists,
+      }));
+    } catch (error) {
+      logger.error('❌ Error getting dragged items:', error);
+      return [];
+    }
   }
 
   public destroy(): void {

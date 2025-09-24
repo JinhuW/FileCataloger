@@ -53,8 +53,9 @@ module.exports = merge(common, {
           {
             loader: 'file-loader',
             options: {
-              name: '[path][name].[ext]',
-              outputPath: 'assets/'
+              name: '[name].[ext]',
+              outputPath: '../',
+              publicPath: '../'
             }
           }
         ]

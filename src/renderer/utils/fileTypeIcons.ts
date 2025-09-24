@@ -18,6 +18,7 @@ import ZipIcon from '@renderer/assets/icons/files/ic-zip.svg';
 import PdfIcon from '@renderer/assets/icons/files/ic-pdf.svg';
 import AiIcon from '@renderer/assets/icons/files/ic-ai.svg';
 import FileIcon from '@renderer/assets/icons/files/ic-file.svg';
+import { ShelfItemType } from '@shared/types';
 
 /**
  * Map of file extensions to icon paths
@@ -89,19 +90,27 @@ export function getFileIcon(filename: string): string {
 
 /**
  * Get the appropriate icon for a file type
- * @param type - The type of the item (file, folder, etc.)
+ * @param type - The type of the item (file, folder, etc.) - can be string or ShelfItemType enum
  * @returns The path to the icon SVG
  */
-export function getTypeIcon(type: string): string {
+export function getTypeIcon(type: string | ShelfItemType): string {
+  // Handle both string and enum values
   switch (type) {
     case 'folder':
+    case ShelfItemType.FOLDER:
       return FolderIcon;
     case 'text':
+    case ShelfItemType.TEXT:
       return TxtIcon;
     case 'url':
+    case ShelfItemType.URL:
       return DocumentIcon;
     case 'image':
+    case ShelfItemType.IMAGE:
       return ImgIcon;
+    case 'file':
+    case ShelfItemType.FILE:
+      return FileIcon;
     default:
       return FileIcon;
   }

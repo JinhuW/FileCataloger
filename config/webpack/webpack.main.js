@@ -42,7 +42,8 @@ module.exports = merge(common, {
     // Native modules should be externalized
     './mouse_tracker_darwin.node': 'commonjs ./mouse_tracker_darwin.node',
     './drag_monitor_darwin.node': 'commonjs ./drag_monitor_darwin.node',
-    'node-gyp-build': 'commonjs node-gyp-build'
+    'node-gyp-build': 'commonjs node-gyp-build',
+    'better-sqlite3': 'commonjs better-sqlite3'
   },
 
   externalsType: 'commonjs',

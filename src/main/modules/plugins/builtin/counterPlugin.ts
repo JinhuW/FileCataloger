@@ -198,7 +198,7 @@ export const counterPlugin: NamingPlugin = {
     'Adds sequential numbers to file names with customizable formatting, reset options, and full TypeScript support',
   type: 'component',
   engine: {
-    filecataloger: '>=2.0.0',
+    filecataloger: '>=1.0.0',
   },
   capabilities: [],
   permissions: [],

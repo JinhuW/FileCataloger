@@ -51,7 +51,7 @@ export const PERFORMANCE_CONSTANTS = {
   CPU_LIMIT_PERCENT: 80,
   MOUSE_TRACKING_FPS: 60,
   MOUSE_TRACKING_INTERVAL: 16, // milliseconds (60fps)
-  POSITION_LOG_INTERVAL: 100, // Log every 100th position update
+  POSITION_LOG_INTERVAL: 3600, // Log every 3600th position update (1 per minute at 60fps)
   PERFORMANCE_CHECK_INTERVAL: 5000, // milliseconds
   GC_TRIGGER_THRESHOLD_MB: 500,
 } as const;

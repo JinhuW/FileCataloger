@@ -245,3 +245,112 @@ const nativeMetrics = tracker.getNativePerformanceMetrics();
 ---
 
 **Last Updated**: September 21, 2025 - Native module optimizations complete
+
+## Issue 2: Native Drag Monitor Caching Problem (2025-09-24) ✅ RESOLVED
+
+**Problem**: When dropping different files consecutively on a shelf, the native drag monitor returns cached file information from the previous drag operation instead of detecting the new files being dragged.
+
+**Symptoms**:
+- Drop folder → shelf shows folder ✓
+- Drop PDF → shelf shows folder again ✗ (should show PDF)
+- Both drag operations show same file name in logs: `files: [ 'TestFolder' ]`
+- State machine blocked transitions: `🚫 BLOCKED STATE TRANSITION: No transition found for event 'items_added' from state 'shelf_active'`
+
+**Root Cause Analysis**:
+1. **Missing State Transition**: No transition defined for `ITEMS_ADDED` from `SHELF_ACTIVE` state
+2. **Native Module Caching**: C++ module's `draggedFilePaths` vector not cleared properly between drags
+3. **Pasteboard Change Detection**: Too strict `changeCount` logic prevented rapid consecutive drag detection
+
+**Technical Details**:
+- **State Machine**: `src/main/modules/state/dragShelfStateMachine.ts`
+- **Native Module**: `src/native/drag-monitor/darwin-drag-monitor.mm`
+- **Cache Variable**: `std::vector<std::string> draggedFilePaths`
+- **Change Detection**: `NSInteger currentChangeCount = [dragPasteboard changeCount]`
+
+**Complete Solution Applied**:
+
+### 1. **State Machine Fix** (`dragShelfStateMachine.ts:119-125`)
+```typescript
+{
+  from: DragShelfState.SHELF_ACTIVE,
+  event: DragShelfEvent.ITEMS_ADDED,
+  to: DragShelfState.SHELF_ACTIVE,
+  action: ctx => {
+    ctx.hasItems = true;
+  },
+},
+```
+
+### 2. **Native Module Cache Fix** (`darwin-drag-monitor.mm:161`)
+```cpp
+// OLD: Blocked all processing if changeCount hadn't increased
+if (currentChangeCount <= lastPasteboardChangeCount.load()) {
+    return false;
+}
+
+// NEW: Allow processing on new drags even with same changeCount
+if (currentChangeCount <= lastPasteboardChangeCount.load() && hasActiveDrag.load()) {
+    return false;
+}
+```
+
+### 3. **Aggressive Cache Reset** (`darwin-drag-monitor.mm:359`)
+```cpp
+if (wasDragging) {
+    monitor->hasActiveDrag.store(false);
+    monitor->fileCount.store(0);
+    // NEW: Reset change count to force fresh detection
+    monitor->lastPasteboardChangeCount.store(-1);
+
+    std::lock_guard<std::mutex> lock(monitor->filePathsMutex);
+    monitor->draggedFilePaths.clear();
+}
+```
+
+### 4. **JavaScript Layer Enhancement** (`drag-monitor/index.ts:257-278`)
+```typescript
+public getDraggedItems(): DraggedItem[] {
+  if (!this.nativeMonitor) return [];
+
+  try {
+    const files = this.nativeMonitor.getDraggedFiles();
+    return files.map((file: any) => ({
+      path: file.path,
+      name: file.name || path.basename(file.path),
+      type: file.type as 'file' | 'folder',
+      isDirectory: file.isDirectory,
+      isFile: file.isFile,
+      size: file.size,
+      extension: file.extension,
+      exists: file.exists,
+    }));
+  } catch (error) {
+    logger.error('❌ Error getting dragged items:', error);
+    return [];
+  }
+}
+```
+
+**Resolution Status**: ✅ **FIXED**
+- State machine transitions work properly
+- Different files now detected correctly in consecutive drags
+- No more cached/stale file information
+- PDF files, folders, and other file types display correctly
+
+**Prevention for Future**:
+1. **Always test consecutive drag operations** with different file types during development
+2. **Monitor state machine logs** for blocked transitions
+3. **Check native module cache clearing** when modifying drag detection
+4. **Run `yarn build:native:clean`** after any native module changes
+
+**Commands for Testing**:
+```bash
+# Rebuild native modules after changes
+yarn build:native:clean
+
+# Monitor drag detection logs
+yarn dev 2>&1 | grep -E "File drag started|HANDLING DROPPED FILES|STATE TRANSITION"
+
+# Validate native modules working
+yarn test:native:validate
+```

@@ -167,8 +167,8 @@ export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector
       );
     }
 
-    // More aggressive logging for debugging
-    if (this.bufferIndex % 20 === 0 && positions.length > 0) {
+    // Reduced logging to prevent memory leak
+    if (this.bufferIndex % 1000 === 0 && positions.length > 0) {
       this.logger.debug(`📊 Analyzing ${positions.length} positions for shake detection`);
     }
 
@@ -282,9 +282,12 @@ export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector
       this.logger.info(
         `✅ Velocity-based shake detected! Changes: ${directionChanges}, Distance: ${totalDistance}, Avg Velocity: ${avgVelocity.toFixed(2)}, Acceleration Changes: ${accelerationChanges}`
       );
-      this.logger.debug(
-        `🎉 Velocity-based shake: ${directionChanges} changes, ${totalDistance.toFixed(2)} distance`
-      );
+      // Reduced logging to prevent memory leak - only log significant shakes
+      if (directionChanges >= 3) {
+        this.logger.debug(
+          `🎉 Velocity-based shake: ${directionChanges} changes, ${totalDistance.toFixed(2)} distance`
+        );
+      }
       this.handleShakeDetected(directionChanges, totalDistance, avgVelocity * velocityFactor);
     } else if (directionChanges >= this.config.minDirectionChanges + 1 && hasAccelerationPattern) {
       // Alternative detection: more direction changes with acceleration pattern
@@ -324,9 +327,7 @@ export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector
 
     // Check debounce time
     if (timeSinceLastShake < this.config.debounceTime) {
-      this.logger.debug(
-        `🔄 Shake debounced: ${timeSinceLastShake}ms < ${this.config.debounceTime}ms`
-      );
+      // Remove debounce logging to prevent memory leak
       return;
     }
 

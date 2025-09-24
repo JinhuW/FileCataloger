@@ -112,6 +112,20 @@ export class ShelfManager extends EventEmitter {
       this.logger.warn('Shelf creation blocked: Only 1 shelf allowed at a time');
       // Return the ID of the existing shelf and make it visible
       const existingShelfId = Array.from(this.activeShelves)[0];
+
+      // IMPORTANT: Clear old items when reusing shelf to prevent showing cached items
+      const existingConfig = this.shelfConfigs.get(existingShelfId);
+      if (existingConfig) {
+        this.logger.info(`🧹 Clearing ${existingConfig.items.length} old items from reused shelf ${existingShelfId}`);
+        existingConfig.items = [];
+
+        // Update the shelf config with the new items (empty array)
+        const window = this.shelves.get(existingShelfId);
+        if (window && !window.isDestroyed()) {
+          window.webContents.send('shelf:config', existingShelfId, existingConfig);
+        }
+      }
+
       this.showShelf(existingShelfId);
       return existingShelfId;
     }
@@ -533,7 +547,8 @@ export class ShelfManager extends EventEmitter {
       config.items.push(item);
       this.logger.debug(`  Item added! New count: ${config.items.length}`);
 
-      // Notify renderer
+      // Notify renderer - send the full updated config
+      window.webContents.send('shelf:config', shelfId, config);
       window.webContents.send('shelf:item-added', item);
       this.emit('shelf-item-added', shelfId, item);
 

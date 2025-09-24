@@ -91,7 +91,7 @@ const DEFAULT_PREFERENCES: AppPreferences = {
     defaultPosition: 'cursor',
     defaultSize: { width: 300, height: 400 },
     opacity: 0.9,
-    autoHideEmpty: true,
+    autoHideEmpty: false,
     autoHideDelay: 5000,
     maxSimultaneous: 5,
     animationSpeed: 'normal',

@@ -199,7 +199,7 @@ export const filenamePlugin: NamingPlugin = {
     'Uses the original file name with various transformation options and full TypeScript support',
   type: 'component',
   engine: {
-    filecataloger: '>=2.0.0',
+    filecataloger: '>=1.0.0',
   },
   capabilities: [],
   permissions: [],

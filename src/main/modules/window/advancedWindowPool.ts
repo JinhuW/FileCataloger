@@ -347,6 +347,21 @@ export class AdvancedWindowPool {
   private cleanup(): void {
     const now = Date.now();
 
+    // EMERGENCY: Clean up ghost windows from crashed renderers
+    const ghostWindows: string[] = [];
+    for (const [windowId, pooledWindow] of this.inUseWindows.entries()) {
+      if (pooledWindow.window.isDestroyed() || pooledWindow.window.webContents.isDestroyed()) {
+        ghostWindows.push(windowId);
+        this.logger.debug(`Found ghost window: ${windowId}`);
+      }
+    }
+
+    // Remove ghost windows from tracking
+    for (const windowId of ghostWindows) {
+      this.inUseWindows.delete(windowId);
+      this.logger.debug(`Cleaned up ghost window: ${windowId}`);
+    }
+
     // Clean up cold windows that are too old
     this.coldPool = this.coldPool.filter(pooledWindow => {
       const age = now - pooledWindow.createdAt;

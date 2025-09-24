@@ -36,13 +36,12 @@ import { ShelfConfig } from '@shared/types';
 export interface ShelfHeaderProps {
   config: ShelfConfig;
   itemCount: number;
-  onTogglePin: () => void;
   onClose: () => void;
   title?: string;
 }
 
 export const ShelfHeader = React.memo<ShelfHeaderProps>(
-  ({ config, itemCount, onTogglePin, onClose, title = 'Shelf' }) => {
+  ({ config, itemCount, onClose, title = 'Shelf' }) => {
     return (
       <div
         className="shelf-header"
@@ -75,21 +74,6 @@ export const ShelfHeader = React.memo<ShelfHeaderProps>(
 
         {/* Left Side - Title and Count */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', zIndex: 2 }}>
-          <motion.div
-            style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: config.isPinned ? '#10b981' : '#f59e0b',
-            }}
-            animate={{
-              scale: config.isPinned ? [1, 1.2, 1] : 1,
-            }}
-            transition={{
-              duration: 2,
-              repeat: config.isPinned ? Infinity : 0,
-            }}
-          />
           <span
             style={{
               color: 'white',
@@ -128,28 +112,6 @@ export const ShelfHeader = React.memo<ShelfHeaderProps>(
             position: 'relative',
           }}
         >
-          {/* Pin Toggle Button */}
-          <motion.button
-            onClick={onTogglePin}
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.95 }}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: config.isPinned ? '#10b981' : 'rgba(255, 255, 255, 0.6)',
-              cursor: 'pointer',
-              padding: '4px',
-              borderRadius: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '14px',
-            }}
-            title={config.isPinned ? 'Unpin shelf' : 'Pin shelf'}
-          >
-            📌
-          </motion.button>
-
           {/* Close Button */}
           <motion.button
             onClick={onClose}

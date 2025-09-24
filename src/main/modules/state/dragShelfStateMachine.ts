@@ -117,6 +117,14 @@ export class DragShelfStateMachine extends EventEmitter {
     },
     {
       from: DragShelfState.SHELF_ACTIVE,
+      event: DragShelfEvent.ITEMS_ADDED,
+      to: DragShelfState.SHELF_ACTIVE,
+      action: ctx => {
+        ctx.hasItems = true;
+      },
+    },
+    {
+      from: DragShelfState.SHELF_ACTIVE,
       event: DragShelfEvent.END_DRAG,
       to: DragShelfState.SHELF_AUTO_HIDE_SCHEDULED,
       guard: ctx => !ctx.hasItems && !ctx.dropInProgress,

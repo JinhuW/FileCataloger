@@ -38,6 +38,14 @@ export function useExternalPlugins() {
       // Get all plugins (built-in and external)
       const allPlugins = await window.api.invoke('pattern:get-plugins');
 
+      // CRITICAL FIX: Ensure allPlugins is an array to prevent memory leak
+      if (!Array.isArray(allPlugins)) {
+        console.warn('allPlugins is not an array:', typeof allPlugins, allPlugins);
+        setPlugins([]);
+        setComponents([]);
+        return;
+      }
+
       // Filter for external plugins that provide rename components
       const externalRenamePlugins = allPlugins.filter((plugin: LoadedPlugin) => {
         return plugin.isExternal && plugin.enabled && (plugin.plugin as NamingPlugin).component;
