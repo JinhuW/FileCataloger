@@ -246,22 +246,192 @@ const nativeMetrics = tracker.getNativePerformanceMetrics();
 
 **Last Updated**: September 21, 2025 - Native module optimizations complete
 
+## Issue 3: Drag Detection Failing - No Files Extracted (2025-09-28) ✅ RESOLVED
+
+**Problem**: Native drag monitor detected drag operations but returned 0 files, preventing shelf creation when shaking mouse while dragging.
+
+**Symptoms**:
+
+- Drag events detected: `hasActiveDrag` returns true
+- File count always 0: `File drag started: { count: 0, files: [] }`
+- Shake detection worked perfectly (8 direction changes detected!)
+- ApplicationController ignored shake: `⚠️ Shake detected but no drag operation - ignoring`
+- System logs showed: `[DragMonitor] No file URLs found despite hasFiles=true`
+
+**Root Cause Analysis**:
+
+### 1. **Missing CheckForFileDrag() Call**
+
+The native C++ code never called `CheckForFileDrag()` to extract files from the pasteboard:
+
+```cpp
+// OLD CODE (lines 385-393 in drag_monitor_darwin.mm)
+if (shouldCheckForFiles && !monitor->dragState.hasFiles && !monitor->isDragging.load()) {
+    // PERFORMANCE: Schedule CheckForFileDrag on separate thread to avoid blocking
+    // For now, do a quick non-blocking check
+    monitor->dragState.hasFiles = true; // Assume files present to avoid repeated checks
+    monitor->isDragging.store(true);
+    monitor->hasActiveDrag.store(true);
+
+    // Note: Actual file detection will happen asynchronously via polling
+}
+```
+
+The comment said file detection would happen via polling, but it never did!
+
+### 2. **Promised Files Not Handled**
+
+When dragging from certain applications, the pasteboard contains **promised file URLs** not regular file URLs:
+
+```
+Available types: (
+    "com.apple.pasteboard.promised-file-url",
+    "com.apple.pasteboard.promised-file-content-type",
+    "Apple files promise pasteboard type",
+    "Apple URL pasteboard type"
+)
+```
+
+The code only checked for `NSPasteboardTypeFileURL` and `kUTTypeFileURL`, missing these promised file types.
+
+**Complete Solution Applied**:
+
+### 1. **Call CheckForFileDrag() Immediately** (lines 390-399)
+
+```cpp
+// NEW: Perform file detection immediately
+if (monitor->CheckForFileDrag()) {
+    monitor->hasActiveDrag.store(true);
+    NSLog(@"[DragMonitor] Files detected during drag event");
+} else {
+    // Still mark as active drag even if no files detected yet
+    // The polling loop will retry
+    monitor->hasActiveDrag.store(true);
+    NSLog(@"[DragMonitor] Drag detected but no files found yet");
+}
+```
+
+### 2. **Add Periodic Check in Monitoring Loop** (lines 495-502)
+
+```cpp
+// Periodic check for file drag during active drag state
+// This ensures we catch files even if initial detection failed
+if (isDragging.load() && !hasActiveDrag.load()) {
+    if (CheckForFileDrag()) {
+        hasActiveDrag.store(true);
+        NSLog(@"[DragMonitor] Files detected in monitoring loop");
+    }
+}
+```
+
+### 3. **Handle Promised Files and Apple URL Pasteboard** (lines 248-299)
+
+```cpp
+// Handle promised files (common when dragging from certain apps)
+if ((!fileURLs || fileURLs.count == 0) && [types containsObject:@"com.apple.pasteboard.promised-file-url"]) {
+    NSLog(@"[DragMonitor] Attempting to read promised file URLs");
+
+    // Try to get promised file URLs
+    NSArray* promisedURLs = [dragPasteboard readObjectsForClasses:@[[NSURL class]]
+                                                        options:@{NSPasteboardURLReadingContentsConformToTypesKey: @[@"com.apple.pasteboard.promised-file-url"]}];
+    if (promisedURLs && promisedURLs.count > 0) {
+        fileURLs = promisedURLs;
+        NSLog(@"[DragMonitor] Found %lu promised file URLs", (unsigned long)promisedURLs.count);
+    }
+}
+
+// Try Apple URL pasteboard type
+if ((!fileURLs || fileURLs.count == 0) && [types containsObject:@"Apple URL pasteboard type"]) {
+    NSLog(@"[DragMonitor] Attempting to read Apple URL pasteboard type");
+
+    // Read the URL data
+    NSData* urlData = [dragPasteboard dataForType:@"Apple URL pasteboard type"];
+    if (urlData && urlData.length > 0) {
+        // Apple URL format is often a property list
+        NSPropertyListFormat format;
+        NSError* error = nil;
+        id plist = [NSPropertyListSerialization propertyListWithData:urlData
+                                                            options:NSPropertyListImmutable
+                                                            format:&format
+                                                              error:&error];
+
+        if (plist && [plist isKindOfClass:[NSArray class]]) {
+            NSMutableArray* urls = [NSMutableArray array];
+            for (id item in (NSArray*)plist) {
+                NSString* urlString = nil;
+                if ([item isKindOfClass:[NSString class]]) {
+                    urlString = item;
+                } else if ([item isKindOfClass:[NSURL class]]) {
+                    urlString = [(NSURL*)item absoluteString];
+                }
+
+                if (urlString) {
+                    NSURL* url = [NSURL URLWithString:urlString];
+                    if (url && [url isFileURL]) {
+                        [urls addObject:url];
+                    }
+                }
+            }
+            if (urls.count > 0) {
+                fileURLs = urls;
+                NSLog(@"[DragMonitor] Found %lu file URLs from Apple URL pasteboard", (unsigned long)urls.count);
+            }
+        }
+    }
+}
+```
+
+**Resolution Status**: ✅ **FIXED**
+
+- Files now detected correctly when dragging
+- System logs confirm: `Found 1 file URLs from Apple URL pasteboard`
+- Shake + drag functionality fully restored
+- Works with both regular files and promised files
+
+**Prevention for Future**:
+
+1. **Always implement promised functionality** mentioned in comments
+2. **Test with various drag sources** (Finder, Desktop, Safari downloads, etc.)
+3. **Check all pasteboard types** when debugging drag issues
+4. **Use system Console.app** to see NSLog output from native modules
+
+**Debug Commands**:
+
+```bash
+# Monitor system logs for native module output
+log show --predicate 'subsystem == "com.apple.AppKit" AND category == "Pasteboard"' --last 5m
+
+# Check drag detection in app logs
+yarn dev 2>&1 | grep -E "DragMonitor|File drag|Pasteboard|shake"
+
+# Rebuild native module after changes
+cd src/native/drag-monitor/darwin && node-gyp rebuild
+cp build/Release/drag_monitor_darwin.node ../../../../dist/main/
+```
+
+---
+
+**Last Updated**: September 28, 2025 - Drag detection fixed with promised file support
+
 ## Issue 2: Native Drag Monitor Caching Problem (2025-09-24) ✅ RESOLVED
 
 **Problem**: When dropping different files consecutively on a shelf, the native drag monitor returns cached file information from the previous drag operation instead of detecting the new files being dragged.
 
 **Symptoms**:
+
 - Drop folder → shelf shows folder ✓
 - Drop PDF → shelf shows folder again ✗ (should show PDF)
 - Both drag operations show same file name in logs: `files: [ 'TestFolder' ]`
 - State machine blocked transitions: `🚫 BLOCKED STATE TRANSITION: No transition found for event 'items_added' from state 'shelf_active'`
 
 **Root Cause Analysis**:
+
 1. **Missing State Transition**: No transition defined for `ITEMS_ADDED` from `SHELF_ACTIVE` state
 2. **Native Module Caching**: C++ module's `draggedFilePaths` vector not cleared properly between drags
 3. **Pasteboard Change Detection**: Too strict `changeCount` logic prevented rapid consecutive drag detection
 
 **Technical Details**:
+
 - **State Machine**: `src/main/modules/state/dragShelfStateMachine.ts`
 - **Native Module**: `src/native/drag-monitor/darwin-drag-monitor.mm`
 - **Cache Variable**: `std::vector<std::string> draggedFilePaths`
@@ -270,6 +440,7 @@ const nativeMetrics = tracker.getNativePerformanceMetrics();
 **Complete Solution Applied**:
 
 ### 1. **State Machine Fix** (`dragShelfStateMachine.ts:119-125`)
+
 ```typescript
 {
   from: DragShelfState.SHELF_ACTIVE,
@@ -282,6 +453,7 @@ const nativeMetrics = tracker.getNativePerformanceMetrics();
 ```
 
 ### 2. **Native Module Cache Fix** (`darwin-drag-monitor.mm:161`)
+
 ```cpp
 // OLD: Blocked all processing if changeCount hadn't increased
 if (currentChangeCount <= lastPasteboardChangeCount.load()) {
@@ -295,6 +467,7 @@ if (currentChangeCount <= lastPasteboardChangeCount.load() && hasActiveDrag.load
 ```
 
 ### 3. **Aggressive Cache Reset** (`darwin-drag-monitor.mm:359`)
+
 ```cpp
 if (wasDragging) {
     monitor->hasActiveDrag.store(false);
@@ -308,6 +481,7 @@ if (wasDragging) {
 ```
 
 ### 4. **JavaScript Layer Enhancement** (`drag-monitor/index.ts:257-278`)
+
 ```typescript
 public getDraggedItems(): DraggedItem[] {
   if (!this.nativeMonitor) return [];
@@ -332,18 +506,21 @@ public getDraggedItems(): DraggedItem[] {
 ```
 
 **Resolution Status**: ✅ **FIXED**
+
 - State machine transitions work properly
 - Different files now detected correctly in consecutive drags
 - No more cached/stale file information
 - PDF files, folders, and other file types display correctly
 
 **Prevention for Future**:
+
 1. **Always test consecutive drag operations** with different file types during development
 2. **Monitor state machine logs** for blocked transitions
 3. **Check native module cache clearing** when modifying drag detection
 4. **Run `yarn build:native:clean`** after any native module changes
 
 **Commands for Testing**:
+
 ```bash
 # Rebuild native modules after changes
 yarn build:native:clean

@@ -79,7 +79,7 @@ module.exports = merge(common, {
           noErrorOnMissing: true
         },
         {
-          from: path.join(projectRoot, 'src/native/drag-monitor/build/Release/drag_monitor_darwin.node'),
+          from: path.join(projectRoot, 'src/native/drag-monitor/darwin/build/Release/drag_monitor_darwin.node'),
           to: path.join(projectRoot, 'dist/main/drag_monitor_darwin.node'),
           noErrorOnMissing: true
         },

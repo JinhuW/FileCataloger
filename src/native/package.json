@@ -5,11 +5,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "echo 'Using direct node-gyp build - advanced build system available in scripts/native/' && cd mouse-tracker/darwin && node-gyp rebuild && cd ../../drag-monitor && node-gyp rebuild",
-    "build:clean": "cd mouse-tracker/darwin && node-gyp clean && node-gyp rebuild && cd ../../drag-monitor && node-gyp clean && node-gyp rebuild",
-    "build:verbose": "cd mouse-tracker/darwin && node-gyp rebuild --verbose && cd ../../drag-monitor && node-gyp rebuild --verbose",
+    "build": "echo 'Using direct node-gyp build - advanced build system available in scripts/native/' && cd mouse-tracker/darwin && node-gyp rebuild && cd ../../drag-monitor/darwin && node-gyp rebuild",
+    "build:clean": "cd mouse-tracker/darwin && node-gyp clean && node-gyp rebuild && cd ../../drag-monitor/darwin && node-gyp clean && node-gyp rebuild",
+    "build:verbose": "cd mouse-tracker/darwin && node-gyp rebuild --verbose && cd ../../drag-monitor/darwin && node-gyp rebuild --verbose",
     "build:mouse-tracker": "cd mouse-tracker/darwin && node-gyp rebuild",
-    "build:drag-monitor": "cd drag-monitor && node-gyp rebuild",
+    "build:drag-monitor": "cd drag-monitor/darwin && node-gyp rebuild",
     "clean": "cd mouse-tracker/darwin && node-gyp clean",
     "test": "echo 'Native module tests not yet implemented'",
     "validate": "echo 'Configuration validation available in scripts/native/'"

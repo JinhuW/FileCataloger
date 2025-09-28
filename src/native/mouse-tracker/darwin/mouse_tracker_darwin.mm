@@ -124,7 +124,6 @@ private:
     napi_threadsafe_function tsfn_move_;
     napi_threadsafe_function tsfn_button_;
     CFMachPortRef event_tap_;
-    CFRunLoopSourceRef run_loop_source_;
     std::thread event_thread_;
     std::thread batch_thread_;
     std::atomic<bool> running_;
@@ -150,6 +149,39 @@ private:
     // Performance tracking
     std::atomic<uint64_t> events_processed_;
     std::atomic<uint64_t> events_batched_;
+
+    // RAII wrapper for CFRunLoopSource
+    class RunLoopSourceWrapper {
+    private:
+        CFRunLoopSourceRef source_;
+        CFRunLoopRef runLoop_;
+
+    public:
+        RunLoopSourceWrapper() : source_(nullptr), runLoop_(nullptr) {}
+
+        ~RunLoopSourceWrapper() {
+            if (source_ && runLoop_) {
+                CFRunLoopRemoveSource(runLoop_, source_, kCFRunLoopCommonModes);
+                CFRelease(source_);
+            }
+        }
+
+        void create(CFMachPortRef port) {
+            source_ = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, port, 0);
+            runLoop_ = CFRunLoopGetCurrent();
+            if (source_ && runLoop_) {
+                CFRunLoopAddSource(runLoop_, source_, kCFRunLoopCommonModes);
+            }
+        }
+
+        bool isValid() const { return source_ != nullptr; }
+
+        // Delete copy/move to ensure single ownership
+        RunLoopSourceWrapper(const RunLoopSourceWrapper&) = delete;
+        RunLoopSourceWrapper& operator=(const RunLoopSourceWrapper&) = delete;
+    };
+
+    std::unique_ptr<RunLoopSourceWrapper> run_loop_wrapper_;
     
 public:
     MacOSMouseTracker(napi_env env)
@@ -157,13 +189,13 @@ public:
           tsfn_move_(nullptr),
           tsfn_button_(nullptr),
           event_tap_(nullptr),
-          run_loop_source_(nullptr),
           running_(false),
           left_button_down_(false),
           right_button_down_(false),
           last_error_(FileCataloger::ErrorCode::SUCCESS, "No error"),
           events_processed_(0),
-          events_batched_(0) {
+          events_batched_(0),
+          run_loop_wrapper_(std::make_unique<RunLoopSourceWrapper>()) {
     }
     
     ~MacOSMouseTracker() {
@@ -312,10 +344,7 @@ public:
             batch_thread_.join();
         }
 
-        if (run_loop_source_) {
-            CFRelease(run_loop_source_);
-            run_loop_source_ = nullptr;
-        }
+        // Run loop source cleanup handled by RAII wrapper
 
         if (event_tap_) {
             CFRelease(event_tap_);
@@ -352,16 +381,25 @@ private:
             return;
         }
         
-        run_loop_source_ = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, event_tap_, 0);
-        CFRunLoopAddSource(CFRunLoopGetCurrent(), run_loop_source_, kCFRunLoopCommonModes);
+        run_loop_wrapper_->create(event_tap_);
+        if (!run_loop_wrapper_->isValid()) {
+            std::cerr << "Failed to create run loop source" << std::endl;
+            SetError(FileCataloger::ErrorCode::RUNLOOP_CREATE_FAILED,
+                    "Failed to create run loop source for event tap");
+            CFRelease(event_tap_);
+            event_tap_ = nullptr;
+            running_ = false;
+            return;
+        }
+
         CGEventTapEnable(event_tap_, true);
         
         // Run the event loop with reduced timeout for better responsiveness
         while (running_.load()) {
             CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.01, false); // 10ms timeout
         }
-        
-        CFRunLoopRemoveSource(CFRunLoopGetCurrent(), run_loop_source_, kCFRunLoopCommonModes);
+
+        // RAII wrapper handles cleanup
     }
     
     static CGEventRef EventCallback(CGEventTapProxy proxy, CGEventType type,

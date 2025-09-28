@@ -20,7 +20,7 @@
   "targets": [
     {
       "target_name": "drag_monitor_darwin",
-      "sources": ["darwin-drag-monitor.mm"],
+      "sources": ["drag_monitor_darwin.mm"],
       "include_dirs": [
         "<!@(node -p \"require('node-addon-api').include\")"
       ],
@@ -29,10 +29,23 @@
       ],
       "cflags!": ["-fno-exceptions"],
       "cflags_cc!": ["-fno-exceptions"],
+      "cflags": ["-O3", "-ffast-math", "-march=native"],
+      "cflags_cc": ["-O3", "-ffast-math", "-march=native", "-std=c++17"],
       "xcode_settings": {
         "GCC_ENABLE_CPP_EXCEPTIONS": "YES",
         "CLANG_CXX_LIBRARY": "libc++",
         "MACOSX_DEPLOYMENT_TARGET": "10.15",
+        "GCC_OPTIMIZATION_LEVEL": "3",
+        "LLVM_LTO": "YES",
+        "CLANG_CXX_LANGUAGE_STANDARD": "c++17",
+        "OTHER_CPLUSPLUSFLAGS": [
+          "-ffast-math",
+          "-funroll-loops"
+        ],
+        "OTHER_CFLAGS": [
+          "-fobjc-arc",
+          "-ffast-math"
+        ],
         "OTHER_LDFLAGS": [
           "-framework", "CoreGraphics",
           "-framework", "ApplicationServices",

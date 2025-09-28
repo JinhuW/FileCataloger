@@ -59,15 +59,19 @@ export const NATIVE_MODULES: NativeModuleConfig[] = [
       'cp build/Release/*.node ../../'
     ]
   },
-  // Example of future modules:
-  // {
-  //   name: 'drag-monitor',
-  //   displayName: 'Drag Monitor',
-  //   platforms: ['darwin', 'win32'],
-  //   buildPath: path.join(NATIVE_ROOT, 'drag-monitor'),
-  //   binding: 'binding.gyp',
-  //   targetName: 'drag_monitor'
-  // }
+  {
+    name: 'drag-monitor',
+    displayName: 'Drag Monitor',
+    platforms: ['darwin'], // TODO: Add 'win32', 'linux' when implemented
+    buildPath: path.join(NATIVE_ROOT, 'drag-monitor', 'darwin'),
+    binding: 'binding.gyp',
+    targetName: 'drag_monitor_darwin',
+    buildArgs: ['--release', '--verbose'],
+    postBuild: [
+      // Copy built module to expected location for webpack
+      'cp build/Release/*.node ../../'
+    ]
+  }
 ];
 
 /**
