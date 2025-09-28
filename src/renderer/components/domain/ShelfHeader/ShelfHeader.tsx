@@ -41,7 +41,7 @@ export interface ShelfHeaderProps {
 }
 
 export const ShelfHeader = React.memo<ShelfHeaderProps>(
-  ({ itemCount, onClose, title = 'Shelf' }) => {
+  ({ config, itemCount, onClose, title = 'Shelf' }) => {
     return (
       <div
         className="shelf-header"
