@@ -2,6 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { app } from 'electron';
 import { LogLevel, LogEntry as SharedLogEntry, ILogger } from '@shared/logger';
+import { CircularLogBuffer, CircularLogConfig } from './circularLogBuffer';
 
 /**
  * Main process log entry (extends shared interface)
@@ -31,9 +32,10 @@ interface LoggerConfig {
   enableConsoleLogging: boolean;
   enableFileLogging: boolean;
   logDirectory: string;
-  maxLogFiles: number;
   logFilePrefix: string;
   logFileExtension: string;
+  circularBuffer?: Partial<CircularLogConfig>;
+  productionMode?: boolean;
 }
 
 /**
@@ -46,25 +48,37 @@ export class Logger implements ILogger {
   private config: LoggerConfig;
   private logDirectory: string;
   private currentLogFile: string;
-  private fileWriteStream: fs.WriteStream | null = null;
+  private circularBuffer: CircularLogBuffer | null = null;
   private isInitialized: boolean = false;
   private pendingLogs: LogEntry[] = [];
   private context: string | null = null;
 
   private constructor(config?: Partial<LoggerConfig>) {
+    const isProduction = process.env.NODE_ENV === 'production';
     const defaultConfig: LoggerConfig = {
-      logLevel: LogLevel.DEBUG,
-      enableConsoleLogging: true,
+      logLevel: isProduction ? LogLevel.INFO : LogLevel.DEBUG,
+      enableConsoleLogging: !isProduction,
       enableFileLogging: true,
       logDirectory: this.getLogDirectory(),
-      maxLogFiles: 7, // Keep 7 days worth of logs
       logFilePrefix: 'app',
       logFileExtension: 'log',
+      productionMode: isProduction,
+      circularBuffer: {
+        maxLines: 1000,
+        flushInterval: 5000,
+        backupOnRotate: false,
+      },
     };
 
     this.config = { ...defaultConfig, ...config };
     this.logDirectory = this.config.logDirectory;
     this.currentLogFile = this.generateLogFileName();
+
+    // Initialize circular buffer
+    if (this.config.enableFileLogging) {
+      const logPath = path.join(this.logDirectory, this.currentLogFile);
+      this.circularBuffer = new CircularLogBuffer(logPath, this.config.circularBuffer);
+    }
 
     this.initialize();
   }
@@ -115,11 +129,8 @@ export class Logger implements ILogger {
         fs.mkdirSync(this.logDirectory, { recursive: true });
       }
 
-      // Setup file logging if enabled
-      if (this.config.enableFileLogging) {
-        await this.setupFileLogging();
-        await this.rotateOldLogs();
-      }
+      // No need for additional setup with circular buffer
+      // It's already initialized in the constructor
 
       this.isInitialized = true;
 
@@ -142,32 +153,6 @@ export class Logger implements ILogger {
       // Fall back to console-only logging
       this.config.enableFileLogging = false;
       this.isInitialized = true;
-    }
-  }
-
-  /**
-   * Setup file logging stream
-   */
-  private async setupFileLogging(): Promise<void> {
-    try {
-      const logFilePath = path.join(this.logDirectory, this.currentLogFile);
-
-      // Close existing stream if any
-      if (this.fileWriteStream) {
-        this.fileWriteStream.end();
-      }
-
-      // Create new write stream
-      this.fileWriteStream = fs.createWriteStream(logFilePath, { flags: 'a' });
-
-      // Handle stream errors
-      this.fileWriteStream.on('error', error => {
-        console.error('Log file write error:', error);
-        this.config.enableFileLogging = false;
-      });
-    } catch (error) {
-      console.error('Failed to setup file logging:', error);
-      this.config.enableFileLogging = false;
     }
   }
 
@@ -204,48 +189,6 @@ export class Logger implements ILogger {
   }
 
   /**
-   * Rotate old log files (keep only last N days)
-   */
-  private async rotateOldLogs(): Promise<void> {
-    try {
-      if (!fs.existsSync(this.logDirectory)) {
-        return;
-      }
-
-      const files = fs.readdirSync(this.logDirectory);
-      const logFiles = files
-        .filter(
-          file =>
-            file.startsWith(this.config.logFilePrefix) &&
-            file.endsWith(this.config.logFileExtension)
-        )
-        .map(file => ({
-          name: file,
-          path: path.join(this.logDirectory, file),
-          mtime: fs.statSync(path.join(this.logDirectory, file)).mtime,
-        }))
-        .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
-
-      // Remove files beyond the maximum count
-      if (logFiles.length > this.config.maxLogFiles) {
-        const filesToDelete = logFiles.slice(this.config.maxLogFiles);
-        for (const file of filesToDelete) {
-          try {
-            fs.unlinkSync(file.path);
-            // Using console.log intentionally during log rotation
-            // eslint-disable-next-line no-console
-            console.log(`Rotated old log file: ${file.name}`);
-          } catch (error) {
-            console.warn(`Failed to delete old log file ${file.name}:`, error);
-          }
-        }
-      }
-    } catch (error) {
-      console.warn('Failed to rotate old logs:', error);
-    }
-  }
-
-  /**
    * Format timestamp for logs
    */
   private formatTimestamp(): string {
@@ -268,8 +211,8 @@ export class Logger implements ILogger {
       this.writeToConsole(entry);
     }
 
-    // Write to file if enabled and initialized
-    if (this.config.enableFileLogging && this.fileWriteStream) {
+    // Write to circular buffer if enabled
+    if (this.config.enableFileLogging && this.circularBuffer) {
       this.writeToFile(entry);
     }
   }
@@ -310,10 +253,15 @@ export class Logger implements ILogger {
   }
 
   /**
-   * Write log entry to file (plain text format)
+   * Write log entry to file using circular buffer
    */
   private writeToFile(entry: LogEntry): void {
-    if (!this.fileWriteStream) {
+    if (!this.circularBuffer) {
+      return;
+    }
+
+    // Skip verbose debug logs in production
+    if (this.config.productionMode && entry.level === LogLevel.DEBUG) {
       return;
     }
 
@@ -325,11 +273,21 @@ export class Logger implements ILogger {
 
     logLine += ` ${entry.message}`;
 
-    // Add data if present
+    // Add data if present (limit size in production)
     if (entry.data && entry.data.length > 0) {
       try {
         const dataStr = entry.data
-          .map(item => (typeof item === 'object' ? JSON.stringify(item, null, 2) : String(item)))
+          .map(item => {
+            if (typeof item === 'object') {
+              const json = JSON.stringify(item, null, 2);
+              // Truncate large objects in production
+              if (this.config.productionMode && json.length > 500) {
+                return json.substring(0, 500) + '... [truncated]';
+              }
+              return json;
+            }
+            return String(item);
+          })
           .join(' ');
         logLine += ` ${dataStr}`;
       } catch (error) {
@@ -337,10 +295,8 @@ export class Logger implements ILogger {
       }
     }
 
-    logLine += '\n';
-
-    // Write to file immediately (no buffering for important logs)
-    this.fileWriteStream.write(logLine);
+    // Add to circular buffer
+    this.circularBuffer.addLine(logLine);
   }
 
   /**
@@ -442,19 +398,46 @@ export class Logger implements ILogger {
   }
 
   /**
+   * Get log statistics
+   */
+  public async getLogStats(): Promise<{
+    lineCount: number;
+    estimatedMemoryUsage: number;
+    logFilePath: string | null;
+  }> {
+    const stats = {
+      lineCount: 0,
+      estimatedMemoryUsage: 0,
+      logFilePath: this.getLogFilePath(),
+    };
+
+    if (this.circularBuffer) {
+      stats.lineCount = this.circularBuffer.getLineCount();
+      stats.estimatedMemoryUsage = this.circularBuffer.getMemoryUsage();
+    }
+
+    return stats;
+  }
+
+  /**
+   * Manually clear logs
+   */
+  public async clearLogs(): Promise<void> {
+    if (this.circularBuffer) {
+      await this.circularBuffer.clear();
+      this.info('Logs cleared');
+    }
+  }
+
+  /**
    * Flush and close logger
    */
   public async close(): Promise<void> {
-    return new Promise(resolve => {
-      if (this.fileWriteStream) {
-        this.fileWriteStream.end(() => {
-          this.info('Logger closed');
-          resolve();
-        });
-      } else {
-        resolve();
-      }
-    });
+    this.info('Logger closing');
+
+    if (this.circularBuffer) {
+      await this.circularBuffer.close();
+    }
   }
 
   /**
