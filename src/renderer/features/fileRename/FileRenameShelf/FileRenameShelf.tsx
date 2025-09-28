@@ -51,7 +51,7 @@ export interface FileRenameShelfProps {
 }
 
 export const FileRenameShelf = React.memo<FileRenameShelfProps>(
-  ({ config, onConfigChange, onItemAdd, onItemRemove, onClose }) => {
+  ({ config, onItemAdd, onItemRemove, onClose }) => {
     const [selectedFiles, setSelectedFiles] = useState<ShelfItem[]>([]);
     const [renameComponents, setRenameComponents] = useState<RenameComponent[]>([
       { id: 'date-1', type: 'date', format: 'YYYYMMDD' },
@@ -248,7 +248,7 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
               name: file.name,
               path: file.path,
               type: file.type,
-              keys: Object.keys(file)
+              keys: Object.keys(file),
             });
 
             // Validate that the file has a valid path
@@ -271,7 +271,7 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
                 onItemAdd({
                   ...file,
                   name: finalName,
-                  path: newPath
+                  path: newPath,
                 });
               } else {
                 logger.error(`❌ Failed to rename ${file.name}:`, result.error);
