@@ -65,12 +65,7 @@ export class KeyboardManager extends EventEmitter {
         description: 'Quit application',
       },
       // Additional shortcuts
-      {
-        accelerator: 'CommandOrControl+Shift+N',
-        action: 'new-shelf',
-        enabled: true,
-        description: 'Create new shelf',
-      },
+      // Removed - this is now handled by create-shelf from preferences
       {
         accelerator: 'CommandOrControl+Shift+P',
         action: 'pin-shelf',
@@ -78,7 +73,7 @@ export class KeyboardManager extends EventEmitter {
         description: 'Pin/unpin current shelf',
       },
       {
-        accelerator: 'CommandOrControl+Shift+S',
+        accelerator: 'CommandOrControl+Option+Shift+S',
         action: 'save-shelf',
         enabled: true,
         description: 'Save shelf contents',
@@ -116,7 +111,7 @@ export class KeyboardManager extends EventEmitter {
   }
 
   private listenForPreferenceChanges(): void {
-    preferencesManager.on('shortcuts-changed', (shortcuts: any) => {
+    preferencesManager.on('shortcuts-changed', (shortcuts: Record<string, string>) => {
       this.updateShortcuts(shortcuts);
     });
   }
@@ -174,7 +169,11 @@ export class KeyboardManager extends EventEmitter {
 
   private registerShortcut(shortcut: KeyboardShortcut): void {
     try {
+      logger.info(
+        `Registering shortcut with globalShortcut: ${shortcut.accelerator} -> ${shortcut.action}`
+      );
       const registered = globalShortcut.register(shortcut.accelerator, () => {
+        logger.info(`Shortcut triggered: ${shortcut.accelerator} -> ${shortcut.action}`);
         this.handleShortcut(shortcut.action);
       });
 
@@ -185,6 +184,10 @@ export class KeyboardManager extends EventEmitter {
           category: ErrorCategory.SYSTEM,
           context: { shortcut },
         });
+      } else {
+        logger.info(
+          `✓ Successfully registered shortcut: ${shortcut.accelerator} -> ${shortcut.action}`
+        );
       }
     } catch (error) {
       errorHandler.handleError(error as Error, {
@@ -196,6 +199,8 @@ export class KeyboardManager extends EventEmitter {
   }
 
   private handleShortcut(action: string): void {
+    logger.info(`Handling shortcut action: ${action}`);
+
     // Emit event for action
     this.emit('shortcut', action);
 
@@ -223,6 +228,10 @@ export class KeyboardManager extends EventEmitter {
 
       case 'new-shelf':
         this.emit('new-shelf');
+        break;
+
+      case 'create-shelf':
+        this.emit('create-shelf');
         break;
 
       case 'pin-shelf':
@@ -265,6 +274,8 @@ export class KeyboardManager extends EventEmitter {
     description: string = ''
   ): boolean {
     try {
+      logger.info(`Attempting to register custom shortcut: ${accelerator} for action: ${action}`);
+
       // Check if accelerator is already in use
       if (this.isAcceleratorInUse(accelerator)) {
         logger.warn(`Accelerator already in use: ${accelerator}`);
@@ -284,6 +295,11 @@ export class KeyboardManager extends EventEmitter {
 
       if (this.isActive) {
         this.registerShortcut(shortcut);
+        logger.info(`Custom shortcut registered with globalShortcut: ${accelerator}`);
+      } else {
+        logger.warn(
+          `KeyboardManager not active, shortcut stored but not registered: ${accelerator}`
+        );
       }
 
       return true;

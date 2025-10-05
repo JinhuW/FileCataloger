@@ -189,6 +189,36 @@
       opacity: 1;
       transform: translateY(0);
     }
+
+    .shortcut-input {
+      outline: none;
+    }
+
+    .shortcut-input:hover {
+      border-color: #007AFF !important;
+      background: #f8f9fa !important;
+    }
+
+    .shortcut-input.recording {
+      border-color: #28a745 !important;
+      background: #e8f5e9 !important;
+      animation: pulse 1.5s infinite;
+    }
+
+    .shortcut-input.error {
+      border-color: #dc3545 !important;
+      background: #fff5f5 !important;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0.4); }
+      70% { box-shadow: 0 0 0 10px rgba(40, 167, 69, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(40, 167, 69, 0); }
+    }
+
+    .reset-shortcut:hover {
+      background: #f0f0f0;
+    }
   </style>
 </head>
 <body>
@@ -249,9 +279,10 @@
     <h2>Shake Detection</h2>
     <div class="preference-item">
       <label class="checkbox-label">
-        <input type="checkbox" id="shakeEnabled" checked>
-        <span>Enable shake gesture to create shelves</span>
+        <input type="checkbox" id="dragShakeEnabled" checked>
+        <span>Enable drag + shake (create shelf while dragging files)</span>
       </label>
+      <div class="description">When enabled, shake the mouse while dragging files to create a shelf. When disabled, saves CPU resources and only keyboard shortcuts can create shelves.</div>
     </div>
     <div class="preference-item">
       <label for="sensitivity">Shake Sensitivity</label>
@@ -261,6 +292,83 @@
         <option value="high">High</option>
       </select>
       <div class="description">Higher sensitivity requires less movement to trigger shelf creation.</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Keyboard Shortcuts</h2>
+    <div class="preference-item">
+      <label for="createShelfShortcut">Create Shelf</label>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <input type="text" id="createShelfShortcut" class="shortcut-input" placeholder="Click to record" style="
+          padding: 8px 12px;
+          border: 2px solid #ddd;
+          border-radius: 6px;
+          background: white;
+          font-size: 14px;
+          font-family: monospace;
+          width: 200px;
+          cursor: pointer;
+          transition: all 0.2s;
+        ">
+        <button class="reset-shortcut" data-shortcut="createShelf" style="
+          padding: 6px 12px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          background: white;
+          font-size: 12px;
+          cursor: pointer;
+        ">Reset</button>
+      </div>
+      <div class="description">Click the input and press your desired key combination to set the shortcut.</div>
+    </div>
+    <div class="preference-item">
+      <label for="toggleShelfShortcut">Toggle Shelf Visibility</label>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <input type="text" id="toggleShelfShortcut" class="shortcut-input" placeholder="Click to record" style="
+          padding: 8px 12px;
+          border: 2px solid #ddd;
+          border-radius: 6px;
+          background: white;
+          font-size: 14px;
+          font-family: monospace;
+          width: 200px;
+          cursor: pointer;
+          transition: all 0.2s;
+        ">
+        <button class="reset-shortcut" data-shortcut="toggleShelf" style="
+          padding: 6px 12px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          background: white;
+          font-size: 12px;
+          cursor: pointer;
+        ">Reset</button>
+      </div>
+    </div>
+    <div class="preference-item">
+      <label for="clearShelfShortcut">Clear Shelf</label>
+      <div style="display: flex; align-items: center; gap: 10px;">
+        <input type="text" id="clearShelfShortcut" class="shortcut-input" placeholder="Click to record" style="
+          padding: 8px 12px;
+          border: 2px solid #ddd;
+          border-radius: 6px;
+          background: white;
+          font-size: 14px;
+          font-family: monospace;
+          width: 200px;
+          cursor: pointer;
+          transition: all 0.2s;
+        ">
+        <button class="reset-shortcut" data-shortcut="clearShelf" style="
+          padding: 6px 12px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          background: white;
+          font-size: 12px;
+          cursor: pointer;
+        ">Reset</button>
+      </div>
     </div>
   </div>
 

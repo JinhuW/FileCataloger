@@ -14,6 +14,7 @@ export interface AppPreferences {
   // Shake Detection
   shakeDetection: {
     enabled: boolean;
+    dragShakeEnabled: boolean; // Toggle for drag + shake feature
     sensitivity: 'low' | 'medium' | 'high';
     requiredDirectionChanges: number;
     timeWindow: number;
@@ -44,6 +45,7 @@ export interface AppPreferences {
 
   // Keyboard Shortcuts
   shortcuts: {
+    createShelf: string; // New shortcut for creating shelf
     toggleShelf: string;
     clearShelf: string;
     hideAllShelves: string;
@@ -81,6 +83,7 @@ const DEFAULT_PREFERENCES: AppPreferences = {
 
   shakeDetection: {
     enabled: true,
+    dragShakeEnabled: true, // Default: drag + shake enabled
     sensitivity: 'medium',
     requiredDirectionChanges: 6,
     timeWindow: 500,
@@ -108,6 +111,7 @@ const DEFAULT_PREFERENCES: AppPreferences = {
   },
 
   shortcuts: {
+    createShelf: 'CommandOrControl+Option+S', // Shortcut to create shelf (Option+S avoids conflicts)
     toggleShelf: 'CommandOrControl+Shift+D',
     clearShelf: 'CommandOrControl+Shift+C',
     hideAllShelves: 'CommandOrControl+Shift+H',

@@ -53,6 +53,7 @@ export class DragShakeDetector extends EventEmitter {
   private draggedItems: DraggedItem[] = [];
   private lastDragShakeTime: number = 0;
   private dragShakeDebounce: number = 400; // ms - much longer to prevent multiple shelves
+  private isRunning: boolean = false;
 
   constructor() {
     super();
@@ -82,10 +83,14 @@ export class DragShakeDetector extends EventEmitter {
 
     try {
       this.dragMonitor = createDragMonitor();
-      this.logger.debug(`🔧 DEBUG: createDragMonitor() returned: ${this.dragMonitor ? 'instance' : 'null'}`);
+      this.logger.debug(
+        `🔧 DEBUG: createDragMonitor() returned: ${this.dragMonitor ? 'instance' : 'null'}`
+      );
       if (this.dragMonitor) {
         this.logger.debug(`🔧 DEBUG: dragMonitor type: ${this.dragMonitor.constructor.name}`);
-        this.logger.debug(`🔧 DEBUG: dragMonitor methods: ${Object.getOwnPropertyNames(Object.getPrototypeOf(this.dragMonitor)).join(', ')}`);
+        this.logger.debug(
+          `🔧 DEBUG: dragMonitor methods: ${Object.getOwnPropertyNames(Object.getPrototypeOf(this.dragMonitor)).join(', ')}`
+        );
         this.logger.debug(`🔧 DEBUG: start method type: ${typeof this.dragMonitor.start}`);
       }
       this.logger.info('✅ Native drag monitor initialized');
@@ -241,6 +246,11 @@ export class DragShakeDetector extends EventEmitter {
   }
 
   public async start(): Promise<void> {
+    if (this.isRunning) {
+      this.logger.warn('DragShakeDetector is already running');
+      return;
+    }
+
     this.logger.info('Starting native drag-shake detector');
 
     // Start mouse batcher
@@ -256,6 +266,7 @@ export class DragShakeDetector extends EventEmitter {
       const success = this.dragMonitor.start();
       this.logger.debug(`🔧 DEBUG: dragMonitor.start() returned: ${success}`);
       if (success) {
+        this.isRunning = true;
         this.logger.info('✅ System ready');
         this.logger.info('📝 Instructions:');
         this.logger.info('   1. Drag files from Finder');
@@ -272,6 +283,10 @@ export class DragShakeDetector extends EventEmitter {
   }
 
   public stop(): void {
+    if (!this.isRunning) {
+      return;
+    }
+
     this.logger.info('Stopping drag-shake detector');
 
     this.mouseBatcher.stop();
@@ -287,8 +302,13 @@ export class DragShakeDetector extends EventEmitter {
 
     this.isDragging = false;
     this.draggedItems = [];
+    this.isRunning = false;
 
     this.emit('stopped');
+  }
+
+  public isActive(): boolean {
+    return this.isRunning;
   }
 
   public processPosition(position: MousePosition): void {

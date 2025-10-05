@@ -4,7 +4,6 @@ import { EventEmitter } from 'events';
 import { z } from 'zod';
 import { logger } from '../utils/logger';
 import { AppPreferences } from './preferencesManager';
-import { SavedPattern } from '../../../shared/types';
 
 // Define schema for validation
 const preferencesSchema = z.object({
@@ -14,6 +13,7 @@ const preferencesSchema = z.object({
 
   shakeDetection: z.object({
     enabled: z.boolean(),
+    dragShakeEnabled: z.boolean(),
     sensitivity: z.enum(['low', 'medium', 'high']),
     requiredDirectionChanges: z.number().min(2).max(10),
     timeWindow: z.number().min(100).max(2000),
@@ -41,6 +41,7 @@ const preferencesSchema = z.object({
   }),
 
   shortcuts: z.object({
+    createShelf: z.string(),
     toggleShelf: z.string(),
     clearShelf: z.string(),
     hideAllShelves: z.string(),
@@ -75,6 +76,7 @@ const DEFAULT_PREFERENCES: AppPreferences = {
 
   shakeDetection: {
     enabled: true,
+    dragShakeEnabled: true,
     sensitivity: 'medium',
     requiredDirectionChanges: 6,
     timeWindow: 500,
@@ -102,6 +104,7 @@ const DEFAULT_PREFERENCES: AppPreferences = {
   },
 
   shortcuts: {
+    createShelf: 'CommandOrControl+Option+S',
     toggleShelf: 'CommandOrControl+Shift+D',
     clearShelf: 'CommandOrControl+Shift+C',
     hideAllShelves: 'CommandOrControl+Shift+H',
@@ -192,13 +195,28 @@ export class EnhancedPreferencesManager extends EventEmitter {
     return EnhancedPreferencesManager.instance;
   }
 
+  /**
+   * Type-safe wrapper for getting store data
+   */
+  private getStoreData(): AppPreferences {
+    return this.store.store as AppPreferences;
+  }
+
+  /**
+   * Type-safe wrapper for setting store data
+   */
+  private setStoreData(data: AppPreferences): void {
+    this.store.store = data;
+  }
+
   private addBackupFeatures(): void {
     // Create periodic backups
     setInterval(
       () => {
         try {
           const backupPath = `${this.store.path}.backup`;
-          const currentData = this.store.store;
+          const currentData = this.getStoreData();
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
           require('fs').writeFileSync(backupPath, JSON.stringify(currentData, null, 2));
           logger.info('Preferences backup created');
         } catch (error) {
@@ -213,7 +231,7 @@ export class EnhancedPreferencesManager extends EventEmitter {
     // Get preferences with validation
     ipcMain.handle('preferences:get', () => {
       try {
-        const prefs = this.store.store;
+        const prefs = this.getStoreData();
         const validated = preferencesSchema.parse(prefs);
         return validated;
       } catch (error) {
@@ -225,12 +243,12 @@ export class EnhancedPreferencesManager extends EventEmitter {
     // Update preferences with validation
     ipcMain.handle('preferences:update', (event, updates: Partial<AppPreferences>) => {
       try {
-        const current = this.store.store;
+        const current = this.getStoreData();
         const merged = { ...current, ...updates };
         const validated = preferencesSchema.parse(merged);
 
         // Update store
-        this.store.store = validated;
+        this.setStoreData(validated);
         this.applyPreferences();
 
         return validated;
@@ -243,7 +261,7 @@ export class EnhancedPreferencesManager extends EventEmitter {
     // Reset preferences
     ipcMain.handle('preferences:reset', () => {
       this.store.clear();
-      this.store.store = DEFAULT_PREFERENCES;
+      this.setStoreData(DEFAULT_PREFERENCES);
       this.applyPreferences();
       this.emit('preferences-reset', DEFAULT_PREFERENCES);
       return DEFAULT_PREFERENCES;
@@ -251,7 +269,7 @@ export class EnhancedPreferencesManager extends EventEmitter {
 
     // Export preferences
     ipcMain.handle('preferences:export', () => {
-      return JSON.stringify(this.store.store, null, 2);
+      return JSON.stringify(this.getStoreData(), null, 2);
     });
 
     // Import preferences with validation
@@ -259,7 +277,7 @@ export class EnhancedPreferencesManager extends EventEmitter {
       try {
         const imported = JSON.parse(data);
         const validated = preferencesSchema.parse(imported);
-        this.store.store = validated;
+        this.setStoreData(validated);
         this.applyPreferences();
         return true;
       } catch (error) {
@@ -270,7 +288,7 @@ export class EnhancedPreferencesManager extends EventEmitter {
   }
 
   private applyPreferences(): void {
-    const preferences = this.store.store;
+    const preferences = this.getStoreData();
 
     // Apply launch at startup
     app.setLoginItemSettings({
@@ -291,7 +309,7 @@ export class EnhancedPreferencesManager extends EventEmitter {
   }
 
   public getPreferences(): AppPreferences {
-    return { ...this.store.store };
+    return { ...this.getStoreData() };
   }
 
   public getPreference<K extends keyof AppPreferences>(key: K): AppPreferences[K] {
@@ -299,13 +317,11 @@ export class EnhancedPreferencesManager extends EventEmitter {
   }
 
   public updatePreferences(updates: Partial<AppPreferences>): void {
-    const oldPreferences = { ...this.store.store };
-
     // Update preferences with validation
     try {
-      const merged = { ...this.store.store, ...updates };
+      const merged = { ...this.getStoreData(), ...updates };
       const validated = preferencesSchema.parse(merged);
-      this.store.store = validated;
+      this.setStoreData(validated);
       this.applyPreferences();
     } catch (error) {
       logger.error('Failed to update preferences:', error);
@@ -389,13 +405,14 @@ export class EnhancedPreferencesManager extends EventEmitter {
   public async restoreFromBackup(): Promise<boolean> {
     try {
       const backupPath = `${this.store.path}.backup`;
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
       const fs = require('fs');
 
       if (fs.existsSync(backupPath)) {
         const backupData = fs.readFileSync(backupPath, 'utf-8');
         const parsed = JSON.parse(backupData);
         const validated = preferencesSchema.parse(parsed);
-        this.store.store = validated;
+        this.setStoreData(validated);
         this.applyPreferences();
         logger.info('Preferences restored from backup');
         return true;

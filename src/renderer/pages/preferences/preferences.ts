@@ -58,11 +58,33 @@ function updateUI(prefs: AppPreferences): void {
   if (themeEl) themeEl.value = prefs.shelf.theme;
 
   // Shake Detection
-  const shakeEnabledEl = document.getElementById('shakeEnabled') as HTMLInputElement;
+  const dragShakeEnabledEl = document.getElementById('dragShakeEnabled') as HTMLInputElement;
   const sensitivityEl = document.getElementById('sensitivity') as HTMLSelectElement;
 
-  if (shakeEnabledEl) shakeEnabledEl.checked = prefs.shakeDetection.enabled;
+  if (dragShakeEnabledEl)
+    dragShakeEnabledEl.checked = prefs.shakeDetection.dragShakeEnabled ?? true;
   if (sensitivityEl) sensitivityEl.value = prefs.shakeDetection.sensitivity;
+
+  // Keyboard Shortcuts
+  const createShelfShortcutEl = document.getElementById('createShelfShortcut') as HTMLInputElement;
+  const toggleShelfShortcutEl = document.getElementById('toggleShelfShortcut') as HTMLInputElement;
+  const clearShelfShortcutEl = document.getElementById('clearShelfShortcut') as HTMLInputElement;
+
+  if (createShelfShortcutEl) {
+    const shortcut = prefs.shortcuts.createShelf || 'CommandOrControl+Option+S';
+    createShelfShortcutEl.value = formatShortcutForDisplay(shortcut);
+    createShelfShortcutEl.setAttribute('data-shortcut', shortcut);
+  }
+  if (toggleShelfShortcutEl) {
+    const shortcut = prefs.shortcuts.toggleShelf || 'CommandOrControl+Shift+D';
+    toggleShelfShortcutEl.value = formatShortcutForDisplay(shortcut);
+    toggleShelfShortcutEl.setAttribute('data-shortcut', shortcut);
+  }
+  if (clearShelfShortcutEl) {
+    const shortcut = prefs.shortcuts.clearShelf || 'CommandOrControl+Shift+C';
+    clearShelfShortcutEl.value = formatShortcutForDisplay(shortcut);
+    clearShelfShortcutEl.setAttribute('data-shortcut', shortcut);
+  }
 
   // Shelf Behavior
   const autoHideEl = document.getElementById('autoHide') as HTMLInputElement;
@@ -148,9 +170,13 @@ function setupEventListeners(): void {
     window.open('/plugins.html', 'plugin-manager', 'width=900,height=700');
   });
 
-  // Prevent form submission on Enter
+  // Setup keyboard shortcut recording
+  setupShortcutRecording();
+
+  // Prevent form submission on Enter (except when recording shortcuts)
   document.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
+    const activeElement = document.activeElement as HTMLElement;
+    if (e.key === 'Enter' && !activeElement?.classList.contains('recording')) {
       e.preventDefault();
       if (preferencesUI.hasChanges) {
         savePreferences();
@@ -192,11 +218,19 @@ async function savePreferences(): Promise<void> {
 
     shakeDetection: {
       ...preferencesUI.currentPreferences?.shakeDetection,
-      enabled: (document.getElementById('shakeEnabled') as HTMLInputElement)?.checked,
+      enabled: true, // Always enabled for backwards compatibility
+      dragShakeEnabled: (document.getElementById('dragShakeEnabled') as HTMLInputElement)?.checked,
       sensitivity: (document.getElementById('sensitivity') as HTMLSelectElement)?.value as
         | 'low'
         | 'medium'
         | 'high',
+    },
+
+    shortcuts: {
+      ...preferencesUI.currentPreferences?.shortcuts,
+      createShelf: getShortcutValue('createShelfShortcut', 'CommandOrControl+Option+S'),
+      toggleShelf: getShortcutValue('toggleShelfShortcut', 'CommandOrControl+Shift+D'),
+      clearShelf: getShortcutValue('clearShelfShortcut', 'CommandOrControl+Shift+C'),
     },
   };
 
@@ -246,3 +280,214 @@ window.addEventListener('beforeunload', e => {
     e.returnValue = '';
   }
 });
+
+// Keyboard shortcut recording functionality
+function setupShortcutRecording(): void {
+  const shortcutInputs = document.querySelectorAll<HTMLInputElement>('.shortcut-input');
+  const resetButtons = document.querySelectorAll<HTMLButtonElement>('.reset-shortcut');
+
+  // Default shortcuts
+  const defaultShortcuts: Record<string, string> = {
+    createShelf: 'CommandOrControl+Option+S',
+    toggleShelf: 'CommandOrControl+Shift+D',
+    clearShelf: 'CommandOrControl+Shift+C',
+  };
+
+  // Track the currently recording input
+  let currentlyRecording: HTMLInputElement | null = null;
+
+  shortcutInputs.forEach(input => {
+    // Remove readonly initially to allow proper focus
+    input.removeAttribute('readonly');
+
+    // Prevent text input by default
+    input.addEventListener('keydown', e => {
+      if (!input.classList.contains('recording')) {
+        e.preventDefault();
+      }
+    });
+
+    input.addEventListener('focus', () => {
+      if (!input.classList.contains('recording')) {
+        startRecording(input);
+        currentlyRecording = input;
+      }
+    });
+
+    input.addEventListener('blur', () => {
+      // Delay to allow button clicks to process
+      setTimeout(() => {
+        if (input.classList.contains('recording')) {
+          stopRecording(input);
+          currentlyRecording = null;
+        }
+      }, 100);
+    });
+  });
+
+  // Global keydown handler for recording
+  document.addEventListener(
+    'keydown',
+    e => {
+      if (currentlyRecording && currentlyRecording.classList.contains('recording')) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (e.key === 'Escape') {
+          stopRecording(currentlyRecording);
+          currentlyRecording.blur();
+          currentlyRecording = null;
+          return;
+        }
+
+        const shortcut = recordKeyCombination(e);
+        if (shortcut) {
+          const input = currentlyRecording;
+          input.value = formatShortcutForDisplay(shortcut);
+          input.setAttribute('data-shortcut', shortcut);
+          stopRecording(input);
+          input.blur();
+          currentlyRecording = null;
+          preferencesUI.hasChanges = true;
+        }
+      }
+    },
+    true
+  ); // Use capture phase
+
+  resetButtons.forEach(button => {
+    button.addEventListener('click', e => {
+      e.preventDefault();
+      const shortcutType = button.getAttribute('data-shortcut');
+      if (shortcutType && defaultShortcuts[shortcutType]) {
+        const input = document.getElementById(`${shortcutType}Shortcut`) as HTMLInputElement;
+        if (input) {
+          input.value = formatShortcutForDisplay(defaultShortcuts[shortcutType]);
+          input.setAttribute('data-shortcut', defaultShortcuts[shortcutType]);
+          preferencesUI.hasChanges = true;
+        }
+      }
+    });
+  });
+}
+
+function startRecording(input: HTMLInputElement): void {
+  input.classList.add('recording');
+  input.value = 'Press keys...';
+  input.focus();
+}
+
+function stopRecording(input: HTMLInputElement): void {
+  input.classList.remove('recording');
+  const currentShortcut = input.getAttribute('data-shortcut');
+  if (currentShortcut) {
+    input.value = formatShortcutForDisplay(currentShortcut);
+  } else {
+    // Restore original value
+    const prefs = preferencesUI.currentPreferences;
+    if (prefs) {
+      const inputId = input.id;
+      if (inputId === 'createShelfShortcut') {
+        input.value = formatShortcutForDisplay(prefs.shortcuts.createShelf);
+      } else if (inputId === 'toggleShelfShortcut') {
+        input.value = formatShortcutForDisplay(prefs.shortcuts.toggleShelf);
+      } else if (inputId === 'clearShelfShortcut') {
+        input.value = formatShortcutForDisplay(prefs.shortcuts.clearShelf);
+      }
+    }
+  }
+}
+
+function recordKeyCombination(e: KeyboardEvent): string | null {
+  const keys: string[] = [];
+
+  // Check for modifier keys
+  if (e.ctrlKey || e.metaKey) keys.push('CommandOrControl');
+  if (e.altKey) keys.push('Alt'); // Will be formatted for display later
+  if (e.shiftKey) keys.push('Shift');
+
+  // Get the main key
+  let mainKey = e.key;
+
+  // Skip if only modifier keys are pressed
+  if (['Control', 'Meta', 'Alt', 'Shift', 'Command', 'Option'].includes(mainKey)) {
+    return null;
+  }
+
+  // Normalize key names for Electron
+  const keyMap: Record<string, string> = {
+    ArrowUp: 'Up',
+    ArrowDown: 'Down',
+    ArrowLeft: 'Left',
+    ArrowRight: 'Right',
+    ' ': 'Space',
+    Enter: 'Return',
+    Escape: 'Escape',
+    Backspace: 'Backspace',
+    Delete: 'Delete',
+    Tab: 'Tab',
+    Home: 'Home',
+    End: 'End',
+    PageUp: 'PageUp',
+    PageDown: 'PageDown',
+  };
+
+  // Handle special characters and function keys
+  if (mainKey.length === 1) {
+    // Single character - uppercase it
+    mainKey = mainKey.toUpperCase();
+  } else if (mainKey.startsWith('F') && /^F\d+$/.test(mainKey)) {
+    // Function key - keep as is
+  } else {
+    // Use the mapping or keep the original
+    mainKey = keyMap[mainKey] || mainKey;
+  }
+
+  // Require at least one modifier key for safety (except for function keys)
+  if (keys.length === 0 && !mainKey.startsWith('F')) {
+    return null;
+  }
+
+  keys.push(mainKey);
+  return keys.join('+');
+}
+
+function formatShortcutForDisplay(shortcut: string): string {
+  if (!shortcut) return '';
+
+  // Convert Electron accelerator format to display format
+  // Detect platform based on user agent
+  const isMac = navigator.userAgent.includes('Mac');
+
+  return shortcut
+    .replace('CommandOrControl', isMac ? 'Cmd' : 'Ctrl')
+    .replace('Alt', isMac ? 'Option' : 'Alt')
+    .replace('Return', 'Enter');
+}
+
+function formatShortcutForElectron(shortcut: string): string {
+  if (!shortcut) return '';
+
+  // Convert display format to Electron accelerator format
+  // Detect platform based on user agent
+  const isMac = navigator.userAgent.includes('Mac');
+
+  return shortcut
+    .replace(isMac ? 'Cmd' : 'Ctrl', 'CommandOrControl')
+    .replace(isMac ? 'Option' : 'Alt', 'Alt')
+    .replace('Enter', 'Return');
+}
+
+function getShortcutValue(inputId: string, defaultValue: string): string {
+  const input = document.getElementById(inputId) as HTMLInputElement;
+  if (!input) return defaultValue;
+
+  // Get the stored shortcut or use current display value
+  const storedShortcut = input.getAttribute('data-shortcut');
+  if (storedShortcut) {
+    return storedShortcut;
+  }
+
+  // Convert display value to Electron format
+  return formatShortcutForElectron(input.value) || defaultValue;
+}
