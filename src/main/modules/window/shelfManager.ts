@@ -64,6 +64,7 @@ export class ShelfManager extends EventEmitter {
   /**
    * Wrapper for IPC handlers with rate limiting
    */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   private createRateLimitedHandler<T extends any[], R>(
     channel: string,
     handler: (event: Electron.IpcMainInvokeEvent, ...args: T) => Promise<R> | R
@@ -116,13 +117,15 @@ export class ShelfManager extends EventEmitter {
       // IMPORTANT: Clear old items when reusing shelf to prevent showing cached items
       const existingConfig = this.shelfConfigs.get(existingShelfId);
       if (existingConfig) {
-        this.logger.info(`🧹 Clearing ${existingConfig.items.length} old items from reused shelf ${existingShelfId}`);
+        this.logger.info(
+          `🧹 Clearing ${existingConfig.items.length} old items from reused shelf ${existingShelfId}`
+        );
         existingConfig.items = [];
 
         // Update the shelf config with the new items (empty array)
         const window = this.shelves.get(existingShelfId);
         if (window && !window.isDestroyed()) {
-          window.webContents.send('shelf:config', existingShelfId, existingConfig);
+          window.webContents.send('shelf:config', existingConfig);
         }
       }
 
@@ -547,8 +550,8 @@ export class ShelfManager extends EventEmitter {
       config.items.push(item);
       this.logger.debug(`  Item added! New count: ${config.items.length}`);
 
-      // Notify renderer - send the full updated config
-      window.webContents.send('shelf:config', shelfId, config);
+      // Notify renderer - send the full updated config (config must be first parameter!)
+      window.webContents.send('shelf:config', config);
       window.webContents.send('shelf:item-added', item);
       this.emit('shelf-item-added', shelfId, item);
 

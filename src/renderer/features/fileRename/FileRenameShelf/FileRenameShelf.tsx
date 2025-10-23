@@ -52,7 +52,6 @@ export interface FileRenameShelfProps {
 
 export const FileRenameShelf = React.memo<FileRenameShelfProps>(
   ({ config, onConfigChange: _onConfigChange, onItemAdd, onItemRemove, onClose }) => {
-    const [selectedFiles, setSelectedFiles] = useState<ShelfItem[]>([]);
     const [renameComponents, setRenameComponents] = useState<RenameComponent[]>([
       { id: 'date-1', type: 'date', format: 'YYYYMMDD' },
       { id: 'fileName-1', type: 'fileName' },
@@ -64,6 +63,9 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
       message: string;
       details: React.ReactNode;
     } | null>(null);
+
+    // Use config.items as the source of truth for selected files
+    const selectedFiles = config.items;
 
     // Get external plugin executor
     const { executePlugin } = useExternalPlugins();
@@ -131,6 +133,11 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
     // Handle file drop
     const handleFileDrop = useCallback(
       (items: ShelfItem[]) => {
+        logger.info(
+          `📦 FileRenameShelf.handleFileDrop: Received ${items.length} items:`,
+          items.map(i => i.name)
+        );
+
         // Check for duplicates against existing files
         const existingPaths = new Set(selectedFiles.map(file => file.path).filter(Boolean));
         const newItems = items.filter(item => {
@@ -153,9 +160,8 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
           );
         }
 
-        // Only add new (non-duplicate) items
+        // Only add new (non-duplicate) items - state is managed by parent (ShelfPage)
         if (newItems.length > 0) {
-          setSelectedFiles(prev => [...prev, ...newItems]);
           newItems.forEach(item => onItemAdd(item));
         }
       },
@@ -167,7 +173,6 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
       (index: number) => {
         const file = selectedFiles[index];
         if (file) {
-          setSelectedFiles(prev => prev.filter((_, i) => i !== index));
           onItemRemove(file.id);
         }
       },
@@ -282,9 +287,8 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
           }
         }
 
-        // Clear files after rename
+        // Clear files after rename - state is managed by parent (ShelfPage)
         selectedFiles.forEach(file => onItemRemove(file.id));
-        setSelectedFiles([]);
       } catch (error) {
         logger.error('Rename operation failed:', error);
       }

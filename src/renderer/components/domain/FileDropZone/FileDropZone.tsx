@@ -55,102 +55,29 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
       e.stopPropagation();
       onDragOver(false);
 
+      logger.info(`📦 FileDropZone.handleDrop: Drop event received`);
+
       const items: ShelfItem[] = [];
       const duplicatePaths = new Set<string>();
       const dataTransfer = e.dataTransfer;
       let duplicateCount = 0;
 
-      // Always try to get native dragged files first, regardless of dataTransfer.files
-      let nativeDraggedFiles: Array<{ path: string; name: string }> = [];
-      try {
-        nativeDraggedFiles = (await window.api.invoke('drag:get-native-files')) as Array<{
-          path: string;
-          name: string;
-        }>;
-      } catch (error) {
-        logger.error('Failed to get native dragged files:', error);
-      }
+      logger.info(
+        `📦 FileDropZone: dataTransfer.files.length = ${dataTransfer.files?.length || 0}`
+      );
 
-      // If we have native files but no dataTransfer files, create items from native files
-      if (
-        nativeDraggedFiles.length > 0 &&
-        (!dataTransfer.files || dataTransfer.files.length === 0)
-      ) {
-        // For native files, we need to check the file system for type information
-        const pathsToCheck = nativeDraggedFiles.map(file => file.path);
-        let pathTypes: Record<string, 'file' | 'folder' | 'unknown'> = {};
-
-        if (pathsToCheck.length > 0) {
-          try {
-            logger.debug('Checking native file path types', { paths: pathsToCheck });
-            pathTypes = (await window.api.invoke('fs:check-path-type', pathsToCheck)) as Record<
-              string,
-              'file' | 'folder' | 'unknown'
-            >;
-            logger.debug('Native file path types result', pathTypes);
-          } catch (error) {
-            logger.error('Failed to check native file path types:', error);
-          }
-        }
-
-        for (const nativeFile of nativeDraggedFiles) {
-          // Skip if we've already processed this path (prevents duplicates)
-          if (duplicatePaths.has(nativeFile.path)) {
-            logger.debug('Skipping duplicate file path:', nativeFile.path);
-            duplicateCount++;
-            continue;
-          }
-          duplicatePaths.add(nativeFile.path);
-
-          // Determine type based on file system check
-          let type: ShelfItem['type'] = ShelfItemType.FILE;
-          logger.debug('Processing native file', {
-            name: nativeFile.name,
-            path: nativeFile.path,
-            pathType: pathTypes[nativeFile.path] || 'not found'
-          });
-
-          if (pathTypes[nativeFile.path] === 'folder') {
-            type = ShelfItemType.FOLDER;
-          } else if (pathTypes[nativeFile.path] === 'file') {
-            // Check if it's an image by file extension since we don't have MIME type
-            const ext = nativeFile.name.toLowerCase().split('.').pop();
-            if (ext && ['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp', 'bmp', 'ico'].includes(ext)) {
-              type = ShelfItemType.IMAGE;
-            } else {
-              type = ShelfItemType.FILE;
-            }
-          }
-
-          const item: ShelfItem = {
-            id: `file-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
-            type,
-            name: nativeFile.name,
-            path: nativeFile.path,
-            size: undefined, // Size not available from native drag monitor
-            createdAt: Date.now(),
-          };
-          items.push(item);
-        }
-      } else if (dataTransfer.files && dataTransfer.files.length > 0) {
-        // Create a map of file names to native paths for quick lookup
-        const nativePathMap = new Map<string, string>();
-        nativeDraggedFiles.forEach(file => {
-          nativePathMap.set(file.name, file.path);
-        });
-
+      // Process ONLY files from dataTransfer (the actual dropped files from the drop event)
+      // Do NOT use cached native files as they may be stale from previous drag operations
+      if (dataTransfer.files && dataTransfer.files.length > 0) {
         // Collect paths for type checking
         const pathsToCheck: string[] = [];
-        const fileMap: Map<string, { file: File; index: number }> = new Map();
 
         for (let i = 0; i < dataTransfer.files.length; i++) {
           const file = dataTransfer.files[i];
-          // Try native path first, then fall back to browser's path property
-          const filePath =
-            nativePathMap.get(file.name) || (file as unknown as { path?: string }).path;
+          // Get file path from Electron's exposed path property
+          const filePath = (file as unknown as { path?: string }).path;
           if (filePath) {
             pathsToCheck.push(filePath);
-            fileMap.set(filePath, { file, index: i });
           }
         }
 
@@ -169,11 +96,10 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
           }
         }
 
+        // Process each dropped file
         for (let i = 0; i < dataTransfer.files.length; i++) {
           const file = dataTransfer.files[i];
-          // Try native path first, then fall back to browser's path property
-          const filePath =
-            nativePathMap.get(file.name) || (file as unknown as { path?: string }).path;
+          const filePath = (file as unknown as { path?: string }).path;
 
           // Skip if we've already processed this path (prevents duplicates)
           if (filePath && duplicatePaths.has(filePath)) {
@@ -191,7 +117,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
             name: file.name,
             path: filePath,
             pathType: pathTypes[filePath] || 'not found',
-            size: file.size
+            size: file.size,
           });
 
           if (filePath && pathTypes[filePath]) {
@@ -209,9 +135,13 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
               fileName: file.name,
               hasExtension,
               size: file.size,
-              isFolder
+              isFolder,
             });
-            type = isFolder ? ShelfItemType.FOLDER : file.type.startsWith('image/') ? ShelfItemType.IMAGE : ShelfItemType.FILE;
+            type = isFolder
+              ? ShelfItemType.FOLDER
+              : file.type.startsWith('image/')
+                ? ShelfItemType.IMAGE
+                : ShelfItemType.FILE;
           }
 
           const item: ShelfItem = {
@@ -227,7 +157,13 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
       }
 
       if (items.length > 0) {
+        logger.info(
+          `📦 FileDropZone: Calling onDrop with ${items.length} items (from drag):`,
+          items.map(i => i.name)
+        );
         onDrop(items);
+      } else {
+        logger.warn('📦 FileDropZone: No items to drop from drag!');
       }
 
       // Show toast notification for duplicates
@@ -331,7 +267,11 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
           // Fallback to heuristic detection
           const hasExtension = file.name.includes('.') && !file.name.endsWith('.app');
           const isFolder = (!hasExtension && file.size === 0) || (!file.type && !hasExtension);
-          type = isFolder ? ShelfItemType.FOLDER : file.type.startsWith('image/') ? ShelfItemType.IMAGE : ShelfItemType.FILE;
+          type = isFolder
+            ? ShelfItemType.FOLDER
+            : file.type.startsWith('image/')
+              ? ShelfItemType.IMAGE
+              : ShelfItemType.FILE;
         }
 
         const item: ShelfItem = {
@@ -346,7 +286,13 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
       }
 
       if (items.length > 0) {
+        logger.info(
+          `📦 FileDropZone: Calling onDrop with ${items.length} items (from drag):`,
+          items.map(i => i.name)
+        );
         onDrop(items);
+      } else {
+        logger.warn('📦 FileDropZone: No items to drop from drag!');
       }
 
       // Show toast notification for duplicates

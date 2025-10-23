@@ -27,18 +27,10 @@ import { useIPC } from '@renderer/hooks/useIPC';
 export const ShelfPage: React.FC = () => {
   logger.info('ShelfPage component initializing');
 
-  const [config, setConfig] = useState<ShelfConfig>({
-    id: 'default',
-    position: { x: 0, y: 0 },
-    dockPosition: null,
-    isPinned: true,
-    items: [],
-    isVisible: true,
-    opacity: 0.95,
-    mode: 'rename', // Always use rename mode
-  });
+  // Start with null config - wait for actual config from main process
+  const [config, setConfig] = useState<ShelfConfig | null>(null);
 
-  const { invoke, send, on, isConnected } = useIPC();
+  const { invoke, on, isConnected } = useIPC();
 
   // Log component lifecycle
   useEffect(() => {
@@ -115,6 +107,8 @@ export const ShelfPage: React.FC = () => {
   }, [isConnected, on]);
 
   const handleConfigChange = async (changes: Partial<ShelfConfig>) => {
+    if (!config) return; // Guard: config not yet loaded
+
     const newConfig = { ...config, ...changes };
     setConfig(newConfig);
 
@@ -129,28 +123,27 @@ export const ShelfPage: React.FC = () => {
   };
 
   const handleItemAdd = async (item: ShelfItem) => {
+    if (!config) {
+      logger.error('Cannot add item: shelf config not yet loaded');
+      return;
+    }
+
     logger.debug('handleItemAdd called for shelf', config.id, 'with item:', item);
 
-    // Check if this is the first item being added
-    const isFirstItem = config.items.length === 0;
-
-    // Update local state first
-    setConfig(prev => ({
-      ...prev,
-      items: [...prev.items, item],
-    }));
+    // Update local state optimistically (backend will send shelf:config to confirm)
+    setConfig(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        items: [...prev.items, item],
+      };
+    });
 
     // Notify main process
     if (isConnected) {
       try {
-        // If this is the first item, notify backend to persist shelf
-        if (isFirstItem) {
-          logger.debug('First item added! Notifying backend to persist shelf');
-          send('shelf:files-dropped', {
-            shelfId: config.id,
-            files: [item.name],
-          });
-        }
+        // Note: We only need shelf:add-item - the shelf:files-dropped event
+        // was causing duplicate additions. The backend will handle persistence.
 
         logger.debug('Sending shelf:add-item IPC call for shelf', config.id);
         const result = await invoke('shelf:add-item', config.id, item);
@@ -166,12 +159,17 @@ export const ShelfPage: React.FC = () => {
   };
 
   const handleItemRemove = async (itemId: string) => {
+    if (!config) return; // Guard: config not yet loaded
+
     logger.info(`🗑️ handleItemRemove called for itemId: ${itemId} on shelf: ${config.id}`);
 
-    setConfig(prev => ({
-      ...prev,
-      items: prev.items.filter(item => item.id !== itemId),
-    }));
+    setConfig(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        items: prev.items.filter(item => item.id !== itemId),
+      };
+    });
 
     // Notify main process
     if (isConnected) {
@@ -199,6 +197,8 @@ export const ShelfPage: React.FC = () => {
   };
 
   const handleClose = async () => {
+    if (!config) return; // Guard: config not yet loaded
+
     if (isConnected) {
       try {
         await invoke('shelf:close', config.id);
@@ -209,6 +209,27 @@ export const ShelfPage: React.FC = () => {
   };
 
   logger.info('ShelfPage rendering with config:', config);
+
+  // Wait for config to be loaded from main process
+  if (!config) {
+    return (
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'transparent',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <div style={{ color: 'white', fontSize: '14px' }}>Loading shelf...</div>
+      </div>
+    );
+  }
 
   return (
     <div

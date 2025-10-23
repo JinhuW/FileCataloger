@@ -5,7 +5,7 @@
   "main": "dist/main/index.js",
   "license": "MIT",
   "scripts": {
-    "dev": "yarn build && electron ./dist/main/index.js",
+    "dev": "yarn clean && yarn build && electron ./dist/main/index.js",
     "build": "yarn build:native && yarn build:renderer && yarn build:preload && yarn build:main",
     "build:main": "webpack --config config/webpack/webpack.main.js",
     "build:renderer": "webpack --config config/webpack/webpack.renderer.js",
