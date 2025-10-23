@@ -87,7 +87,7 @@ export class PersistentDataManager {
 
       // Migrations for future updates
       migrations: {
-        '1.0.0': store => {
+        '1.0.0': (store: any) => {
           // Migrate old format to new
           if (store.has('recentFiles') && Array.isArray(store.get('recentFiles'))) {
             const files = store.get('recentFiles') as any[];
@@ -95,7 +95,7 @@ export class PersistentDataManager {
               // Convert string paths to objects
               store.set(
                 'recentFiles',
-                files.map(path => ({
+                files.map((path: string) => ({
                   path,
                   timestamp: Date.now(),
                 }))
@@ -206,18 +206,18 @@ export class PersistentDataManager {
   // Session data methods
 
   public updateLastShelfPosition(x: number, y: number): void {
-    this.sessionStore.set('lastShelfPosition', { x, y });
+    (this.sessionStore as any).set('lastShelfPosition', { x, y });
   }
 
   public getLastShelfPosition(): { x: number; y: number } {
-    return this.sessionStore.get('lastShelfPosition');
+    return (this.sessionStore as any).get('lastShelfPosition');
   }
 
   public addRecentFile(filePath: string): void {
-    const recentFiles = this.sessionStore.get('recentFiles');
+    const recentFiles = (this.sessionStore as any).get('recentFiles');
 
     // Remove if already exists
-    const filtered = recentFiles.filter(f => f.path !== filePath);
+    const filtered = recentFiles.filter((f: any) => f.path !== filePath);
 
     // Add to beginning
     filtered.unshift({ path: filePath, timestamp: Date.now() });
@@ -227,15 +227,15 @@ export class PersistentDataManager {
       filtered.splice(50);
     }
 
-    this.sessionStore.set('recentFiles', filtered);
+    (this.sessionStore as any).set('recentFiles', filtered);
   }
 
   public getRecentFiles(limit: number = 10): Array<{ path: string; timestamp: number }> {
-    return this.sessionStore.get('recentFiles').slice(0, limit);
+    return (this.sessionStore as any).get('recentFiles').slice(0, limit);
   }
 
   public updateUsageStats(type: 'shelfCreation' | 'fileDropped'): void {
-    const stats = this.sessionStore.get('usageStats');
+    const stats = (this.sessionStore as any).get('usageStats');
 
     if (type === 'shelfCreation') {
       stats.shelfCreations++;
@@ -244,7 +244,7 @@ export class PersistentDataManager {
     }
 
     stats.lastUsed = Date.now();
-    this.sessionStore.set('usageStats', stats);
+    (this.sessionStore as any).set('usageStats', stats);
   }
 
   // Database methods for complex data
@@ -365,7 +365,7 @@ export class PersistentDataManager {
 
   public async exportData(): Promise<string> {
     const data = {
-      session: this.sessionStore.store,
+      session: (this.sessionStore as any).store,
       database: this.db ? await this.exportDatabase() : null,
       version: '1.0.0',
       exportDate: new Date().toISOString(),
@@ -392,9 +392,9 @@ export class PersistentDataManager {
       if (data.session) {
         const validated = sessionDataSchema.parse(data.session);
         // Clear existing data and set new data
-        this.sessionStore.clear();
+        (this.sessionStore as any).clear();
         Object.entries(validated).forEach(([key, value]) => {
-          this.sessionStore.set(key as keyof SessionData, value as any);
+          (this.sessionStore as any).set(key as keyof SessionData, value as any);
         });
       }
 

@@ -155,8 +155,8 @@ export class EnhancedPreferencesManager extends EventEmitter {
       watch: true,
 
       // Custom serialization for complex objects
-      serialize: value => JSON.stringify(value, null, 2),
-      deserialize: text => JSON.parse(text),
+      serialize: (value: unknown) => JSON.stringify(value, null, 2),
+      deserialize: (text: string) => JSON.parse(text),
 
       // Migration support
       migrations: {
@@ -170,13 +170,13 @@ export class EnhancedPreferencesManager extends EventEmitter {
       },
 
       // Before saving, validate with Zod
-      beforeEachMigration: (store, context) => {
+      beforeEachMigration: (store: any, context: any) => {
         logger.info(`Migrating preferences from ${context.fromVersion} to ${context.toVersion}`);
       },
     });
 
     // Handle external changes
-    this.store.onDidAnyChange((newValue, oldValue) => {
+    (this.store as any).onDidAnyChange?.((newValue: any, oldValue: any) => {
       if (newValue && oldValue) {
         this.detectAndEmitChanges(oldValue as AppPreferences, newValue as AppPreferences);
       }
@@ -199,14 +199,14 @@ export class EnhancedPreferencesManager extends EventEmitter {
    * Type-safe wrapper for getting store data
    */
   private getStoreData(): AppPreferences {
-    return this.store.store as AppPreferences;
+    return (this.store as any).store as AppPreferences;
   }
 
   /**
    * Type-safe wrapper for setting store data
    */
   private setStoreData(data: AppPreferences): void {
-    this.store.store = data;
+    (this.store as any).store = data;
   }
 
   private addBackupFeatures(): void {
@@ -214,7 +214,7 @@ export class EnhancedPreferencesManager extends EventEmitter {
     setInterval(
       () => {
         try {
-          const backupPath = `${this.store.path}.backup`;
+          const backupPath = `${(this.store as any).path}.backup`;
           const currentData = this.getStoreData();
           // eslint-disable-next-line @typescript-eslint/no-var-requires
           require('fs').writeFileSync(backupPath, JSON.stringify(currentData, null, 2));
@@ -260,7 +260,7 @@ export class EnhancedPreferencesManager extends EventEmitter {
 
     // Reset preferences
     ipcMain.handle('preferences:reset', () => {
-      this.store.clear();
+      (this.store as any).clear();
       this.setStoreData(DEFAULT_PREFERENCES);
       this.applyPreferences();
       this.emit('preferences-reset', DEFAULT_PREFERENCES);
@@ -313,7 +313,7 @@ export class EnhancedPreferencesManager extends EventEmitter {
   }
 
   public getPreference<K extends keyof AppPreferences>(key: K): AppPreferences[K] {
-    return this.store.get(key);
+    return (this.store as any).get(key);
   }
 
   public updatePreferences(updates: Partial<AppPreferences>): void {
@@ -352,14 +352,14 @@ export class EnhancedPreferencesManager extends EventEmitter {
   }
 
   public resetPreferences(): void {
-    this.store.clear();
-    this.store.store = DEFAULT_PREFERENCES;
+    (this.store as any).clear();
+    (this.store as any).store = DEFAULT_PREFERENCES;
     this.applyPreferences();
     this.emit('preferences-reset', DEFAULT_PREFERENCES);
   }
 
   public getSensitivityMultiplier(): number {
-    const sensitivity = this.store.get('shakeDetection.sensitivity');
+    const sensitivity = (this.store as any).get('shakeDetection.sensitivity');
     switch (sensitivity) {
       case 'low':
         return 1.5;
@@ -373,7 +373,7 @@ export class EnhancedPreferencesManager extends EventEmitter {
   }
 
   public getAnimationDuration(): number {
-    const speed = this.store.get('shelf.animationSpeed');
+    const speed = (this.store as any).get('shelf.animationSpeed');
     switch (speed) {
       case 'slow':
         return 500;
@@ -391,20 +391,20 @@ export class EnhancedPreferencesManager extends EventEmitter {
   // Additional features
 
   public hasPreference(key: keyof AppPreferences): boolean {
-    return this.store.has(key);
+    return (this.store as any).has(key);
   }
 
   public getStorePath(): string {
-    return this.store.path;
+    return (this.store as any).path;
   }
 
   public getStoreSize(): number {
-    return this.store.size;
+    return (this.store as any).size;
   }
 
   public async restoreFromBackup(): Promise<boolean> {
     try {
-      const backupPath = `${this.store.path}.backup`;
+      const backupPath = `${(this.store as any).path}.backup`;
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const fs = require('fs');
 
