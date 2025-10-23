@@ -5,14 +5,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "echo 'Using direct node-gyp build - advanced build system available in scripts/native/' && cd mouse-tracker/darwin && node-gyp rebuild && cd ../../drag-monitor/darwin && node-gyp rebuild",
-    "build:clean": "cd mouse-tracker/darwin && node-gyp clean && node-gyp rebuild && cd ../../drag-monitor/darwin && node-gyp clean && node-gyp rebuild",
-    "build:verbose": "cd mouse-tracker/darwin && node-gyp rebuild --verbose && cd ../../drag-monitor/darwin && node-gyp rebuild --verbose",
-    "build:mouse-tracker": "cd mouse-tracker/darwin && node-gyp rebuild",
-    "build:drag-monitor": "cd drag-monitor/darwin && node-gyp rebuild",
-    "clean": "cd mouse-tracker/darwin && node-gyp clean",
-    "test": "echo 'Native module tests not yet implemented'",
-    "validate": "echo 'Configuration validation available in scripts/native/'"
+    "build": "npm run build:mouse-tracker && npm run build:drag-monitor",
+    "build:clean": "npm run clean && npm run build",
+    "build:verbose": "cd mouse-tracker && node-gyp rebuild --verbose && cd ../drag-monitor && node-gyp rebuild --verbose",
+    "build:mouse-tracker": "cd mouse-tracker && node-gyp rebuild",
+    "build:drag-monitor": "cd drag-monitor && node-gyp rebuild",
+    "rebuild": "npm run clean && npm run build",
+    "clean": "cd mouse-tracker && node-gyp clean && cd ../drag-monitor && node-gyp clean",
+    "clean:all": "rm -rf mouse-tracker/build drag-monitor/build",
+    "test": "npm run test:validate",
+    "test:validate": "node -e \"try{require('./mouse-tracker/build/Release/mouse_tracker_darwin.node');console.log('✅ mouse-tracker loaded')}catch(e){console.error('❌ mouse-tracker failed:',e.message)}\" && node -e \"try{require('./drag-monitor/build/Release/drag_monitor_darwin.node');console.log('✅ drag-monitor loaded')}catch(e){console.error('❌ drag-monitor failed:',e.message)}\"",
+    "info": "node-gyp configure --verbose 2>&1 | grep -E '(node|v8|modules)' | head -5"
   },
   "dependencies": {},
   "devDependencies": {

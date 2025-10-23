@@ -2,7 +2,7 @@ import { EventEmitter } from 'events';
 import { AdvancedShakeDetector } from './shakeDetector';
 import { createLogger, Logger } from '../utils/logger';
 import { MousePosition } from '@shared/types';
-import { MacDragMonitor, createDragMonitor } from '@native/drag-monitor/index';
+import { MacDragMonitor, createDragMonitor } from '@native/drag-monitor';
 import { MouseEventBatcher } from './mouseEventBatcher';
 
 export interface DraggedItem {

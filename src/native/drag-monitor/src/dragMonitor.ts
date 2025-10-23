@@ -67,9 +67,19 @@ interface NativeDragModule {
 let nativeModule: NativeDragModule | null = null;
 
 try {
-  // Since webpack copies the module to dist/main, we can require it directly
-  // The webpack externals configuration will handle the correct path resolution
-  nativeModule = require('./drag_monitor_darwin.node');
+  // Try multiple paths to find the native module
+  try {
+    // Development: from native module build directory
+    nativeModule = require('../build/Release/drag_monitor_darwin.node');
+  } catch {
+    try {
+      // Production: from dist/main (webpack output)
+      nativeModule = require('./drag_monitor_darwin.node');
+    } catch {
+      // Last resort: absolute path from __dirname
+      nativeModule = require(path.join(__dirname, 'drag_monitor_darwin.node'));
+    }
+  }
   logger.info('Successfully loaded drag monitor native module');
 } catch (error) {
   // Native module not available - will be handled gracefully
@@ -107,9 +117,9 @@ export class MacDragMonitor extends EventEmitter {
       this.nativeMonitor = new nativeModule.DarwinDragMonitor();
 
       logger.info('✅ Native DarwinDragMonitor instance created successfully');
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error('❌ Failed to initialize native drag monitor:', error);
-      logger.error('Error details:', error.message);
+      logger.error('Error details:', error instanceof Error ? error.message : String(error));
       throw error;
     }
   }
@@ -160,7 +170,7 @@ export class MacDragMonitor extends EventEmitter {
             logger.debug('📋 Raw file data from native:', files);
           }
 
-          const items: DraggedItem[] = files.map((file: any) => ({
+          const items: DraggedItem[] = files.map(file => ({
             path: file.path,
             name: file.name || path.basename(file.path),
             type: file.type as 'file' | 'folder',
@@ -274,7 +284,7 @@ export class MacDragMonitor extends EventEmitter {
 
     try {
       const files = this.nativeMonitor.getDraggedFiles();
-      return files.map((file: any) => ({
+      return files.map(file => ({
         path: file.path,
         name: file.name || path.basename(file.path),
         type: file.type as 'file' | 'folder',

@@ -21,9 +21,14 @@
   "targets": [
     {
       "target_name": "mouse_tracker_darwin",
-      "sources": [ "mouse_tracker_darwin.mm" ],
+      "sources": [
+        "src/native/mac/mouse_tracker_mac.mm"
+      ],
       "include_dirs": [
-        "<!@(node -p \"require('node-addon-api').include\")"
+        "<!@(node -p \"require('node-addon-api').include\")",
+        "src",
+        "src/internal",
+        "../common"
       ],
       "dependencies": [
         "<!(node -p \"require('node-addon-api').gyp\")"
@@ -58,7 +63,7 @@
       },
       "conditions": [
         ["OS=='mac'", {
-          "sources": [ "mouse_tracker_darwin.mm" ]
+          "sources": [ "src/native/mac/mouse_tracker_mac.mm" ]
         }]
       ],
       "defines": [ "NAPI_DISABLE_CPP_EXCEPTIONS" ]

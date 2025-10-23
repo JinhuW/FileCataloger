@@ -20,9 +20,14 @@
   "targets": [
     {
       "target_name": "drag_monitor_darwin",
-      "sources": ["drag_monitor_darwin.mm"],
+      "sources": [
+        "src/native/mac/drag_monitor_mac.mm"
+      ],
       "include_dirs": [
-        "<!@(node -p \"require('node-addon-api').include\")"
+        "<!@(node -p \"require('node-addon-api').include\")",
+        "src",
+        "src/internal",
+        "../common"
       ],
       "dependencies": [
         "<!(node -p \"require('node-addon-api').gyp\")"

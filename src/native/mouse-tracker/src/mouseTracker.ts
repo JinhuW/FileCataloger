@@ -23,6 +23,7 @@
  */
 
 import { EventEmitter } from 'events';
+import * as path from 'path';
 import { MouseTracker, MousePosition, PerformanceMetrics } from '@shared/types';
 import { createLogger } from '@main/modules/utils/logger';
 import { NativeErrorCode, getNativeErrorDescription } from '@shared/nativeErrorCodes';
@@ -59,8 +60,19 @@ interface NativeMouseTracker {
 // Load native module
 let nativeModule: { MacOSMouseTracker: new () => NativeMouseTracker };
 try {
-  // Webpack will handle the correct path resolution for the native module
-  nativeModule = require('./mouse_tracker_darwin.node');
+  // Try multiple paths to find the native module
+  try {
+    // Development: from native module build directory
+    nativeModule = require('../build/Release/mouse_tracker_darwin.node');
+  } catch {
+    try {
+      // Production: from dist/main (webpack output)
+      nativeModule = require('./mouse_tracker_darwin.node');
+    } catch {
+      // Last resort: absolute path from __dirname
+      nativeModule = require(path.join(__dirname, 'mouse_tracker_darwin.node'));
+    }
+  }
   logger.info('Successfully loaded optimized native mouse tracker module');
 } catch (error: unknown) {
   logger.error('Failed to load native mouse tracker module:', error);
