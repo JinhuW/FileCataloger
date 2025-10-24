@@ -163,13 +163,6 @@ function setupEventListeners(): void {
   const resetButton = document.getElementById('resetButton');
   resetButton?.addEventListener('click', resetPreferences);
 
-  // Plugin manager button
-  const pluginManagerButton = document.getElementById('openPluginManagerButton');
-  pluginManagerButton?.addEventListener('click', () => {
-    // Open plugin manager in a new window
-    window.open('/plugins.html', 'plugin-manager', 'width=900,height=700');
-  });
-
   // Setup keyboard shortcut recording
   setupShortcutRecording();
 

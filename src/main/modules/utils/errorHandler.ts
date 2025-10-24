@@ -29,7 +29,7 @@ export interface ErrorReport {
   category: ErrorCategory;
   message: string;
   stack?: string;
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
   userAction?: string;
   systemInfo?: {
     platform: string;
@@ -195,7 +195,7 @@ export class ErrorHandler extends EventEmitter {
     options: {
       severity?: ErrorSeverity;
       category?: ErrorCategory;
-      context?: Record<string, any>;
+      context?: Record<string, unknown>;
       userAction?: string;
       showNotification?: boolean;
     } = {}

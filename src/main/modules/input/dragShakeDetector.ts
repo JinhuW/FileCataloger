@@ -66,8 +66,8 @@ export class DragShakeDetector extends EventEmitter {
     this.shakeDetector = new AdvancedShakeDetector();
     this.shakeDetector.configure({
       minDirectionChanges: 2, // Require at least 2 direction changes
-      timeWindow: 600, // 600ms to complete shake
-      minDistance: 10, // Minimum movement to avoid accidental triggers
+      timeWindow: 800, // 800ms to complete shake (more time)
+      minDistance: 5, // Lower threshold for easier detection
       debounceTime: 300, // Longer debounce to prevent spam
     });
 
@@ -109,6 +109,14 @@ export class DragShakeDetector extends EventEmitter {
   private setupEventHandlers(): void {
     // Set up mouse batcher handlers
     this.mouseBatcher.on('batch', (batchedEvent: BatchedEvent) => {
+      // Log batch event for debugging
+      if (this.isDragging) {
+        this.logger.debug('🔍 Batch event received during drag:', {
+          positionCount: batchedEvent.positions.length,
+          isDragging: this.isDragging
+        });
+      }
+
       // Process batched positions for shake detection
       batchedEvent.positions.forEach((pos: MousePosition) => {
         this.shakeDetector.processPosition(pos);
@@ -172,6 +180,15 @@ export class DragShakeDetector extends EventEmitter {
   }
 
   private handleDragStart(items: DraggedItem[]): void {
+    // Don't emit duplicate drag starts
+    if (this.isDragging) {
+      this.logger.debug('📎 Duplicate drag start ignored - already dragging');
+      return;
+    }
+
+    // Reset position counter for debugging
+    this.positionLogCount = 0;
+
     this.isDragging = true;
     this.draggedItems = items;
 
@@ -230,14 +247,21 @@ export class DragShakeDetector extends EventEmitter {
   }
 
   private handleDragEnd(): void {
+    // Ensure drag end is only processed once
+    if (!this.isDragging) {
+      this.logger.debug('📁 Duplicate drag end ignored - not dragging');
+      return;
+    }
+
     this.logger.info('📁 Drag ended');
+
+    // Clear drag state immediately to unblock system operations
+    this.isDragging = false;
+    this.draggedItems = [];
 
     // PERFORMANCE OPTIMIZATION: Stop shake detection when not dragging
     this.logger.debug('⏸️ Stopping shake detection (drag ended)');
     this.shakeDetector.stop();
-
-    this.isDragging = false;
-    this.draggedItems = [];
 
     // Emit drag-end event to allow proper shelf cleanup
     // The ApplicationController will handle smart cleanup logic
@@ -317,18 +341,25 @@ export class DragShakeDetector extends EventEmitter {
       return; // Skip all processing when not dragging - MAJOR CPU savings
     }
 
-    // Debug logging to trace position structure (very minimal)
-    if (Math.random() < 0.001) {
-      // 0.1% chance to avoid spam
-      this.logger.debug('📍 Position received during drag:', {
+    // Debug logging - log first few positions to verify flow
+    if (!this.positionLogCount) {
+      this.positionLogCount = 0;
+    }
+    this.positionLogCount++;
+
+    if (this.positionLogCount <= 5 || this.positionLogCount % 100 === 0) {
+      this.logger.debug(`📍 Position #${this.positionLogCount} received during drag:`, {
         x: position.x,
         y: position.y,
-        isDragging: this.isDragging,
+        isDragging: this.isDragging
       });
     }
+
     // Use batcher instead of direct processing to reduce CPU usage
     this.mouseBatcher.addPosition(position);
   }
+
+  private positionLogCount = 0;
 
   public destroy(): void {
     this.stop();

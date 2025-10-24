@@ -92,8 +92,26 @@ export class DragShelfStateMachine extends EventEmitter {
     },
     {
       from: DragShelfState.DRAG_STARTED,
+      event: DragShelfEvent.END_DRAG,
+      to: DragShelfState.IDLE,
+      guard: ctx => ctx.activeShelfId !== null,
+      action: ctx => {
+        ctx.isDragging = false;
+      },
+    },
+    {
+      from: DragShelfState.DRAG_STARTED,
       event: DragShelfEvent.SHAKE_DETECTED,
       to: DragShelfState.SHELF_CREATING,
+    },
+    {
+      from: DragShelfState.DRAG_STARTED,
+      event: DragShelfEvent.START_DRAG,
+      to: DragShelfState.DRAG_STARTED,
+      action: ctx => {
+        // Stay in drag_started state for repeated drag events
+        ctx.isDragging = true;
+      },
     },
 
     // Shelf creating transitions
@@ -155,6 +173,16 @@ export class DragShelfStateMachine extends EventEmitter {
     },
     {
       from: DragShelfState.SHELF_RECEIVING_DROP,
+      event: DragShelfEvent.DROP_ENDED,
+      to: DragShelfState.SHELF_ACTIVE,
+      action: ctx => {
+        ctx.dropInProgress = false;
+      },
+    },
+
+    // Additional shelf active transitions for drop_ended
+    {
+      from: DragShelfState.SHELF_ACTIVE,
       event: DragShelfEvent.DROP_ENDED,
       to: DragShelfState.SHELF_ACTIVE,
       action: ctx => {

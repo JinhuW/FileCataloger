@@ -211,6 +211,7 @@ export const ShelfPage: React.FC = () => {
   logger.info('ShelfPage rendering with config:', config);
 
   // Wait for config to be loaded from main process
+  // Make the loading state invisible to avoid flashing
   if (!config) {
     return (
       <div
@@ -221,13 +222,10 @@ export const ShelfPage: React.FC = () => {
           right: 0,
           bottom: 0,
           background: 'transparent',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          // Hide the loading state completely to prevent flashing
+          opacity: 0,
         }}
-      >
-        <div style={{ color: 'white', fontSize: '14px' }}>Loading shelf...</div>
-      </div>
+      />
     );
   }
 

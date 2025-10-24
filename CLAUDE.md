@@ -127,11 +127,6 @@ All IPC channels are strictly validated in preload script:
 'pattern:save'        // Save rename pattern
 'pattern:list'        // List saved patterns
 'pattern:execute'     // Execute rename
-
-// Plugin system
-'plugin:install'      // Install plugin
-'plugin:execute'      // Run plugin command
-'plugin:get-config'   // Get plugin settings
 ```
 
 ### State Management
@@ -140,7 +135,6 @@ All IPC channels are strictly validated in preload script:
 - **Renderer**: Zustand stores with Immer middleware
   - `shelfStore`: Map-based storage for performance
   - `patternStore`: Rename pattern management
-  - `pluginStore`: Plugin state and configuration
 
 ### TypeScript Configuration
 
@@ -196,13 +190,6 @@ Located in `src/renderer/features/fileRename/`:
 2. Update `shelfManager.createShelf()` to handle mode
 3. Create renderer components in `src/renderer/pages/shelf/`
 4. Update shelf store if needed
-
-### Adding a Plugin Hook
-
-1. Define hook in `src/shared/types/plugins.ts`
-2. Add execution point in relevant module
-3. Update plugin manager to call hook
-4. Document in plugin SDK
 
 ## Debugging
 

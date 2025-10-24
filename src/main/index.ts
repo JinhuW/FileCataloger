@@ -180,18 +180,15 @@ class FileCatalogerApp {
       this.applicationController = new ApplicationController();
       this.logger.info('✅ ApplicationController created successfully');
 
+      this.logger.info('🚀 Initializing ApplicationController...');
+      await this.applicationController.initialize();
+      this.logger.info('✅ ApplicationController initialized successfully');
+
       this.logger.info('🚀 Starting ApplicationController...');
       this.logger.info('📍 About to call applicationController.start()');
       await this.applicationController.start();
       this.logger.info('✅ ApplicationController.start() completed successfully');
 
-      // Scan for external plugins after startup
-      this.logger.info('🔌 Scanning for external plugins...');
-      import('./modules/plugins/pluginManager').then(({ pluginManager }) => {
-        pluginManager.scanPluginsDirectory().catch(error => {
-          this.logger.error('Failed to scan plugins directory:', error);
-        });
-      });
       // Start keyboard manager
       keyboardManager.start();
 
@@ -400,15 +397,6 @@ class FileCatalogerApp {
       })
       .catch(error => {
         this.logger.error('Failed to register pattern handlers:', error);
-      });
-
-    // Register plugin handlers
-    import('./ipc/pluginHandlers')
-      .then(({ registerPluginHandlers }) => {
-        registerPluginHandlers();
-      })
-      .catch(error => {
-        this.logger.error('Failed to register plugin handlers:', error);
       });
 
     // Get application status

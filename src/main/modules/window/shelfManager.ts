@@ -6,6 +6,7 @@ import { SHELF_CONSTANTS } from '@shared/constants';
 import { createLogger } from '../utils/logger';
 import { globalIPCRateLimiter } from '../utils/ipcRateLimiter';
 import { AdvancedWindowPool } from './advancedWindowPool';
+import { AsyncMutex } from '../utils/asyncMutex';
 
 /**
  * Advanced shelf window management system
@@ -23,6 +24,9 @@ export class ShelfManager extends EventEmitter {
   // Active shelves tracking
   private activeShelves = new Set<string>();
   private dockPositions = new Map<DockPosition, string[]>();
+
+  // Mutex to prevent concurrent shelf creation race condition
+  private shelfCreationMutex = new AsyncMutex();
 
   // Configuration
   private readonly DEFAULT_SHELF_SIZE = {
@@ -64,8 +68,7 @@ export class ShelfManager extends EventEmitter {
   /**
    * Wrapper for IPC handlers with rate limiting
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private createRateLimitedHandler<T extends any[], R>(
+  private createRateLimitedHandler<T extends unknown[], R>(
     channel: string,
     handler: (event: Electron.IpcMainInvokeEvent, ...args: T) => Promise<R> | R
   ): (event: Electron.IpcMainInvokeEvent, ...args: T) => Promise<R> {
@@ -108,72 +111,75 @@ export class ShelfManager extends EventEmitter {
    * Create a new shelf window
    */
   public async createShelf(config: Partial<ShelfConfig> = {}): Promise<string> {
-    // Check if there's already an active shelf
-    if (this.activeShelves.size >= 1) {
-      this.logger.warn('Shelf creation blocked: Only 1 shelf allowed at a time');
-      // Return the ID of the existing shelf and make it visible
-      const existingShelfId = Array.from(this.activeShelves)[0];
+    // Use mutex to prevent race condition when multiple shelf creation requests arrive simultaneously
+    return this.shelfCreationMutex.runExclusive(async () => {
+      // Check if there's already an active shelf (protected by mutex)
+      if (this.activeShelves.size >= 1) {
+        this.logger.warn('Shelf creation blocked: Only 1 shelf allowed at a time');
+        // Return the ID of the existing shelf and make it visible
+        const existingShelfId = Array.from(this.activeShelves)[0];
 
-      // IMPORTANT: Clear old items when reusing shelf to prevent showing cached items
-      const existingConfig = this.shelfConfigs.get(existingShelfId);
-      if (existingConfig) {
-        this.logger.info(
-          `🧹 Clearing ${existingConfig.items.length} old items from reused shelf ${existingShelfId}`
-        );
-        existingConfig.items = [];
+        // IMPORTANT: Clear old items when reusing shelf to prevent showing cached items
+        const existingConfig = this.shelfConfigs.get(existingShelfId);
+        if (existingConfig) {
+          this.logger.info(
+            `🧹 Clearing ${existingConfig.items.length} old items from reused shelf ${existingShelfId}`
+          );
+          existingConfig.items = [];
 
-        // Update the shelf config with the new items (empty array)
-        const window = this.shelves.get(existingShelfId);
-        if (window && !window.isDestroyed()) {
-          window.webContents.send('shelf:config', existingConfig);
+          // Update the shelf config with the new items (empty array)
+          const window = this.shelves.get(existingShelfId);
+          if (window && !window.isDestroyed()) {
+            window.webContents.send('shelf:config', existingConfig);
+          }
         }
+
+        this.showShelf(existingShelfId);
+        return existingShelfId;
       }
 
-      this.showShelf(existingShelfId);
-      return existingShelfId;
-    }
+      const shelfId = this.generateShelfId();
 
-    const shelfId = this.generateShelfId();
+      // Create shelf configuration
+      const shelfConfig: ShelfConfig = {
+        id: shelfId,
+        position: config.position || this.getDefaultPosition(),
+        dockPosition: config.dockPosition || null,
+        isPinned: config.isPinned !== undefined ? config.isPinned : false,
+        items: config.items || [],
+        isVisible: config.isVisible !== undefined ? config.isVisible : true,
+        opacity: config.opacity || SHELF_CONSTANTS.OPACITY,
+        isDropZone: config.isDropZone || false,
+        autoHide: config.autoHide || false,
+        mode: config.mode || ShelfMode.RENAME, // Default to rename mode
+      };
 
-    // Create shelf configuration
-    const shelfConfig: ShelfConfig = {
-      id: shelfId,
-      position: config.position || this.getDefaultPosition(),
-      dockPosition: config.dockPosition || null,
-      isPinned: config.isPinned !== undefined ? config.isPinned : false,
-      items: config.items || [],
-      isVisible: config.isVisible !== undefined ? config.isVisible : true,
-      opacity: config.opacity || SHELF_CONSTANTS.OPACITY,
-      isDropZone: config.isDropZone || false,
-      autoHide: config.autoHide || false,
-      mode: config.mode || ShelfMode.RENAME, // Default to rename mode
-    };
+      // Get or create window
+      const window = await this.acquireWindow();
 
-    // Get or create window
-    const window = await this.acquireWindow();
+      // Configure window
+      this.configureShelfWindow(window, shelfConfig);
 
-    // Configure window
-    this.configureShelfWindow(window, shelfConfig);
+      // Store shelf
+      this.shelves.set(shelfId, window);
+      this.shelfConfigs.set(shelfId, shelfConfig);
+      this.activeShelves.add(shelfId);
 
-    // Store shelf
-    this.shelves.set(shelfId, window);
-    this.shelfConfigs.set(shelfId, shelfConfig);
-    this.activeShelves.add(shelfId);
+      // Handle docking
+      if (shelfConfig.dockPosition) {
+        this.handleShelfDocking(shelfId, shelfConfig.dockPosition);
+      }
 
-    // Handle docking
-    if (shelfConfig.dockPosition) {
-      this.handleShelfDocking(shelfId, shelfConfig.dockPosition);
-    }
+      // Set up window event handlers
+      this.setupWindowEventHandlers(window, shelfId);
 
-    // Set up window event handlers
-    this.setupWindowEventHandlers(window, shelfId);
+      // Load shelf content
+      await this.loadShelfContent(window, shelfConfig);
 
-    // Load shelf content
-    await this.loadShelfContent(window, shelfConfig);
+      this.emit('shelf-created', shelfId, shelfConfig);
 
-    this.emit('shelf-created', shelfId, shelfConfig);
-
-    return shelfId;
+      return shelfId;
+    }); // End of mutex.runExclusive
   }
 
   /**
@@ -334,12 +340,18 @@ export class ShelfManager extends EventEmitter {
         // }
       }
 
-      // Also send config after a delay as fallback
-      setTimeout(() => {
+      // Send config immediately instead of waiting
+      // This ensures the React app receives config quickly and doesn't show loading state
+      if (!window.isDestroyed()) {
+        window.webContents.send('shelf:config', config);
+      }
+
+      // Also send on dom-ready event for extra reliability
+      window.webContents.once('dom-ready', () => {
         if (!window.isDestroyed()) {
           window.webContents.send('shelf:config', config);
         }
-      }, 500);
+      });
     } catch (error) {
       this.logger.error('Failed to load shelf content:', error);
       this.logger.error('Attempted path:', rendererPath);

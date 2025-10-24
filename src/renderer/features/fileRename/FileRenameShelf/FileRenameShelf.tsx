@@ -38,7 +38,6 @@ import { RenamePatternBuilder } from '../RenamePatternBuilder';
 import { FileRenamePreviewList } from '../FileRenamePreviewList';
 import { WarningDialog } from '@renderer/components/primitives';
 import { validateFileRenames, formatValidationWarning } from '@renderer/utils/fileValidation';
-import { useExternalPlugins } from '@renderer/hooks/useExternalPlugins';
 import { useToast } from '@renderer/stores/toastStore';
 import { logger } from '@shared/logger';
 
@@ -66,9 +65,6 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
 
     // Use config.items as the source of truth for selected files
     const selectedFiles = config.items;
-
-    // Get external plugin executor
-    const { executePlugin } = useExternalPlugins();
 
     // Get toast notification system
     const toast = useToast();
@@ -103,14 +99,6 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
               break;
             case 'project':
               newName += component.value || 'Project';
-              break;
-            default:
-              // Handle plugin components
-              if (component.type.startsWith('plugin:') && component.pluginId) {
-                // For now, use a placeholder - actual plugin execution would be async
-                // and should be handled differently in production
-                newName += component.value || `[${component.pluginId}]`;
-              }
               break;
           }
         });
@@ -194,50 +182,30 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
               const component = renameComponents[j];
               if (j > 0) finalName += '_';
 
-              if (component.type.startsWith('plugin:') && component.pluginId) {
-                // Execute plugin component
-                try {
-                  const extension = file.name.match(/\.[^/.]+$/)?.[0] || '';
+              // Handle built-in components
+              switch (component.type) {
+                case 'date': {
+                  const now = new Date();
+                  const year = now.getFullYear();
+                  const month = String(now.getMonth() + 1).padStart(2, '0');
+                  const day = String(now.getDate()).padStart(2, '0');
+                  finalName += `${year}${month}${day}`;
+                  break;
+                }
+                case 'fileName': {
                   const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
-
-                  const result = await executePlugin(
-                    component.pluginId,
-                    nameWithoutExt,
-                    extension,
-                    i,
-                    component.config
-                  );
-                  finalName += result;
-                } catch (error) {
-                  logger.error(`Plugin execution failed for ${component.pluginId}:`, error);
-                  finalName += `[${component.pluginId}-error]`;
+                  finalName += component.value || nameWithoutExt;
+                  break;
                 }
-              } else {
-                // Handle built-in components (same as preview logic)
-                switch (component.type) {
-                  case 'date': {
-                    const now = new Date();
-                    const year = now.getFullYear();
-                    const month = String(now.getMonth() + 1).padStart(2, '0');
-                    const day = String(now.getDate()).padStart(2, '0');
-                    finalName += `${year}${month}${day}`;
-                    break;
-                  }
-                  case 'fileName': {
-                    const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
-                    finalName += component.value || nameWithoutExt;
-                    break;
-                  }
-                  case 'text':
-                    finalName += component.value || '';
-                    break;
-                  case 'counter':
-                    finalName += String(i + 1).padStart(3, '0');
-                    break;
-                  case 'project':
-                    finalName += component.value || 'Project';
-                    break;
-                }
+                case 'text':
+                  finalName += component.value || '';
+                  break;
+                case 'counter':
+                  finalName += String(i + 1).padStart(3, '0');
+                  break;
+                case 'project':
+                  finalName += component.value || 'Project';
+                  break;
               }
             }
 
@@ -292,7 +260,7 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
       } catch (error) {
         logger.error('Rename operation failed:', error);
       }
-    }, [selectedFiles, filePreview, renameComponents, executePlugin, onItemRemove, onItemAdd]);
+    }, [selectedFiles, filePreview, renameComponents, onItemRemove, onItemAdd]);
 
     // Handle rename action
     const handleRename = useCallback(() => {

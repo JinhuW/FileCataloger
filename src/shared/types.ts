@@ -113,12 +113,10 @@ export interface PerformanceMetrics {
 // File Rename Types
 export interface RenameComponent {
   id: string;
-  type: 'date' | 'fileName' | 'counter' | 'text' | 'project' | string; // Allow plugin types
+  type: 'date' | 'fileName' | 'counter' | 'text' | 'project';
   value?: string;
   format?: string; // For date components
   placeholder?: string;
-  pluginId?: string; // For plugin components
-  config?: Record<string, any>; // Plugin-specific configuration
 }
 
 export interface RenamePattern {

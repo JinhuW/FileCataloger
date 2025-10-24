@@ -129,7 +129,7 @@ export class MacDragMonitor extends EventEmitter {
       return;
     }
 
-    // Poll at 60fps (16ms) for responsive drag detection
+    // Poll at 10fps (100ms) for better performance - still responsive but less CPU intensive
     this.pollingInterval = setInterval(() => {
       if (!this.nativeMonitor) {
         return;
@@ -140,10 +140,10 @@ export class MacDragMonitor extends EventEmitter {
       try {
         const hasActiveDrag = this.nativeMonitor.hasActiveDrag();
 
-        // Log every 60 polls (about once per second)
-        if (this.pollCount % 60 === 0) {
+        // Only log significant events or every 600 polls (about once per minute)
+        if (this.pollCount % 600 === 0) {
           logger.debug(
-            `🔍 Drag monitor polling #${this.pollCount}: hasActiveDrag=${hasActiveDrag}`
+            `🔍 Drag monitor health check: hasActiveDrag=${hasActiveDrag}, polls=${this.pollCount}`
           );
         }
 
@@ -198,7 +198,7 @@ export class MacDragMonitor extends EventEmitter {
       } catch (error) {
         logger.error('❌ Error during drag polling:', error);
       }
-    }, 16);
+    }, 100); // Changed from 16ms to 100ms for better performance
   }
 
   private stopPolling(): void {
