@@ -6,39 +6,51 @@
  *
  * @features
  * - Dual mode support (default shelf / rename shelf)
- * - Real-time IPC communication with main process
- * - State synchronization between renderer and main
- * - Automatic mode switching based on config
+ * - Real-time IPC communication with main process via custom hooks
+ * - State management through Zustand store
+ * - Automatic auto-hide for empty unpinned shelves
  *
- * @ipc-channels
- * - shelf:config - Receives complete shelf configuration
- * - shelf:add-item - Adds item to shelf
- * - shelf:remove-item - Removes item from shelf
- * - shelf:close - Closes the shelf window
+ * @refactored
+ * - Uses useShelfConfig hook for configuration management
+ * - Uses useShelfItems hook for item operations
+ * - Uses useShelfAutoHide hook for auto-hide behavior
+ * - Eliminates local state in favor of Zustand store
  */
 
-import React, { useState, useEffect } from 'react';
-import { ShelfConfig, ShelfItem } from '@shared/types';
+import React, { useEffect, useState, useCallback } from 'react';
+import { ShelfConfig } from '@shared/types';
 import { logger } from '@shared/logger';
-import { isShelfConfig, isShelfItem } from '@renderer/utils/typeGuards';
 import { FileRenameShelf } from '@renderer/features/fileRename/FileRenameShelf';
 import { useIPC } from '@renderer/hooks/useIPC';
+import { isShelfConfig } from '@renderer/utils/typeGuards';
+import { useShelfStore } from '@renderer/stores/shelfStore';
+import { useShelfAutoHide } from '@renderer/hooks/useShelfAutoHide';
+import { cleanupItemThumbnails } from '@renderer/utils/fileProcessing';
 
 export const ShelfPage: React.FC = () => {
   logger.info('ShelfPage component initializing');
 
-  // Start with null config - wait for actual config from main process
-  const [config, setConfig] = useState<ShelfConfig | null>(null);
-
+  const [shelfId, setShelfId] = useState<string | null>(null);
   const { invoke, on, isConnected } = useIPC();
 
-  // Log component lifecycle
+  // Get config from Zustand store
+  const shelf = useShelfStore(state => (shelfId ? state.getShelf(shelfId) : null));
+  const addShelf = useShelfStore(state => state.addShelf);
+  const updateShelf = useShelfStore(state => state.updateShelf);
+  const addItemToShelf = useShelfStore(state => state.addItemToShelf);
+  const removeItemFromShelf = useShelfStore(state => state.removeItemFromShelf);
+
+  // Log component lifecycle and cleanup thumbnails on unmount
   useEffect(() => {
     logger.info('ShelfPage component mounted');
     return () => {
       logger.info('ShelfPage component unmounting');
+      // Cleanup any object URLs created for thumbnails
+      if (shelf?.items) {
+        cleanupItemThumbnails(shelf.items);
+      }
     };
-  }, []);
+  }, [shelf?.items]);
 
   // Debug window API in development only
   if (process.env.NODE_ENV === 'development') {
@@ -49,170 +61,123 @@ export const ShelfPage: React.FC = () => {
     logger.debug('  - typeof window.electronAPI:', typeof window.electronAPI);
   }
 
+  // Listen for initial shelf config and subsequent updates
   useEffect(() => {
     if (!isConnected) return;
 
-    const cleanups: (() => void)[] = [];
+    const cleanup = on('shelf:config', (newConfig: unknown) => {
+      if (isShelfConfig(newConfig)) {
+        logger.debug(
+          'Received shelf config:',
+          newConfig.id,
+          'with',
+          newConfig.items.length,
+          'items'
+        );
 
-    // Listen for configuration updates
-    cleanups.push(
-      on('shelf:config', (newConfig: unknown) => {
-        if (isShelfConfig(newConfig)) {
-          logger.debug(
-            'Received shelf config:',
-            newConfig.id,
-            'with',
-            newConfig.items.length,
-            'items'
-          );
-          setConfig(newConfig);
-        } else if (process.env.NODE_ENV === 'development') {
-          logger.warn('Received invalid shelf config:', newConfig);
+        // Set shelf ID on first config (initialization)
+        if (!shelfId) {
+          logger.info(`Initializing shelf with ID: ${newConfig.id}`);
+          setShelfId(newConfig.id);
+          addShelf(newConfig);
+        } else {
+          // Update existing shelf
+          updateShelf(newConfig.id, newConfig);
         }
-      })
-    );
+      } else if (process.env.NODE_ENV === 'development') {
+        logger.warn('Received invalid shelf config:', newConfig);
+      }
+    });
 
-    // Listen for item additions
-    cleanups.push(
-      on('shelf:add-item', (item: unknown) => {
-        if (isShelfItem(item)) {
-          setConfig(prev => ({
-            ...prev,
-            items: [...prev.items, item],
-          }));
-        } else if (process.env.NODE_ENV === 'development') {
-          logger.warn('Received invalid shelf item:', item);
-        }
-      })
-    );
+    return cleanup;
+  }, [isConnected, on, shelfId, addShelf, updateShelf]);
 
-    // Listen for item removals
-    cleanups.push(
-      on('shelf:remove-item', (itemId: unknown) => {
-        if (typeof itemId === 'string') {
-          setConfig(prev => ({
-            ...prev,
-            items: prev.items.filter(item => item.id !== itemId),
-          }));
-        } else if (process.env.NODE_ENV === 'development') {
-          logger.warn('Received invalid item ID:', itemId);
-        }
-      })
-    );
-
-    // Cleanup all listeners on unmount
-    return () => {
-      cleanups.forEach(cleanup => cleanup());
-    };
-  }, [isConnected, on]);
-
+  // Handle updating config
   const handleConfigChange = async (changes: Partial<ShelfConfig>) => {
-    if (!config) return; // Guard: config not yet loaded
+    if (!shelfId) {
+      logger.error('Cannot update config: shelfId not initialized');
+      return;
+    }
 
-    const newConfig = { ...config, ...changes };
-    setConfig(newConfig);
+    // Update store
+    updateShelf(shelfId, changes);
 
-    // Notify main process of configuration changes
+    // Sync with main process
     if (isConnected) {
       try {
-        await invoke('shelf:update-config', config.id, changes);
+        await invoke('shelf:update-config', shelfId, changes);
       } catch (error) {
         logger.error('Failed to update config via IPC:', error);
       }
     }
   };
 
-  const handleItemAdd = async (item: ShelfItem) => {
-    if (!config) {
-      logger.error('Cannot add item: shelf config not yet loaded');
+  // Handle adding item
+  const handleItemAdd = async (item: import('@shared/types').ShelfItem) => {
+    if (!shelfId) {
+      logger.error('Cannot add item: shelfId not initialized');
       return;
     }
 
-    logger.debug('handleItemAdd called for shelf', config.id, 'with item:', item);
+    logger.debug(`Adding item to shelf ${shelfId}:`, item.name);
 
-    // Update local state optimistically (backend will send shelf:config to confirm)
-    setConfig(prev => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        items: [...prev.items, item],
-      };
-    });
+    // Optimistic update
+    addItemToShelf(shelfId, item);
 
-    // Notify main process
+    // Sync with main process
     if (isConnected) {
       try {
-        // Note: We only need shelf:add-item - the shelf:files-dropped event
-        // was causing duplicate additions. The backend will handle persistence.
-
-        logger.debug('Sending shelf:add-item IPC call for shelf', config.id);
-        const result = await invoke('shelf:add-item', config.id, item);
-        logger.debug('IPC shelf:add-item succeeded:', result);
-      } catch (err) {
-        logger.error('Failed to add item via IPC:', err);
-        logger.error('Shelf ID:', config.id);
-        logger.error('Item:', item);
+        await invoke('shelf:add-item', shelfId, item);
+      } catch (error) {
+        logger.error('Failed to add item via IPC:', error);
       }
-    } else {
-      logger.error('IPC not available!');
     }
   };
 
+  // Handle removing item
   const handleItemRemove = async (itemId: string) => {
-    if (!config) return; // Guard: config not yet loaded
+    if (!shelfId) {
+      logger.error('Cannot remove item: shelfId not initialized');
+      return;
+    }
 
-    logger.info(`🗑️ handleItemRemove called for itemId: ${itemId} on shelf: ${config.id}`);
+    logger.debug(`Removing item ${itemId} from shelf ${shelfId}`);
 
-    setConfig(prev => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        items: prev.items.filter(item => item.id !== itemId),
-      };
-    });
+    // Optimistic update
+    removeItemFromShelf(shelfId, itemId);
 
-    // Notify main process
+    // Sync with main process
     if (isConnected) {
       try {
-        logger.info(`📡 Calling shelf:remove-item IPC for shelf: ${config.id}, item: ${itemId}`);
-        await invoke('shelf:remove-item', config.id, itemId);
-        logger.info(`✅ IPC shelf:remove-item succeeded`);
+        await invoke('shelf:remove-item', shelfId, itemId);
       } catch (error) {
         logger.error('Failed to remove item via IPC:', error);
       }
-    } else {
-      logger.warn('⚠️ Not connected to main process, skipping IPC call');
-    }
-
-    // RESTORE FRONTEND FIX: Auto-hide empty shelf after 3 seconds
-    // Keep this until main process architecture is fully working
-    const updatedItems = config.items.filter(item => item.id !== itemId);
-    if (updatedItems.length === 0 && !config.isPinned) {
-      logger.info(`⏰ FRONTEND: Shelf ${config.id} is empty, scheduling auto-hide in 3 seconds`);
-      setTimeout(() => {
-        logger.info(`🗑️ FRONTEND: Auto-hiding empty shelf ${config.id}`);
-        handleClose();
-      }, 3000);
     }
   };
 
-  const handleClose = async () => {
-    if (!config) return; // Guard: config not yet loaded
+  // Handle shelf close (wrapped in useCallback to stabilize reference)
+  const handleClose = useCallback(async () => {
+    if (!shelfId) return;
 
-    if (isConnected) {
-      try {
-        await invoke('shelf:close', config.id);
-      } catch (error) {
-        logger.error('Failed to close shelf via IPC:', error);
-      }
+    try {
+      await invoke('shelf:close', shelfId);
+    } catch (error) {
+      logger.error('Failed to close shelf via IPC:', error);
     }
-  };
+  }, [shelfId, invoke]);
 
-  logger.info('ShelfPage rendering with config:', config);
+  // Auto-hide empty unpinned shelves using custom hook
+  useShelfAutoHide(shelfId || '', shelf?.items.length === 0 || false, shelf?.isPinned || false, {
+    onClose: handleClose,
+    enabled: !!shelfId && !!shelf,
+  });
+
+  logger.info('ShelfPage rendering with shelf:', shelf);
 
   // Wait for config to be loaded from main process
   // Make the loading state invisible to avoid flashing
-  if (!config) {
+  if (!shelf) {
     return (
       <div
         style={{
@@ -245,7 +210,7 @@ export const ShelfPage: React.FC = () => {
       }}
     >
       <FileRenameShelf
-        config={config}
+        config={shelf}
         onConfigChange={handleConfigChange}
         onItemAdd={handleItemAdd}
         onItemRemove={handleItemRemove}

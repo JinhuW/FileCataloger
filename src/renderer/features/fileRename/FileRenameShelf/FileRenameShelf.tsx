@@ -30,15 +30,16 @@
  * ```
  */
 
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { ShelfConfig, ShelfItem, FileRenamePreview, RenameComponent } from '@shared/types';
+import { ShelfConfig, ShelfItem } from '@shared/types';
 import { ShelfHeader, ErrorBoundary, FileDropZone } from '@renderer/components/domain';
 import { RenamePatternBuilder } from '../RenamePatternBuilder';
 import { FileRenamePreviewList } from '../FileRenamePreviewList';
 import { WarningDialog } from '@renderer/components/primitives';
-import { validateFileRenames, formatValidationWarning } from '@renderer/utils/fileValidation';
 import { useToast } from '@renderer/stores/toastStore';
+import { useFileRename } from '@renderer/hooks/useFileRename';
+import { SHELF_DIMENSIONS, ANIMATION } from '@renderer/constants/ui';
 import { logger } from '@shared/logger';
 
 export interface FileRenameShelfProps {
@@ -51,10 +52,6 @@ export interface FileRenameShelfProps {
 
 export const FileRenameShelf = React.memo<FileRenameShelfProps>(
   ({ config, onConfigChange: _onConfigChange, onItemAdd, onItemRemove, onClose }) => {
-    const [renameComponents, setRenameComponents] = useState<RenameComponent[]>([
-      { id: 'date-1', type: 'date', format: 'YYYYMMDD' },
-      { id: 'fileName-1', type: 'fileName' },
-    ]);
     const [isDragOver, setIsDragOver] = useState(false);
     const [destinationPath, setDestinationPath] = useState('~/Downloads');
     const [showWarningDialog, setShowWarningDialog] = useState(false);
@@ -69,54 +66,36 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
     // Get toast notification system
     const toast = useToast();
 
-    // Generate preview names based on current pattern
-    const filePreview = useMemo((): FileRenamePreview[] => {
-      return selectedFiles.map((file, fileIndex) => {
-        let newName = '';
-
-        renameComponents.forEach((component, index) => {
-          if (index > 0) newName += '_'; // Add separator
-
-          switch (component.type) {
-            case 'date': {
-              const now = new Date();
-              const year = now.getFullYear();
-              const month = String(now.getMonth() + 1).padStart(2, '0');
-              const day = String(now.getDate()).padStart(2, '0');
-              newName += `${year}${month}${day}`;
-              break;
-            }
-            case 'fileName': {
-              const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
-              newName += component.value || nameWithoutExt;
-              break;
-            }
-            case 'text':
-              newName += component.value || '';
-              break;
-            case 'counter':
-              newName += String(fileIndex + 1).padStart(3, '0');
-              break;
-            case 'project':
-              newName += component.value || 'Project';
-              break;
+    // Use the file rename hook for all rename operations
+    const {
+      components: renameComponents,
+      setComponents: setRenameComponents,
+      previews: filePreview,
+      executeRename,
+      validate,
+      isRenaming,
+    } = useFileRename(selectedFiles, {
+      onSuccess: results => {
+        const successCount = results.filter(r => r.success).length;
+        toast.success(
+          'Rename Complete',
+          `Successfully renamed ${successCount} of ${results.length} files`
+        );
+        // Clear files after successful rename
+        results.forEach(result => {
+          if (result.success) {
+            const file = selectedFiles.find(f => f.name === result.originalName);
+            if (file) onItemRemove(file.id);
           }
         });
-
-        // Add file extension (not for folders)
-        if (file.type !== 'folder') {
-          const ext = file.name.match(/\.[^/.]+$/);
-          if (ext) newName += ext[0];
-        }
-
-        return {
-          originalName: file.name,
-          newName,
-          selected: true,
-          type: file.type,
-        };
-      });
-    }, [selectedFiles, renameComponents]);
+      },
+      onError: error => {
+        toast.error('Rename Failed', error.message);
+      },
+      onProgress: (completed, total) => {
+        logger.info(`Rename progress: ${completed}/${total}`);
+      },
+    });
 
     // Handle file drop
     const handleFileDrop = useCallback(
@@ -167,126 +146,34 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
       [selectedFiles, onItemRemove]
     );
 
-    // Perform the actual rename operation
-    const performRename = useCallback(async () => {
-      try {
-        // Process each file
-        for (let i = 0; i < selectedFiles.length; i++) {
-          const file = selectedFiles[i];
-          const preview = filePreview[i];
-          if (preview) {
-            let finalName = '';
-
-            // Process each component
-            for (let j = 0; j < renameComponents.length; j++) {
-              const component = renameComponents[j];
-              if (j > 0) finalName += '_';
-
-              // Handle built-in components
-              switch (component.type) {
-                case 'date': {
-                  const now = new Date();
-                  const year = now.getFullYear();
-                  const month = String(now.getMonth() + 1).padStart(2, '0');
-                  const day = String(now.getDate()).padStart(2, '0');
-                  finalName += `${year}${month}${day}`;
-                  break;
-                }
-                case 'fileName': {
-                  const nameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
-                  finalName += component.value || nameWithoutExt;
-                  break;
-                }
-                case 'text':
-                  finalName += component.value || '';
-                  break;
-                case 'counter':
-                  finalName += String(i + 1).padStart(3, '0');
-                  break;
-                case 'project':
-                  finalName += component.value || 'Project';
-                  break;
-              }
-            }
-
-            // Add extension
-            if (file.type !== 'folder') {
-              const ext = file.name.match(/\.[^/.]+$/)?.[0];
-              if (ext) finalName += ext;
-            }
-
-            // Actually rename the file using Electron APIs
-            logger.debug(`🔧 DEBUG: File object structure:`, {
-              id: file.id,
-              name: file.name,
-              path: file.path,
-              type: file.type,
-              keys: Object.keys(file),
-            });
-
-            // Validate that the file has a valid path
-            if (!file.path || !file.path.includes('/')) {
-              logger.error(`❌ Cannot rename ${file.name}: No valid file path available`);
-              logger.info('💡 Tip: Drag files from Finder to ensure full paths are captured');
-              continue; // Skip this file
-            }
-
-            const oldPath = file.path;
-            const directory = oldPath.substring(0, oldPath.lastIndexOf('/'));
-            const newPath = directory + '/' + finalName;
-
-            try {
-              const result = await window.api.invoke('fs:rename-file', oldPath, newPath);
-              if (result.success) {
-                logger.info(`✅ File renamed: ${file.name} → ${finalName}`);
-                // Update the file item with new name and path
-                onItemRemove(file.id);
-                onItemAdd({
-                  ...file,
-                  name: finalName,
-                  path: newPath,
-                });
-              } else {
-                logger.error(`❌ Failed to rename ${file.name}:`, result.error);
-              }
-            } catch (error) {
-              logger.error(`❌ Rename failed for ${file.name}:`, error);
-            }
-          }
-        }
-
-        // Clear files after rename - state is managed by parent (ShelfPage)
-        selectedFiles.forEach(file => onItemRemove(file.id));
-      } catch (error) {
-        logger.error('Rename operation failed:', error);
-      }
-    }, [selectedFiles, filePreview, renameComponents, onItemRemove, onItemAdd]);
-
     // Handle rename action
-    const handleRename = useCallback(() => {
-      // Create a map of file IDs to their new names
-      const newNamesMap = new Map<string, string>();
-      selectedFiles.forEach((file, index) => {
-        const preview = filePreview[index];
-        if (preview) {
-          newNamesMap.set(file.id, preview.newName);
-        }
-      });
-
+    const handleRename = useCallback(async () => {
       // Validate the rename operations
-      const validation = validateFileRenames(selectedFiles, newNamesMap, destinationPath);
+      const validation = validate(selectedFiles, destinationPath);
 
-      if (!validation.isValid) {
+      if (!validation.isValid && validation.warning) {
         // Show warning dialog
-        const warning = formatValidationWarning(validation);
-        setValidationWarning(warning);
+        setValidationWarning(validation.warning);
         setShowWarningDialog(true);
         return;
       }
 
-      // Proceed with rename
-      performRename();
-    }, [selectedFiles, filePreview, destinationPath, performRename]);
+      // Execute rename
+      try {
+        await executeRename(selectedFiles, destinationPath);
+      } catch (error) {
+        logger.error('Rename operation failed:', error);
+      }
+    }, [selectedFiles, destinationPath, validate, executeRename]);
+
+    // Perform rename (called from warning dialog)
+    const performRename = useCallback(async () => {
+      try {
+        await executeRename(selectedFiles, destinationPath);
+      } catch (error) {
+        logger.error('Rename operation failed:', error);
+      }
+    }, [selectedFiles, destinationPath, executeRename]);
 
     return (
       <ErrorBoundary>
@@ -297,17 +184,19 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
             opacity: config.isVisible ? config.opacity : 0,
             scale: config.isVisible ? 1 : 0.9,
           }}
-          transition={{ duration: 0.2, ease: 'easeOut' }}
+          transition={{ duration: ANIMATION.DURATION, ease: ANIMATION.EASE }}
           style={{
             background: 'rgba(30, 30, 30, 0.95)',
             backdropFilter: 'blur(20px)',
             border: '1px solid rgba(255, 255, 255, 0.1)',
             borderRadius: '16px',
-            width: '900px',
-            height: '600px',
+            width: `${SHELF_DIMENSIONS.WIDTH}px`,
+            height: `${SHELF_DIMENSIONS.HEIGHT}px`,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
+            pointerEvents: isRenaming ? 'none' : 'auto',
+            opacity: isRenaming ? 0.7 : 1,
           }}
         >
           {/* Header */}

@@ -218,3 +218,207 @@ export function getFileExtension(filename: string): string {
   const lastDot = filename.lastIndexOf('.');
   return lastDot > 0 ? filename.substring(lastDot + 1).toLowerCase() : '';
 }
+
+/**
+ * Result of processing dropped/selected files with duplicate detection
+ */
+export interface ProcessFilesResult {
+  /**
+   * Successfully processed items
+   */
+  items: ShelfItem[];
+  /**
+   * Number of duplicate files that were skipped
+   */
+  duplicateCount: number;
+  /**
+   * Whether the filesystem type check failed (using heuristic fallback)
+   */
+  pathTypeCheckFailed?: boolean;
+}
+
+/**
+ * Options for processing file lists
+ */
+export interface ProcessFileListOptions {
+  /**
+   * Set of existing file paths to check for duplicates
+   */
+  existingPaths?: Set<string>;
+  /**
+   * Source of the files (for logging)
+   */
+  source?: 'drag' | 'input';
+}
+
+/**
+ * Processes a FileList and converts it to ShelfItems with type detection.
+ * Handles duplicate detection and file type classification via IPC.
+ * This function is optimized for batch processing with a single IPC call.
+ *
+ * @param files - The FileList to process
+ * @param options - Processing options including duplicate detection
+ * @returns ProcessFilesResult containing items and duplicate count
+ */
+export async function processFileList(
+  files: FileList,
+  options: ProcessFileListOptions = {}
+): Promise<ProcessFilesResult> {
+  const { existingPaths = new Set<string>(), source = 'drag' } = options;
+
+  const items: ShelfItem[] = [];
+  const duplicatePaths = new Set<string>();
+  let duplicateCount = 0;
+
+  logger.info(`📦 processFileList: Processing ${files.length} files from ${source}`);
+
+  // Step 1: Collect paths for batch type checking
+  const pathsToCheck: string[] = [];
+  const fileMap: Map<string, { file: File; index: number }> = new Map();
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const filePath = getElectronFilePath(file);
+    if (filePath) {
+      pathsToCheck.push(filePath);
+      fileMap.set(filePath, { file, index: i });
+    }
+  }
+
+  // Step 2: Batch check path types via IPC
+  let pathTypes: Record<string, 'file' | 'folder' | 'unknown'> = {};
+  let pathTypeCheckFailed = false;
+
+  if (pathsToCheck.length > 0) {
+    try {
+      logger.debug(`Checking ${pathsToCheck.length} path types`);
+      pathTypes = (await window.api.invoke('fs:check-path-type', pathsToCheck)) as Record<
+        string,
+        'file' | 'folder' | 'unknown'
+      >;
+      logger.debug('Path types received', pathTypes);
+    } catch (error) {
+      pathTypeCheckFailed = true;
+      logger.error('Failed to check path types via IPC:', error);
+      logger.warn(
+        '⚠️ Falling back to heuristic file type detection. Folder detection may be inaccurate.'
+      );
+      // Continue processing with empty pathTypes - will use heuristic fallback
+    }
+  }
+
+  // Step 3: Process each file
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+    const filePath = getElectronFilePath(file);
+
+    // Skip duplicates (both from existing paths and within current batch)
+    if (filePath) {
+      if (existingPaths.has(filePath) || duplicatePaths.has(filePath)) {
+        logger.debug(`Skipping duplicate file: ${file.name} (${filePath})`);
+        duplicateCount++;
+        continue;
+      }
+      duplicatePaths.add(filePath);
+    }
+
+    // Determine file type with filesystem check
+    const type = determineFileTypeWithPath(file, filePath, pathTypes);
+
+    logger.debug(`Processed file ${i}:`, {
+      name: file.name,
+      path: filePath,
+      type,
+      size: file.size,
+    });
+
+    const item: ShelfItem = {
+      id: generateItemId(type, i),
+      type,
+      name: file.name,
+      path: filePath || undefined,
+      size: file.size,
+      createdAt: Date.now(),
+    };
+    items.push(item);
+  }
+
+  logger.info(
+    `📦 processFileList: Processed ${items.length} items, skipped ${duplicateCount} duplicates`
+  );
+
+  return { items, duplicateCount, pathTypeCheckFailed };
+}
+
+/**
+ * Gets the Electron file path from a File object.
+ * Electron exposes the native path on the File object.
+ *
+ * @param file - The File object
+ * @returns The file path or undefined
+ */
+export function getElectronFilePath(file: File): string | undefined {
+  return (file as unknown as { path?: string }).path;
+}
+
+/**
+ * Determines the ShelfItemType for a file based on filesystem checks and heuristics.
+ * This function uses IPC results to accurately determine if a path is a folder.
+ *
+ * @param file - The File object
+ * @param filePath - The file path (if available)
+ * @param pathTypes - Map of paths to their filesystem types
+ * @returns The determined ShelfItemType
+ */
+export function determineFileTypeWithPath(
+  file: File,
+  filePath: string | undefined,
+  pathTypes: Record<string, 'file' | 'folder' | 'unknown'>
+): ShelfItemType {
+  // Primary: Use filesystem type if available
+  if (filePath && pathTypes[filePath]) {
+    if (pathTypes[filePath] === 'folder') {
+      return ShelfItemType.FOLDER;
+    }
+    // For files, check if it's an image
+    if (file.type.startsWith('image/')) {
+      return ShelfItemType.IMAGE;
+    }
+    return ShelfItemType.FILE;
+  }
+
+  // Fallback: Heuristic detection
+  const hasExtension = file.name.includes('.') && !file.name.endsWith('.app');
+  const isFolder = (!hasExtension && file.size === 0) || (!file.type && !hasExtension);
+
+  if (isFolder) {
+    return ShelfItemType.FOLDER;
+  }
+  if (file.type.startsWith('image/')) {
+    return ShelfItemType.IMAGE;
+  }
+  return ShelfItemType.FILE;
+}
+
+/**
+ * Checks if an array of files contains duplicates based on their paths.
+ *
+ * @param items - Array of ShelfItems to check
+ * @returns Set of duplicate paths found
+ */
+export function findDuplicatePaths(items: ShelfItem[]): Set<string> {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+
+  for (const item of items) {
+    if (item.path) {
+      if (seen.has(item.path)) {
+        duplicates.add(item.path);
+      } else {
+        seen.add(item.path);
+      }
+    }
+  }
+
+  return duplicates;
+}
