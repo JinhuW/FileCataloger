@@ -1,12 +1,12 @@
 import { EventEmitter } from 'events';
 import { Logger, createLogger } from '../utils/logger';
 import { MouseTracker, DragItem } from '@shared/types';
-import { DragShakeDetector, DragShakeEvent } from '../input/dragShakeDetector';
-import { ShelfLifecycleManager } from './shelfLifecycleManager';
-import { DragShelfStateMachine, DragShelfEvent as StateMachineEvent } from '../state/dragShelfStateMachine';
-import { PreferencesManager } from '../config/preferencesManager';
-import { AsyncMutex } from '../utils/asyncMutex';
-import { TimerManager } from '../utils/timerManager';
+import { DragShakeDetector, DragShakeEvent } from '../input/drag_shake_detector';
+import { ShelfLifecycleManager } from './shelf_lifecycle_manager';
+import { DragShelfStateMachine, DragShelfEvent as StateMachineEvent } from '../state/drag_shelf_state_machine';
+import { PreferencesManager } from '../config/preferences_manager';
+import { AsyncMutex } from '../utils/async_mutex';
+import { TimerManager } from '../utils/timer_manager';
 
 /**
  * Coordinates drag and drop operations between mouse tracking, shake detection, and shelf management

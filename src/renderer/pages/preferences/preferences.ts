@@ -1,4 +1,4 @@
-import { AppPreferences } from '@main/modules/config/preferencesManager';
+import { AppPreferences } from '@main/modules/config/preferences_manager';
 import { logger } from '@shared/logger';
 
 interface PreferencesUI {

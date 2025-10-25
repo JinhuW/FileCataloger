@@ -1,7 +1,7 @@
 import { app, globalShortcut, BrowserWindow } from 'electron';
 import { EventEmitter } from 'events';
-import { preferencesManager } from '../config/preferencesManager';
-import { errorHandler, ErrorSeverity, ErrorCategory } from '../utils/errorHandler';
+import { preferencesManager } from '../config/preferences_manager';
+import { errorHandler, ErrorSeverity, ErrorCategory } from '../utils/error_handler';
 import { logger } from '../utils/logger';
 
 export interface KeyboardShortcut {

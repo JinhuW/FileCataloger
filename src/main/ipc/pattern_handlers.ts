@@ -1,10 +1,10 @@
 import { ipcMain, dialog } from 'electron';
 import { SavedPattern } from '@shared/types';
-import { patternPersistenceManager } from '../modules/storage/patternPersistenceManager';
+import { patternPersistenceManager } from '../modules/storage/pattern_persistence_manager';
 import { logger } from '../modules/utils/logger';
 
 // IPC Response type for consistent error handling
-interface IPCResponse<T = any> {
+interface IPCResponse<T = unknown> {
   success: boolean;
   data?: T;
   error?: string;
@@ -138,12 +138,11 @@ export function registerPatternHandlers(): void {
   );
 
   // Get usage statistics
-  ipcMain.handle('pattern:get-stats', async (): Promise<IPCResponse<any>> => {
+  ipcMain.handle('pattern:get-stats', async (): Promise<IPCResponse<unknown>> => {
     return handleAsyncIPC(async () => {
       return await patternPersistenceManager.getUsageStats();
     }, 'pattern:get-stats');
   });
-
 
   // Batch operations
   ipcMain.handle(
@@ -196,16 +195,16 @@ export function registerPatternHandlers(): void {
           ],
         });
 
-        if (result.canceled) {
+        if (result.canceled || !result.filePath) {
           throw new Error('Export canceled by user');
         }
 
         const exportData = await patternPersistenceManager.exportPattern(id);
 
         const fs = await import('fs/promises');
-        await fs.writeFile(result.filePath!, exportData, 'utf8');
+        await fs.writeFile(result.filePath, exportData, 'utf8');
 
-        return result.filePath!;
+        return result.filePath;
       }, 'pattern:export-to-file');
     }
   );
@@ -221,16 +220,16 @@ export function registerPatternHandlers(): void {
         ],
       });
 
-      if (result.canceled) {
+      if (result.canceled || !result.filePath) {
         throw new Error('Export canceled by user');
       }
 
       const exportData = await patternPersistenceManager.exportAllPatterns();
 
       const fs = await import('fs/promises');
-      await fs.writeFile(result.filePath!, exportData, 'utf8');
+      await fs.writeFile(result.filePath, exportData, 'utf8');
 
-      return result.filePath!;
+      return result.filePath;
     }, 'pattern:export-all-to-file');
   });
 
@@ -317,16 +316,16 @@ export function registerPatternHandlers(): void {
         ],
       });
 
-      if (result.canceled) {
+      if (result.canceled || !result.filePath) {
         throw new Error('Backup canceled by user');
       }
 
       const exportData = await patternPersistenceManager.exportAllPatterns();
 
       const fs = await import('fs/promises');
-      await fs.writeFile(result.filePath!, exportData, 'utf8');
+      await fs.writeFile(result.filePath, exportData, 'utf8');
 
-      return result.filePath!;
+      return result.filePath;
     }, 'pattern:backup-to-file');
   });
 

@@ -135,15 +135,22 @@ export class SecurityConfig {
     app.on('web-contents-created', (event, contents) => {
       // Remote module is deprecated in newer Electron versions
       // These events may not exist, so we'll use type assertions
-      (contents as any).on('remote-require', (event: any) => {
-        event.preventDefault();
-        this.logger.warn('Blocked remote-require attempt');
-      });
+      type RemoteEvent = { preventDefault: () => void };
+      (contents as { on: (event: string, handler: (event: RemoteEvent) => void) => void }).on(
+        'remote-require',
+        (event: RemoteEvent) => {
+          event.preventDefault();
+          this.logger.warn('Blocked remote-require attempt');
+        }
+      );
 
-      (contents as any).on('remote-get-global', (event: any) => {
-        event.preventDefault();
-        this.logger.warn('Blocked remote-get-global attempt');
-      });
+      (contents as { on: (event: string, handler: (event: RemoteEvent) => void) => void }).on(
+        'remote-get-global',
+        (event: RemoteEvent) => {
+          event.preventDefault();
+          this.logger.warn('Blocked remote-get-global attempt');
+        }
+      );
     });
 
     // Set secure headers for all responses

@@ -4,9 +4,9 @@ import * as path from 'path';
 import { ShelfConfig, DockPosition, Vector2D, ShelfItem, ShelfMode } from '@shared/types';
 import { SHELF_CONSTANTS } from '@shared/constants';
 import { createLogger } from '../utils/logger';
-import { globalIPCRateLimiter } from '../utils/ipcRateLimiter';
-import { AdvancedWindowPool } from './advancedWindowPool';
-import { AsyncMutex } from '../utils/asyncMutex';
+import { globalIPCRateLimiter } from '../utils/ipc_rate_limiter';
+import { AdvancedWindowPool } from './advanced_window_pool';
+import { AsyncMutex } from '../utils/async_mutex';
 
 /**
  * Advanced shelf window management system

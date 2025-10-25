@@ -245,9 +245,7 @@ export class AdvancedShakeDetector extends EventEmitter implements ShakeDetector
     // Check if shake pattern detected with velocity-based criteria
     if (directionChanges >= this.config.minDirectionChanges && hasValidVelocity) {
       // Only log when actually detected to prevent memory leak
-      this.logger.info(
-        `✅ Shake detected: ${directionChanges} changes`
-      );
+      this.logger.info(`✅ Shake detected: ${directionChanges} changes`);
       this.handleShakeDetected(directionChanges, totalDistance, avgVelocity * velocityFactor);
     } else if (directionChanges >= this.config.minDirectionChanges + 1 && hasAccelerationPattern) {
       // Alternative detection: more direction changes with acceleration pattern

@@ -127,6 +127,8 @@ export class CircularLogBuffer {
 
       this.isDirty = false;
     } catch (error) {
+      // Fallback to console since this is a low-level logging utility
+      // eslint-disable-next-line no-console
       console.error('Failed to flush log buffer:', error);
     }
   }
@@ -141,6 +143,8 @@ export class CircularLogBuffer {
         const backupPath = this.logFilePath.replace(/\.log$/, `-${timestamp}.log`);
         await writeFile(backupPath, this.buffer.join('\n') + '\n', 'utf-8');
       } catch (error) {
+        // Fallback to console since this is a low-level logging utility
+        // eslint-disable-next-line no-console
         console.error('Failed to backup log during rotation:', error);
       }
     }
@@ -161,6 +165,8 @@ export class CircularLogBuffer {
 
     this.flushTimer = setInterval(() => {
       this.flush().catch(error => {
+        // Fallback to console since this is a low-level logging utility
+        // eslint-disable-next-line no-console
         console.error('Auto-flush failed:', error);
       });
     }, this.config.flushInterval);

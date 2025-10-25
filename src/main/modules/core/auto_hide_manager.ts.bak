@@ -1,9 +1,9 @@
 import { EventEmitter } from 'events';
 import { Logger, createLogger } from '../utils/logger';
-import { TimerManager } from '../utils/timerManager';
-import { PreferencesManager } from '../config/preferencesManager';
-import { ShelfLifecycleManager } from './shelfLifecycleManager';
-import { DragShelfStateMachine } from '../state/dragShelfStateMachine';
+import { TimerManager } from '../utils/timer_manager';
+import { PreferencesManager } from '../config/preferences_manager';
+import { ShelfLifecycleManager } from './shelf_lifecycle_manager';
+import { DragShelfStateMachine } from '../state/drag_shelf_state_machine';
 import { SHELF_CONSTANTS } from '@shared/constants';
 
 /**

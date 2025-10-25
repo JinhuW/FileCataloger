@@ -246,6 +246,17 @@ bool DarwinDragMonitor::CheckForFileDrag() {
                 return false;
             }
 
+            // CRITICAL FIX: Filter out Chromium internal drag types
+            // These are NOT file drags from Finder - they're internal Electron UI drags
+            bool isChromiumDrag = [types containsObject:@"org.chromium.chromium-initiated-drag"] ||
+                                 [types containsObject:@"org.chromium.chromium-renderer-initiated-drag"];
+
+            if (isChromiumDrag) {
+                // Don't treat Chromium internal drags as file drags
+                NSLog(@"[DragMonitor] Ignoring Chromium internal drag (not a file drag)");
+                return false;
+            }
+
             // Enhanced file type detection - covers more drag sources
             bool hasFiles = [types containsObject:NSPasteboardTypeFileURL] ||           // Modern file URLs
                            [types containsObject:(__bridge NSString*)kUTTypeFileURL] || // Modern file URL UTI
@@ -413,9 +424,12 @@ bool DarwinDragMonitor::CheckForFileDrag() {
                 } else {
                     NSLog(@"[DragMonitor] No file URLs found despite hasFiles=true");
                     NSLog(@"[DragMonitor] Available types: %@", types);
+                    // CRITICAL FIX: Don't return true if no actual file URLs were found
+                    return false;
                 }
 
-                return true;
+                // Only return true if we actually found file URLs
+                return fileURLs && fileURLs.count > 0;
             }
 
             return false;
@@ -525,19 +539,18 @@ CGEventRef DarwinDragMonitor::DragEventCallback(CGEventTapProxy proxy,
             dragState.moveCount >= MIN_MOVE_COUNT;
 
         if (shouldCheckForFiles && !dragState.hasFiles && !monitor->isDragging.load()) {
-            // Check for files when drag is detected
-            dragState.hasFiles = true; // Assume files present to avoid repeated checks
-            monitor->isDragging.store(true);
-
-            // Perform file detection immediately
+            // CRITICAL FIX: Only mark as dragging if files are actually found
+            // Perform file detection FIRST, before marking as dragging
             if (monitor->CheckForFileDrag()) {
+                // Files confirmed - now mark as dragging
+                dragState.hasFiles = true;
+                monitor->isDragging.store(true);
                 monitor->hasActiveDrag.store(true);
                 NSLog(@"[DragMonitor] Files detected during drag event");
             } else {
-                // Still mark as active drag even if no files detected yet
-                // The polling loop will retry
-                monitor->hasActiveDrag.store(true);
-                NSLog(@"[DragMonitor] Drag detected but no files found yet");
+                // No files found - this is just a mouse drag (e.g., clicking on desktop)
+                // Don't mark as dragging to avoid false positives
+                NSLog(@"[DragMonitor] Mouse drag detected but no files found (not a file drag)");
             }
         }
     }

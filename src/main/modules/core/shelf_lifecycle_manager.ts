@@ -1,9 +1,9 @@
 import { EventEmitter } from 'events';
 import { Logger, createLogger } from '../utils/logger';
-import { ShelfManager } from '../window/shelfManager';
-import { TimerManager } from '../utils/timerManager';
-import { PreferencesManager } from '../config/preferencesManager';
-import { DragShelfStateMachine, DragShelfEvent } from '../state/dragShelfStateMachine';
+import { ShelfManager } from '../window/shelf_manager';
+import { TimerManager } from '../utils/timer_manager';
+import { PreferencesManager } from '../config/preferences_manager';
+import { DragShelfStateMachine, DragShelfEvent } from '../state/drag_shelf_state_machine';
 import { ShelfConfig, ShelfMode } from '@shared/types';
 import { SHELF_CONSTANTS } from '@shared/constants';
 
@@ -48,7 +48,7 @@ export class ShelfLifecycleManager extends EventEmitter {
       this.emit('shelf-destroyed', shelfId);
     });
 
-    this.shelfManager.on('shelf-item-added', (shelfId: string, item: any) => {
+    this.shelfManager.on('shelf-item-added', (shelfId: string, item: unknown) => {
       // Cancel auto-hide timer when items are added
       this.cancelShelfAutoHide(shelfId);
       this.logger.info(`📦 Item added to shelf ${shelfId}, auto-hide cancelled`);
@@ -94,7 +94,7 @@ export class ShelfLifecycleManager extends EventEmitter {
         opacity: preferences.shelf.opacity,
         mode: ShelfMode.RENAME,
         items: [],
-        ...config
+        ...config,
       };
 
       const shelfId = await this.shelfManager.createShelf(fullConfig);
@@ -111,11 +111,17 @@ export class ShelfLifecycleManager extends EventEmitter {
 
         // Schedule auto-hide for empty shelf if enabled (but NOT during drag)
         // Shelves created during drag will have auto-hide scheduled when drag ends
-        if (fullConfig.items?.length === 0 && preferences.shelf.autoHideEmpty && !context.isDragging) {
+        if (
+          fullConfig.items?.length === 0 &&
+          preferences.shelf.autoHideEmpty &&
+          !context.isDragging
+        ) {
           this.logger.info(`📅 Scheduling auto-hide for empty shelf ${shelfId}`);
           this.scheduleEmptyShelfAutoHide(shelfId, SHELF_CONSTANTS.EMPTY_TIMEOUT);
         } else if (context.isDragging) {
-          this.logger.info(`🚫 Skipping auto-hide for shelf ${shelfId} - created during active drag`);
+          this.logger.info(
+            `🚫 Skipping auto-hide for shelf ${shelfId} - created during active drag`
+          );
         }
       }
 

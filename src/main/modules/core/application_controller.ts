@@ -1,20 +1,20 @@
 import { EventEmitter } from 'events';
 import { createMouseTracker } from '@native/mouse-tracker';
 import { DragShakeDetector } from '../input';
-import { ShelfManager } from '../window/shelfManager';
-import { PreferencesManager } from '../config/preferencesManager';
+import { ShelfManager } from '../window/shelf_manager';
+import { PreferencesManager } from '../config/preferences_manager';
 import { MouseTracker, ShelfConfig, ShelfItem } from '@shared/types';
 import { Logger, createLogger } from '../utils/logger';
-import { DragShelfStateMachine } from '../state/dragShelfStateMachine';
-import { keyboardManager } from '../input/keyboardManager';
-import { EventRegistry } from '../utils/eventRegistry';
-import { errorHandler, ErrorSeverity, ErrorCategory } from '../utils/errorHandler';
+import { DragShelfStateMachine } from '../state/drag_shelf_state_machine';
+import { keyboardManager } from '../input/keyboard_manager';
+import { EventRegistry } from '../utils/event_registry';
+import { errorHandler, ErrorSeverity, ErrorCategory } from '../utils/error_handler';
 
 // New extracted modules
-import { ShelfLifecycleManager } from './shelfLifecycleManager';
-import { DragDropCoordinator } from './dragDropCoordinator';
-import { AutoHideManager } from './autoHideManager';
-import { CleanupCoordinator } from '../utils/cleanupCoordinator';
+import { ShelfLifecycleManager } from './shelf_lifecycle_manager';
+import { DragDropCoordinator } from './drag_drop_coordinator';
+import { AutoHideManager } from './auto_hide_manager';
+import { CleanupCoordinator } from '../utils/cleanup_coordinator';
 
 /**
  * Refactored Application Controller - now a thin orchestrator
@@ -162,7 +162,7 @@ export class ApplicationController extends EventEmitter {
     this.eventRegistry.register(
       this.dragDropCoordinator,
       'drag-started',
-      (items: any) => this.emit('drag-started', items),
+      (items: unknown) => this.emit('drag-started', items),
       'routing'
     );
 
@@ -204,9 +204,9 @@ export class ApplicationController extends EventEmitter {
    */
   private setupErrorHandling(): void {
     this.eventRegistry.register(
-      errorHandler as any,
+      errorHandler as unknown as EventEmitter,
       'error',
-      (error: any) => {
+      (error: { severity: ErrorSeverity }) => {
         if (error.severity === ErrorSeverity.CRITICAL) {
           this.logger.error('Critical error detected:', error);
           this.emit('critical-error', error);
@@ -216,13 +216,13 @@ export class ApplicationController extends EventEmitter {
     );
 
     this.eventRegistry.register(
-      this.mouseTracker as any,
+      this.mouseTracker as unknown as EventEmitter,
       'error',
       (error: Error) => {
         errorHandler.handleError(error, {
           severity: ErrorSeverity.HIGH,
           category: ErrorCategory.NATIVE,
-          context: { module: 'mouse-tracker' }
+          context: { module: 'mouse-tracker' },
         });
       },
       'error-handling'
@@ -236,14 +236,14 @@ export class ApplicationController extends EventEmitter {
    */
   private setupKeyboardShortcuts(): void {
     this.eventRegistry.register(
-      keyboardManager as any,
+      keyboardManager as unknown as EventEmitter,
       'create-shelf',
       () => this.createShelfViaShortcut(),
       'keyboard'
     );
 
     this.eventRegistry.register(
-      keyboardManager as any,
+      keyboardManager as unknown as EventEmitter,
       'new-shelf',
       () => this.createShelfViaShortcut(),
       'keyboard'
@@ -319,8 +319,8 @@ export class ApplicationController extends EventEmitter {
     await this.shelfLifecycleManager.createShelf({
       position: {
         x: currentPos.x - 150,
-        y: currentPos.y - 200
-      }
+        y: currentPos.y - 200,
+      },
     });
   }
 
@@ -432,7 +432,7 @@ export class ApplicationController extends EventEmitter {
   /**
    * Update configuration
    */
-  public updateConfig(config: any): void {
+  public updateConfig(config: Partial<ShelfConfig>): void {
     // Handle config updates as needed
     // For now, just log the config change
     this.logger.info('Configuration update requested:', config);
@@ -448,11 +448,11 @@ export class ApplicationController extends EventEmitter {
     for (const file of files) {
       await this.shelfManager.addItemToShelf(shelfId, {
         id: `file-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        type: 'file' as any,
+        type: 'file',
         path: file,
         name: file.split('/').pop() || file,
-        createdAt: Date.now()
-      });
+        createdAt: Date.now(),
+      } as ShelfItem);
     }
 
     this.dragDropCoordinator.completeDropOperation(shelfId);
@@ -475,7 +475,7 @@ export class ApplicationController extends EventEmitter {
       isDragging: this.dragDropCoordinator.isDragging(),
       activeShelves: this.shelfLifecycleManager.getActiveShelves().size,
       mouseTracking: this.mouseTracker?.isTracking() || false,
-      dragShakeEnabled: preferences.shakeDetection.dragShakeEnabled
+      dragShakeEnabled: preferences.shakeDetection.dragShakeEnabled,
     };
   }
 

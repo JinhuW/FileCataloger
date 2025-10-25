@@ -1,6 +1,7 @@
 import Database from 'better-sqlite3';
 import { app } from 'electron';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import { z } from 'zod';
 import { SavedPattern, RenameComponent } from '@shared/types';
 import { logger } from '../utils/logger';
@@ -712,8 +713,7 @@ export class PatternPersistenceManager {
 
   // Private utility methods
 
-  private generateChecksum(data: any): string {
-    const crypto = require('crypto');
+  private generateChecksum(data: unknown): string {
     return crypto.createHash('sha256').update(JSON.stringify(data)).digest('hex');
   }
 

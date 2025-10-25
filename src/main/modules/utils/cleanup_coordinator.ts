@@ -1,7 +1,11 @@
 import { EventEmitter } from 'events';
 import { Logger, createLogger } from './logger';
-import { TimerManager } from './timerManager';
-import { DragShelfStateMachine, DragShelfEvent, DragShelfState } from '../state/dragShelfStateMachine';
+import { TimerManager } from './timer_manager';
+import {
+  DragShelfStateMachine,
+  DragShelfEvent,
+  DragShelfState,
+} from '../state/drag_shelf_state_machine';
 
 /**
  * Cleanup operations that can be scheduled
@@ -17,9 +21,9 @@ export enum CleanupOperation {
  * Cleanup configuration
  */
 interface CleanupConfig {
-  dropOperationsClearDelay: number;  // Delay before clearing drop operations (ms)
-  emptyShelfClearDelay: number;      // Delay before clearing empty shelves (ms)
-  nativeFilesClearDelay: number;     // Delay before clearing native files (ms)
+  dropOperationsClearDelay: number; // Delay before clearing drop operations (ms)
+  emptyShelfClearDelay: number; // Delay before clearing empty shelves (ms)
+  nativeFilesClearDelay: number; // Delay before clearing native files (ms)
 }
 
 /**
@@ -103,17 +107,13 @@ export class CleanupCoordinator extends EventEmitter {
             this.emit('clear-native-files');
 
             // Stage 3: Re-evaluate remaining shelves for auto-hide
-            this.scheduleOperation(
-              CleanupOperation.EVALUATE_AUTO_HIDE,
-              0,
-              () => {
-                this.emit('evaluate-auto-hide');
-                this.pendingOperations.delete(CleanupOperation.EVALUATE_AUTO_HIDE);
+            this.scheduleOperation(CleanupOperation.EVALUATE_AUTO_HIDE, 0, () => {
+              this.emit('evaluate-auto-hide');
+              this.pendingOperations.delete(CleanupOperation.EVALUATE_AUTO_HIDE);
 
-                // Signal cleanup complete to state machine
-                this.stateMachine.send(DragShelfEvent.CLEANUP_COMPLETE);
-              }
-            );
+              // Signal cleanup complete to state machine
+              this.stateMachine.send(DragShelfEvent.CLEANUP_COMPLETE);
+            });
           }
         );
       }

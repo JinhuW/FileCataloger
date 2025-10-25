@@ -429,11 +429,11 @@ export class DragShelfStateMachine extends EventEmitter {
   public canCreateShelf(): boolean {
     // Allow shelf creation when dragging, regardless of existing shelves
     // This supports multiple concurrent shelves (up to 5 total)
-    const canCreate = this.context.isDragging && (
-      this.currentState === DragShelfState.DRAG_STARTED ||
-      this.currentState === DragShelfState.SHELF_ACTIVE ||
-      this.currentState === DragShelfState.SHELF_AUTO_HIDE_SCHEDULED
-    );
+    const canCreate =
+      this.context.isDragging &&
+      (this.currentState === DragShelfState.DRAG_STARTED ||
+        this.currentState === DragShelfState.SHELF_ACTIVE ||
+        this.currentState === DragShelfState.SHELF_AUTO_HIDE_SCHEDULED);
     this.logger.debug(
       `🔍 canCreateShelf(): ${canCreate} (state: ${this.currentState}, isDragging: ${this.context.isDragging}, activeShelfId: ${this.context.activeShelfId})`
     );

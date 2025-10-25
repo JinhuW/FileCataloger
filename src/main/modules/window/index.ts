@@ -1,1 +1,1 @@
-export { ShelfManager } from './shelfManager';
+export { ShelfManager } from './shelf_manager';

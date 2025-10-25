@@ -2,211 +2,1138 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Code Style
+
+**This project follows the [Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html)**
+
+### Naming Conventions
+
+- **File names**: `snake_case` (e.g., `application_controller.ts`, `shelf_manager.ts`)
+- **Classes/Interfaces/Types**: `PascalCase` (e.g., `ApplicationController`, `ShelfConfig`)
+- **Functions/Methods/Variables**: `camelCase` (e.g., `createShelf()`, `shelfId`)
+- **Constants**: `UPPER_SNAKE_CASE` (e.g., `MAX_SHELVES`, `DEFAULT_TIMEOUT`)
+- **Module namespace imports**: `lowerCamelCase` (e.g., `import * as fooBar from './foo_bar'`)
+
+### TypeScript Standards
+
+- Always use TypeScript strict mode
+- Prefer `interface` over `type` for object shapes
+- Use explicit return types for public methods
+- Avoid `any` - use `unknown` and type guards instead
+- Use `readonly` for immutable properties
+- Prefer async/await over raw Promises
+
+### Code Quality
+
+- **No console.log**: Use the Logger module for all logging
+- **Error handling**: Always wrap async operations in try/catch
+- **Resource cleanup**: Always clean up timers, listeners, and native resources
+- **Comments**: Write JSDoc comments for all public APIs
+- **Imports**: Order imports (built-in → third-party → local)
+
+---
+
 ## Main Process Module Overview
 
 This is the **main process** of the FileCataloger Electron application. The main process manages the application lifecycle, window creation, system integration, and coordinates all modules for the shelf functionality.
 
-### Purpose
+### What is FileCataloger?
 
-The main process:
+FileCataloger is a macOS menu bar app that creates temporary floating "shelf" windows for file storage. Users trigger shelf creation by **shaking the mouse while dragging files** - a unique gesture-based interaction.
+
+### Main Process Responsibilities
 
 - Orchestrates all application modules through `ApplicationController`
 - Manages shelf window lifecycle via `ShelfManager`
-- Handles native mouse tracking and drag detection
+- Handles native mouse tracking and drag detection (macOS-specific)
 - Provides system tray integration
 - Manages user preferences and security settings
 - Handles IPC communication with renderer processes
+- Coordinates file operations and rename patterns
 
-### Development Commands
+---
+
+## Development Commands
 
 ```bash
-# Build the main process
-cd ../.. # Navigate to project root
-yarn build:main
-
-# Type checking (run from project root)
+# Type checking (ALWAYS run before committing)
 yarn typecheck
 
-# Run in development mode
+# Linting (ALWAYS run before committing)
+yarn lint
+
+# Build the main process only
+yarn build:main
+
+# Run in development mode (with hot reload)
 yarn dev
 
-# Full build including main
+# Full build (all processes + native modules)
 yarn build
-```
 
-### Architecture
+# Clean build artifacts
+yarn clean
 
-#### Core Modules (Refactored - 90% size reduction!)
-
-1. **ApplicationController** (`modules/core/applicationController.ts`) - **412 lines**
-   - Thin orchestrator managing module lifecycle
-   - Routes events between specialized modules
-   - Handles IPC interface for main process
-   - Coordinates initialization and shutdown
-
-2. **ShelfLifecycleManager** (`modules/core/shelfLifecycleManager.ts`) - **357 lines**
-   - Manages shelf creation and destruction
-   - Tracks active shelves and drop operations
-   - Handles shelf visibility and configuration
-   - Coordinates with state machine for lifecycle events
-
-3. **DragDropCoordinator** (`modules/core/dragDropCoordinator.ts`) - **392 lines**
-   - Coordinates drag and drop operations
-   - Manages mouse tracking and shake detection
-   - Handles drag-shake events for shelf creation
-   - Tracks native dragged files
-
-4. **AutoHideManager** (`modules/core/autoHideManager.ts`) - **283 lines**
-   - Manages auto-hide scheduling for empty shelves
-   - Respects user preferences for auto-hide behavior
-   - Blocks auto-hide during drag/drop operations
-   - Re-evaluates shelves when preferences change
-
-5. **CleanupCoordinator** (`modules/utils/cleanupCoordinator.ts`) - **198 lines**
-   - Event-driven cleanup sequencing
-   - Replaces complex nested setTimeout logic
-   - Manages staged cleanup operations
-   - Coordinates with state machine transitions
-
-6. **EventRegistry** (`modules/utils/eventRegistry.ts`) - **154 lines**
-   - Automatic event listener cleanup
-   - Prevents memory leaks
-   - Groups listeners for organized management
-   - Provides cleanup statistics
-
-#### Supporting Modules
-
-1. **ShelfManager** (`modules/window/shelfManager.ts`)
-   - Creates and manages shelf windows
-   - Handles window positioning and docking
-   - Supports window pooling for performance
-
-2. **DragShakeDetector** (`modules/input/dragShakeDetector.ts`)
-   - Detects mouse shake gestures (6+ direction changes in 500ms)
-   - Monitors system-wide drag operations
-   - Triggers shelf creation on shake during drag
-
-3. **PreferencesManager** (`modules/config/preferencesManager.ts`)
-   - Persists user settings with Electron Store
-   - Manages shelf behavior preferences
-   - Handles configuration updates
-
-4. **Native Integration**
-   - Mouse tracking via CGEventTap (requires Accessibility permissions)
-   - Drag monitoring using NSPasteboard
-   - Performance-optimized event batching
-
-### Module Structure
-
-```
-main/
-   index.ts                        # Application entry point
-   modules/
-       core/                        # Core orchestration (refactored!)
-          applicationController.ts  # Thin orchestrator (412 lines)
-          shelfLifecycleManager.ts  # Shelf lifecycle (357 lines)
-          dragDropCoordinator.ts    # Drag/drop coordination (392 lines)
-          autoHideManager.ts        # Auto-hide logic (283 lines)
-          index.ts
-       input/
-          dragShakeDetector.ts     # Gesture detection
-          mouseEventBatcher.ts     # Performance optimization
-          shakeDetector.ts         # Shake pattern detection
-          keyboardManager.ts       # Global shortcuts
-       window/
-          shelfManager.ts          # Window management
-          advancedWindowPool.ts    # Window recycling
-       config/
-          preferencesManager.ts    # User preferences
-          securityConfig.ts        # CSP and security
-       state/
-          dragShelfStateMachine.ts # State machine for drag/shelf lifecycle
-       utils/
-           logger.ts                # Structured logging
-           errorHandler.ts          # Error management
-           performanceMonitor.ts    # Resource tracking
-           eventRegistry.ts         # Event listener management
-           cleanupCoordinator.ts    # Cleanup orchestration
-           asyncMutex.ts           # Concurrency control
-           timerManager.ts         # Timer management
-```
-
-### Key Workflows
-
-#### Shelf Creation Flow (Refactored)
-
-1. User drags files from Finder
-2. User shakes mouse (gesture detection)
-3. `DragShakeDetector` triggers event
-4. `DragDropCoordinator` handles drag-shake event
-5. `ShelfLifecycleManager` creates shelf (prevents duplicates)
-6. `ShelfManager` creates window at cursor
-7. `AutoHideManager` schedules auto-hide if empty
-
-#### IPC Channels (Main � Renderer)
-
-- `shelf:create` - Create new shelf with config
-- `shelf:destroy` - Remove shelf window
-- `shelf:items-updated` - Update shelf items
-- `shelf:config` - Send shelf configuration
-- `app:status` - Broadcast app status
-
-#### IPC Channels (Renderer � Main)
-
-- `shelf:files-dropped` - Handle dropped files
-- `shelf:close` - Request shelf closure
-- `app:get-status` - Request app status
-- `app:create-shelf` - Manual shelf creation
-
-### Important Notes
-
-#### macOS Permissions
-
-- Requires Accessibility permissions for mouse tracking
-- Automatically prompts user on first launch
-- Check permissions with `systemPreferences.isTrustedAccessibilityClient()`
-
-#### Performance Considerations
-
-- Mouse events are batched to prevent flooding
-- Window pool reduces creation overhead
-- Automatic garbage collection on high memory
-- Performance metrics logged to file
-
-#### Security
-
-- Context isolation enabled for all windows
-- CSP headers configured for production
-- Sandboxing enabled by default
-- No remote content loading
-
-#### Common Issues
-
-1. **Shelf not appearing**: Verify Accessibility permissions
-2. **High CPU usage**: Check mouse event batching
-3. **Memory leaks**: Ensure proper cleanup in shelf manager
-4. **IPC errors**: Validate channel names in preload
-
-### Testing
-
-```bash
-# Run unit tests
+# Run tests
 yarn test
 
-# Test shelf creation manually
-# 1. Run in dev mode: yarn dev
-# 2. Drag files from Finder
-# 3. Shake mouse to trigger shelf
-# 4. Drop files on shelf
+# Code quality pipeline (runs all checks)
+yarn quality:check
+```
 
-# Check logs for issues
+---
+
+## Architecture Overview
+
+FileCataloger uses a **modular, event-driven architecture** with clear separation of concerns. The ApplicationController acts as a thin orchestrator, delegating work to specialized managers.
+
+### Multi-Process Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     Main Process (Node.js)                  │
+├─────────────────────────────────────────────────────────────┤
+│  ApplicationController (Orchestrator)                       │
+│    ├─── ShelfLifecycleManager                              │
+│    ├─── DragDropCoordinator                                │
+│    ├─── AutoHideManager                                    │
+│    └─── CleanupCoordinator                                 │
+│                                                             │
+│  Supporting Modules                                         │
+│    ├─── ShelfManager (Window Management)                   │
+│    ├─── DragShakeDetector (Gesture Detection)              │
+│    ├─── PreferencesManager (Settings)                      │
+│    ├─── DragShelfStateMachine (State Management)           │
+│    └─── Native Modules (C++)                               │
+│          ├── MouseTracker (CGEventTap)                      │
+│          └── DragMonitor (NSPasteboard)                     │
+└─────────────────────────────────────────────────────────────┘
+                            ↕ IPC
+┌─────────────────────────────────────────────────────────────┐
+│              Renderer Processes (Chromium + React)          │
+├─────────────────────────────────────────────────────────────┤
+│  Multiple Shelf Windows                                     │
+│    ├─── Display Mode (Show files)                          │
+│    ├─── Rename Mode (Pattern editor)                       │
+│    └─── Zustand State Management                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Core Modules
+
+### 1. ApplicationController (`modules/core/application_controller.ts`) - 412 lines
+
+**Purpose**: Thin orchestrator managing the entire application lifecycle.
+
+**Responsibilities**:
+
+- Module initialization and shutdown
+- Event routing between specialized modules
+- Error handling coordination
+- IPC interface management
+
+**Key Methods**:
+
+- `initialize()` - Sets up all modules
+- `start()` - Starts mouse tracking and event listeners
+- `createShelf(config)` - Delegates to ShelfLifecycleManager
+- `destroy()` - Graceful cleanup of all resources
+
+**Design Pattern**: Event-driven orchestrator with minimal business logic
+
+---
+
+### 2. ShelfLifecycleManager (`modules/core/shelf_lifecycle_manager.ts`) - 357 lines
+
+**Purpose**: Manages the complete lifecycle of shelf windows.
+
+**Responsibilities**:
+
+- Shelf creation with duplicate prevention
+- Tracking active shelves (Map-based storage)
+- Shelf visibility and configuration
+- Coordinating with state machine for lifecycle events
+
+**Key Features**:
+
+- Prevents duplicate shelf creation during active drag
+- Maintains shelf registry with metadata
+- Handles shelf destruction and cleanup
+- Emits lifecycle events for other modules
+
+**Example**:
+
+```typescript
+// Creating a shelf
+const shelf = await shelfLifecycleManager.createShelf({
+  position: { x: 100, y: 100 },
+  mode: 'display',
+});
+
+// Destroying a shelf
+await shelfLifecycleManager.destroyShelf(shelfId);
+```
+
+---
+
+### 3. DragDropCoordinator (`modules/core/drag_drop_coordinator.ts`) - 392 lines
+
+**Purpose**: Coordinates all drag and drop operations.
+
+**Responsibilities**:
+
+- Mouse tracking initialization and management
+- Shake detection for shelf triggering
+- Drag-shake event handling
+- Native dragged files tracking
+
+**Key Features**:
+
+- Integrates with native mouse tracker (60fps)
+- Detects shake gestures (6+ direction changes in 500ms)
+- Provides fallback to Node.js implementation if native fails
+- Tracks system-wide drag operations
+
+**Flow**:
+
+1. Monitors mouse events via native module
+2. Detects shake pattern during drag
+3. Retrieves dragged files from NSPasteboard
+4. Triggers shelf creation event
+5. Passes files to shelf for display
+
+---
+
+### 4. AutoHideManager (`modules/core/auto_hide_manager.ts`) - 283 lines
+
+**Purpose**: Manages auto-hide scheduling for empty shelves.
+
+**Responsibilities**:
+
+- Auto-hide scheduling with configurable delay
+- Respects user preferences
+- Blocks auto-hide during drag/drop operations
+- Re-evaluates shelves when preferences change
+
+**Key Features**:
+
+- Preference-aware (checks `autoHideEmpty` setting)
+- Drag-operation blocking (prevents hiding during drops)
+- Configurable delay (default: 5 seconds)
+- Automatic cleanup of timers
+
+---
+
+### 5. CleanupCoordinator (`modules/utils/cleanup_coordinator.ts`) - 198 lines
+
+**Purpose**: Event-driven cleanup sequencing.
+
+**Responsibilities**:
+
+- Staged cleanup operations (immediate, delayed, final)
+- Replaces complex nested setTimeout logic
+- Manages cleanup timing and ordering
+- Coordinates with state machine transitions
+
+**Design Pattern**: Observer pattern for cleanup events
+
+---
+
+### 6. EventRegistry (`modules/utils/event_registry.ts`) - 154 lines
+
+**Purpose**: Automatic event listener cleanup to prevent memory leaks.
+
+**Features**:
+
+- Tracks all registered event listeners
+- Groups listeners for organized management
+- Automatic cleanup on demand
+- Provides cleanup statistics for debugging
+
+**Example**:
+
+```typescript
+const registry = new EventRegistry();
+
+// Register listeners (automatically tracked)
+registry.on(emitter, 'event', handler, 'myGroup');
+
+// Cleanup by group
+registry.cleanupGroup('myGroup');
+
+// Cleanup all
+registry.cleanupAll();
+```
+
+---
+
+## Supporting Modules
+
+### Window Management
+
+#### ShelfManager (`modules/window/shelf_manager.ts`)
+
+**Purpose**: Creates and manages shelf BrowserWindows.
+
+**Features**:
+
+- Window pooling for performance (max 5 shelves)
+- Dynamic positioning (cursor, center, last position)
+- Window docking and auto-hide
+- Multiple modes (display, rename)
+- Security hardening (context isolation, CSP)
+
+**Window Configuration**:
+
+```typescript
+{
+  width: 400,
+  height: 600,
+  frame: false,           // Frameless for custom UI
+  transparent: true,      // Transparent background
+  alwaysOnTop: true,     // Float above other windows
+  skipTaskbar: true,     // Don't show in taskbar
+  webPreferences: {
+    preload: 'path/to/preload.js',
+    contextIsolation: true,
+    nodeIntegration: false,
+    sandbox: true
+  }
+}
+```
+
+#### AdvancedWindowPool (`modules/window/advanced_window_pool.ts`)
+
+**Purpose**: Recycles windows for better performance.
+
+**Features**:
+
+- Pre-creates windows for instant availability
+- Reuses destroyed windows
+- Configurable pool size
+- Reduces window creation overhead by 80%
+
+---
+
+### Input Management
+
+#### DragShakeDetector (`modules/input/drag_shake_detector.ts`)
+
+**Purpose**: Detects mouse shake gestures during drag operations.
+
+**Algorithm**:
+
+1. Monitors mouse velocity and direction changes
+2. Requires 6+ direction changes within 500ms
+3. Checks for active system drag operation
+4. Triggers shelf creation event
+
+**Sensitivity Levels**:
+
+- **Low**: 8 direction changes, 600ms window
+- **Medium**: 6 direction changes, 500ms window (default)
+- **High**: 4 direction changes, 400ms window
+
+#### MouseEventBatcher (`modules/input/mouse_event_batcher.ts`)
+
+**Purpose**: Batches mouse events to prevent flooding.
+
+**Features**:
+
+- Caps event rate at 60fps (16.67ms intervals)
+- Uses RequestAnimationFrame-style batching
+- Reduces CPU usage by 70%
+- Maintains smooth gesture detection
+
+#### KeyboardManager (`modules/input/keyboard_manager.ts`)
+
+**Purpose**: Global keyboard shortcuts.
+
+**Default Shortcuts**:
+
+- `Cmd+Shift+S` - Create shelf manually
+- `Cmd+,` - Open preferences
+- `Cmd+Q` - Quit application
+
+---
+
+### Configuration
+
+#### PreferencesManager (`modules/config/preferences_manager.ts`)
+
+**Purpose**: Persists and manages user settings.
+
+**Storage**: Electron Store (JSON file in app data)
+
+**Key Settings**:
+
+```typescript
+{
+  launchAtStartup: boolean,
+  showInDock: boolean,
+  showInMenuBar: boolean,
+
+  shakeDetection: {
+    enabled: boolean,
+    dragShakeEnabled: boolean,
+    sensitivity: 'low' | 'medium' | 'high',
+    requiredDirectionChanges: number,
+    timeWindow: number,
+    cooldownPeriod: number
+  },
+
+  shelf: {
+    defaultPosition: 'cursor' | 'center' | 'lastPosition',
+    defaultSize: { width: number, height: number },
+    opacity: number,
+    autoHideEmpty: boolean,
+    autoHideDelay: number,
+    maxSimultaneous: number,
+    animationSpeed: 'slow' | 'normal' | 'fast' | 'instant',
+    theme: 'light' | 'dark' | 'auto'
+  }
+}
+```
+
+#### SecurityConfig (`modules/config/security_config.ts`)
+
+**Purpose**: Security configuration for all windows.
+
+**Features**:
+
+- Content Security Policy (CSP) headers
+- Context isolation enforcement
+- Sandbox configuration
+- Remote content blocking
+
+---
+
+### State Management
+
+#### DragShelfStateMachine (`modules/state/drag_shelf_state_machine.ts`)
+
+**Purpose**: State machine for drag/shelf lifecycle.
+
+**States**:
+
+- `IDLE` - No drag operation
+- `DRAGGING` - User is dragging files
+- `SHAKE_DETECTED` - Shake gesture detected
+- `SHELF_CREATING` - Shelf window being created
+- `SHELF_ACTIVE` - Shelf is visible and ready
+- `DROP_IN_PROGRESS` - Files being dropped
+- `CLEANING_UP` - Shelf cleanup in progress
+
+**Transitions**:
+
+```
+IDLE → DRAGGING → SHAKE_DETECTED → SHELF_CREATING
+  → SHELF_ACTIVE → DROP_IN_PROGRESS → CLEANING_UP → IDLE
+```
+
+**Benefits**:
+
+- Prevents invalid state transitions
+- Ensures proper cleanup sequencing
+- Provides clear debugging information
+- Enables state-based behavior changes
+
+---
+
+### Storage
+
+#### PatternPersistenceManager (`modules/storage/pattern_persistence_manager.ts`)
+
+**Purpose**: Manages saved file rename patterns.
+
+**Features**:
+
+- Save/load rename patterns
+- Pattern validation
+- Pattern templates
+- Usage tracking
+
+**Example Pattern**:
+
+```typescript
+{
+  id: 'uuid-v4',
+  name: 'Date Prefix',
+  pattern: '{YYYY-MM-DD}_{original}',
+  description: 'Add date prefix to files',
+  createdAt: Date,
+  lastUsed: Date,
+  useCount: number
+}
+```
+
+#### PersistentDataManager (`modules/storage/persistent_data_manager.ts`)
+
+**Purpose**: Handles persistent data storage.
+
+**Features**:
+
+- JSON-based storage
+- Atomic writes
+- Backup/restore
+- Migration support
+
+---
+
+### Utilities
+
+#### Logger (`modules/utils/logger.ts`)
+
+**Purpose**: Structured logging system.
+
+**Log Levels**: DEBUG, INFO, WARN, ERROR
+
+**Features**:
+
+- File-based logging (rotated daily)
+- Console output in development
+- Context-aware logging
+- Performance metrics
+
+**Example**:
+
+```typescript
+Logger.info('Shelf created', {
+  shelfId,
+  position,
+  mode,
+  itemCount: 0,
+});
+
+Logger.error('Failed to create shelf', error, {
+  severity: 'HIGH',
+  category: 'WINDOW',
+});
+```
+
+#### ErrorHandler (`modules/utils/error_handler.ts`)
+
+**Purpose**: Centralized error handling.
+
+**Severity Levels**: LOW, MEDIUM, HIGH, CRITICAL
+
+**Categories**: SYSTEM, WINDOW, NATIVE, IPC, PERFORMANCE, STORAGE
+
+**Features**:
+
+- Error categorization and prioritization
+- Automatic recovery for transient errors
+- Error reporting and analytics
+- Stack trace preservation
+
+#### PerformanceMonitor (`modules/utils/performance_monitor.ts`)
+
+**Purpose**: Resource tracking and optimization.
+
+**Monitors**:
+
+- CPU usage
+- Memory consumption
+- Event loop lag
+- Window count
+
+**Thresholds**:
+
+- High memory: > 200MB
+- High CPU: > 50% sustained
+- Event loop lag: > 100ms
+
+#### TimerManager (`modules/utils/timer_manager.ts`)
+
+**Purpose**: Centralized timer management.
+
+**Features**:
+
+- Named timers for debugging
+- Automatic cleanup on app shutdown
+- Timer statistics
+- Prevents timer leaks
+
+**Example**:
+
+```typescript
+timerManager.setTimeout(
+  'auto-hide-shelf',
+  () => {
+    hideShelf(shelfId);
+  },
+  5000,
+  'Hide empty shelf after delay'
+);
+
+// Cleanup
+timerManager.clearTimeout('auto-hide-shelf');
+```
+
+#### AsyncMutex (`modules/utils/async_mutex.ts`)
+
+**Purpose**: Concurrency control for async operations.
+
+**Use Cases**:
+
+- Prevent concurrent shelf creation
+- Serialize file operations
+- Coordinate cleanup sequences
+
+**Example**:
+
+```typescript
+await asyncMutex.runExclusive(async () => {
+  // Only one execution at a time
+  await createShelf(config);
+});
+```
+
+---
+
+## Module Directory Structure
+
+```
+src/main/
+├── index.ts                          # Application entry point
+├── ipc/
+│   └── pattern_handlers.ts          # IPC handlers for rename patterns
+│
+├── modules/
+│   ├── core/                         # Core orchestration
+│   │   ├── application_controller.ts # Main orchestrator (412 lines)
+│   │   ├── shelf_lifecycle_manager.ts # Shelf lifecycle (357 lines)
+│   │   ├── drag_drop_coordinator.ts  # Drag/drop coordination (392 lines)
+│   │   ├── auto_hide_manager.ts      # Auto-hide logic (283 lines)
+│   │   └── index.ts                  # Module exports
+│   │
+│   ├── input/                        # Input handling
+│   │   ├── drag_shake_detector.ts    # Gesture detection
+│   │   ├── mouse_event_batcher.ts    # Event batching
+│   │   ├── shake_detector.ts         # Shake pattern detection
+│   │   ├── keyboard_manager.ts       # Global shortcuts
+│   │   └── index.ts
+│   │
+│   ├── window/                       # Window management
+│   │   ├── shelf_manager.ts          # Window creation/management
+│   │   ├── advanced_window_pool.ts   # Window recycling
+│   │   └── index.ts
+│   │
+│   ├── config/                       # Configuration
+│   │   ├── preferences_manager.ts    # User preferences
+│   │   ├── security_config.ts        # Security settings
+│   │   └── index.ts
+│   │
+│   ├── state/                        # State management
+│   │   ├── drag_shelf_state_machine.ts # State machine
+│   │   └── index.ts
+│   │
+│   ├── storage/                      # Data persistence
+│   │   ├── pattern_persistence_manager.ts # Rename patterns
+│   │   ├── persistent_data_manager.ts     # General storage
+│   │   └── index.ts
+│   │
+│   └── utils/                        # Utilities
+│       ├── logger.ts                 # Logging system
+│       ├── error_handler.ts          # Error handling
+│       ├── performance_monitor.ts    # Performance tracking
+│       ├── event_registry.ts         # Event cleanup
+│       ├── cleanup_coordinator.ts    # Cleanup orchestration
+│       ├── async_mutex.ts            # Concurrency control
+│       ├── timer_manager.ts          # Timer management
+│       ├── circular_log_buffer.ts    # Log buffering
+│       ├── ipc_rate_limiter.ts       # IPC throttling
+│       └── index.ts
+│
+└── assets/
+    └── logo.png                      # App icon
+```
+
+---
+
+## Key Workflows
+
+### Shelf Creation Flow
+
+```
+1. User drags files from Finder
+   ↓
+2. DragMonitor (native) detects drag operation
+   ↓
+3. User shakes mouse (6+ direction changes in 500ms)
+   ↓
+4. DragShakeDetector triggers 'drag-shake' event
+   ↓
+5. DragDropCoordinator handles event
+   ↓
+6. StateMachine: IDLE → DRAGGING → SHAKE_DETECTED
+   ↓
+7. ShelfLifecycleManager.createShelf()
+   - Checks for duplicates (prevents spam)
+   - Generates unique shelf ID
+   - Determines position (cursor/center/last)
+   ↓
+8. ShelfManager.createWindow()
+   - Gets window from pool OR creates new
+   - Loads renderer HTML
+   - Positions at cursor location
+   - Shows window with fade-in animation
+   ↓
+9. StateMachine: SHELF_CREATING → SHELF_ACTIVE
+   ↓
+10. AutoHideManager schedules auto-hide (if empty after 5s)
+    ↓
+11. User drops files on shelf
+    ↓
+12. Files rendered in shelf UI
+    ↓
+13. AutoHideManager cancels auto-hide (shelf has items)
+```
+
+### File Drop Flow
+
+```
+1. User drags files over shelf window
+   ↓
+2. Renderer detects dragenter/dragover events
+   ↓
+3. User drops files (drop event)
+   ↓
+4. Renderer sends 'shelf:files-dropped' IPC
+   ↓
+5. ApplicationController.handleFilesDropped()
+   ↓
+6. StateMachine: SHELF_ACTIVE → DROP_IN_PROGRESS
+   ↓
+7. ShelfLifecycleManager updates shelf items
+   ↓
+8. ShelfManager sends 'shelf:items-updated' to renderer
+   ↓
+9. Renderer re-renders with new files
+   ↓
+10. StateMachine: DROP_IN_PROGRESS → SHELF_ACTIVE
+    ↓
+11. AutoHideManager cancels scheduled auto-hide
+```
+
+### Shelf Cleanup Flow
+
+```
+1. Trigger: User closes shelf OR auto-hide timer expires
+   ↓
+2. ShelfLifecycleManager.destroyShelf(shelfId)
+   ↓
+3. StateMachine: SHELF_ACTIVE → CLEANING_UP
+   ↓
+4. CleanupCoordinator schedules cleanup operations
+   - Stage 1 (Immediate): Remove from active shelf registry
+   - Stage 2 (200ms): Stop tracking files, clear timers
+   - Stage 3 (400ms): Destroy window, release resources
+   ↓
+5. EventRegistry.cleanupGroup(shelfId)
+   - Removes all event listeners for this shelf
+   ↓
+6. TimerManager.clearAllForContext(shelfId)
+   - Clears auto-hide timer, animation timers
+   ↓
+7. ShelfManager.destroyWindow(window)
+   - Fades out window
+   - Returns to pool OR destroys
+   ↓
+8. StateMachine: CLEANING_UP → IDLE
+```
+
+---
+
+## IPC Communication
+
+### Main → Renderer
+
+| Channel               | Payload       | Purpose                             |
+| --------------------- | ------------- | ----------------------------------- |
+| `shelf:create`        | `ShelfConfig` | Notify renderer to initialize shelf |
+| `shelf:items-updated` | `ShelfItem[]` | Update shelf items                  |
+| `shelf:config`        | `ShelfConfig` | Send configuration updates          |
+| `app:status`          | `AppStatus`   | Broadcast app status (dev mode)     |
+
+### Renderer → Main
+
+| Channel               | Payload                | Response       | Purpose               |
+| --------------------- | ---------------------- | -------------- | --------------------- |
+| `shelf:files-dropped` | `{ shelfId, files }`   | void           | Handle file drop      |
+| `shelf:close`         | `shelfId`              | `boolean`      | Close shelf window    |
+| `shelf:remove-item`   | `{ shelfId, itemId }`  | `boolean`      | Remove single item    |
+| `app:get-status`      | void                   | `AppStatus`    | Get current status    |
+| `app:create-shelf`    | `Partial<ShelfConfig>` | `ShelfConfig?` | Manual shelf creation |
+| `pattern:save`        | `Pattern`              | `boolean`      | Save rename pattern   |
+| `pattern:list`        | void                   | `Pattern[]`    | List saved patterns   |
+| `pattern:execute`     | `{ pattern, files }`   | `RenameResult` | Execute rename        |
+
+### IPC Security
+
+All IPC channels are:
+
+- **Whitelisted** in preload script
+- **Validated** with Zod schemas
+- **Rate-limited** to prevent abuse
+- **Logged** for debugging
+
+---
+
+## macOS Integration
+
+### Native Modules
+
+FileCataloger uses two custom C++ native modules for macOS-specific functionality:
+
+#### MouseTracker (`@native/mouse-tracker`)
+
+**Technology**: CGEventTap (Core Graphics)
+
+**Purpose**: System-wide mouse event monitoring
+
+**Features**:
+
+- 60fps event capture
+- Memory pooling for event objects
+- Batched event delivery to reduce overhead
+- Automatic permission handling
+
+**Permissions Required**: Accessibility (System Settings → Privacy & Security → Accessibility)
+
+**Size**: ~79KB compiled
+
+#### DragMonitor (`@native/drag-monitor`)
+
+**Technology**: NSPasteboard polling
+
+**Purpose**: Detects system-wide drag operations
+
+**Features**:
+
+- Polls NSPasteboard for drag state
+- Extracts file paths from drag operation
+- Minimal CPU usage (smart polling intervals)
+- Fallback to Node.js implementation
+
+**Size**: ~96KB compiled
+
+### Permission Handling
+
+```typescript
+// Check for permissions
+const hasPermission = systemPreferences.isTrustedAccessibilityClient(false);
+
+if (!hasPermission) {
+  // Prompt user
+  dialog.showMessageBox({
+    type: 'warning',
+    title: 'Accessibility Permission Required',
+    message: 'FileCataloger needs accessibility permission...',
+    buttons: ['Open System Settings', 'Continue', 'Quit'],
+  });
+
+  // Request permission (opens System Settings)
+  systemPreferences.isTrustedAccessibilityClient(true);
+}
+```
+
+---
+
+## Performance Optimizations
+
+### Event Batching
+
+Mouse events are batched at 60fps to prevent flooding:
+
+```typescript
+class MouseEventBatcher {
+  private pending: MouseEvent[] = [];
+  private scheduled = false;
+
+  batch(event: MouseEvent) {
+    this.pending.push(event);
+    if (!this.scheduled) {
+      this.scheduled = true;
+      setTimeout(() => {
+        this.flush();
+      }, 16.67); // 60fps
+    }
+  }
+
+  flush() {
+    const events = this.pending;
+    this.pending = [];
+    this.scheduled = false;
+    this.emit('batch', events);
+  }
+}
+```
+
+### Window Pooling
+
+Windows are pre-created and reused:
+
+- **Cold start**: 500ms to create window
+- **Pool**: 50ms to reuse window
+- **Improvement**: 90% faster
+
+### Memory Management
+
+- Event listeners tracked and cleaned up automatically
+- Timers managed centrally with auto-cleanup
+- Native module resources released on app quit
+- Performance monitoring with automatic GC triggers
+
+**Typical Memory Usage**:
+
+- Idle: 50-80MB
+- 3 active shelves: 120-150MB
+- Peak (5 shelves): 180-220MB
+
+---
+
+## Security
+
+### Electron Security Best Practices
+
+✅ **Context Isolation**: Enabled for all windows
+✅ **Node Integration**: Disabled in renderers
+✅ **Sandbox**: Enabled for all renderers
+✅ **CSP Headers**: Configured for production
+✅ **No Remote Content**: All content loaded locally
+✅ **IPC Validation**: All channels whitelisted and validated
+✅ **No eval()**: Forbidden by CSP
+✅ **Secure Defaults**: Following Electron security checklist
+
+### Content Security Policy
+
+```javascript
+"default-src 'none'; " +
+  "script-src 'self'; " +
+  "style-src 'self' 'unsafe-inline'; " +
+  "img-src 'self' data:; " +
+  "font-src 'self';";
+```
+
+---
+
+## Testing
+
+### Manual Testing
+
+```bash
+# 1. Run in development mode
+yarn dev
+
+# 2. Test shelf creation
+#    a. Open Finder
+#    b. Start dragging files
+#    c. Shake mouse rapidly (6+ direction changes)
+#    d. Shelf should appear at cursor
+
+# 3. Test file drop
+#    a. Drop files on shelf
+#    b. Files should appear in shelf UI
+
+# 4. Test auto-hide
+#    a. Create empty shelf
+#    b. Wait 5 seconds
+#    c. Shelf should auto-hide
+
+# 5. Check logs
 tail -f ~/Library/Application\ Support/FileCataloger/logs/app.log
 ```
 
-### Code Style
+### Unit Tests
 
-- Use camelCase for all file names
-- Follow TypeScript strict mode
-- Use structured logging (no console.log)
-- Handle all async operations with try/catch
-- Clean up timers and listeners properly
+```bash
+# Run all tests
+yarn test
+
+# Run specific test suite
+yarn test --grep "ShelfLifecycleManager"
+
+# Run with coverage
+yarn test:coverage
+```
+
+### Native Module Validation
+
+```bash
+# Validate native modules are working
+yarn test:native:validate
+
+# Expected output:
+# ✓ mouse-tracker loaded (~79KB)
+# ✓ drag-monitor loaded (~96KB)
+# ✓ mouse-tracker exports correct functions
+# ✓ drag-monitor exports correct functions
+```
+
+---
+
+## Common Issues & Solutions
+
+### 1. Shelf Not Appearing
+
+**Symptoms**: Mouse shake during drag doesn't create shelf
+
+**Causes**:
+
+- Missing Accessibility permissions
+- Native module failed to load
+- Shake sensitivity too high
+
+**Solutions**:
+
+```bash
+# Check permissions
+# System Settings → Privacy & Security → Accessibility → FileCataloger
+
+# Check native module
+yarn test:native:validate
+
+# Lower shake sensitivity
+# Preferences → Shake Detection → Sensitivity → Low
+```
+
+### 2. High CPU Usage
+
+**Symptoms**: CPU usage > 50%, fan noise
+
+**Causes**:
+
+- Mouse event batching not working
+- Too many event listeners
+- Native module issue
+
+**Solutions**:
+
+```bash
+# Check event batching
+# Look for "Event batch: N events" in logs
+
+# Check event registry stats
+# Look for memory leak warnings in logs
+
+# Restart app to reset native modules
+```
+
+### 3. Memory Leaks
+
+**Symptoms**: Memory usage grows over time
+
+**Causes**:
+
+- Event listeners not cleaned up
+- Timers not cleared
+- Windows not destroyed properly
+
+**Solutions**:
+
+```typescript
+// Always use EventRegistry
+registry.on(emitter, 'event', handler, 'groupName');
+registry.cleanupGroup('groupName'); // When done
+
+// Always use TimerManager
+timerManager.setTimeout('name', handler, delay);
+timerManager.clearTimeout('name'); // When done
+
+// Check cleanup stats in logs
+Logger.debug('Cleanup stats', eventRegistry.getStats());
+```
+
+### 4. IPC Errors
+
+**Symptoms**: Renderer can't communicate with main
+
+**Causes**:
+
+- Channel not whitelisted in preload
+- Invalid payload format
+- Rate limiting triggered
+
+**Solutions**:
+
+```typescript
+// Check preload whitelist (src/preload/index.ts)
+const validChannels = ['shelf:create', 'shelf:close', ...];
+
+// Validate payload with Zod
+const payload = ShelfConfigSchema.parse(data);
+
+// Check rate limit errors in logs
+```
+
+---
+
+## Development Tips
+
+### Debugging
+
+```typescript
+// Enable verbose logging
+Logger.setLogLevel(LogLevel.DEBUG);
+
+// Get detailed state machine logs
+stateMachine.on('transition', (from, to, event) => {
+  Logger.debug('State transition', { from, to, event });
+});
+
+// Monitor performance
+performanceMonitor.on('performance-warning', warning => {
+  Logger.warn('Performance issue', warning);
+});
+
+// Track event listeners
+const stats = eventRegistry.getStats();
+Logger.info('Event listeners', stats);
+```
+
+### Hot Reload
+
+Development mode supports hot reload for:
+
+- ✅ Renderer code (React components)
+- ✅ Preload scripts
+- ❌ Main process (requires restart)
+
+To apply main process changes:
+
+```bash
+# Kill and restart
+Ctrl+C
+yarn dev
+```
+
+### Production Build
+
+```bash
+# Full production build
+yarn build
+
+# Create distributable
+yarn dist
+
+# Create DMG for macOS
+yarn make:dmg
+```
+
+---
+
+## Additional Resources
+
+- [Electron Documentation](https://www.electronjs.org/docs)
+- [Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html)
+- [Project README](../../README.md)
+- [Architecture Diagrams](../../docs/)
+
+---
+
+**Last Updated**: 2025-01-24
+**Main Process Version**: Refactored (90% size reduction)
+**Code Style**: Google TypeScript Style Guide

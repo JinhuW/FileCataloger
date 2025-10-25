@@ -38,10 +38,10 @@ declare global {
 
     // Also exposed for compatibility
     electronAPI: IElectronAPI & {
-      on: (channel: string, callback: (...args: any[]) => void) => void;
-      off: (channel: string, callback: (...args: any[]) => void) => void;
+      on: (channel: string, callback: (...args: unknown[]) => void) => void;
+      off: (channel: string, callback: (...args: unknown[]) => void) => void;
       dialog: {
-        showMessageBox: (options: any) => Promise<any>;
+        showMessageBox: (options: Record<string, unknown>) => Promise<unknown>;
       };
     };
   }

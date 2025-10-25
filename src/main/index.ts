@@ -391,7 +391,7 @@ class FileCatalogerApp {
 
   private setupIpcHandlers(): void {
     // Register pattern handlers
-    import('./ipc/patternHandlers')
+    import('./ipc/pattern_handlers')
       .then(({ registerPatternHandlers }) => {
         registerPatternHandlers();
       })

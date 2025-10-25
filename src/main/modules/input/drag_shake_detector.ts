@@ -1,9 +1,9 @@
 import { EventEmitter } from 'events';
-import { AdvancedShakeDetector } from './shakeDetector';
+import { AdvancedShakeDetector } from './shake_detector';
 import { createLogger, Logger } from '../utils/logger';
 import { MousePosition } from '@shared/types';
 import { MacDragMonitor, createDragMonitor } from '@native/drag-monitor';
-import { MouseEventBatcher } from './mouseEventBatcher';
+import { MouseEventBatcher } from './mouse_event_batcher';
 
 export interface DraggedItem {
   name: string;
@@ -113,7 +113,7 @@ export class DragShakeDetector extends EventEmitter {
       if (this.isDragging) {
         this.logger.debug('🔍 Batch event received during drag:', {
           positionCount: batchedEvent.positions.length,
-          isDragging: this.isDragging
+          isDragging: this.isDragging,
         });
       }
 
@@ -351,7 +351,7 @@ export class DragShakeDetector extends EventEmitter {
       this.logger.debug(`📍 Position #${this.positionLogCount} received during drag:`, {
         x: position.x,
         y: position.y,
-        isDragging: this.isDragging
+        isDragging: this.isDragging,
       });
     }
 
