@@ -24,7 +24,7 @@ export interface AutoHideConfig {
 export class AutoHideManager extends EventEmitter {
   private readonly logger: Logger;
   private readonly timerManager: TimerManager;
-  private readonly pendingAutoHides = new Map<string, NodeJS.Timeout>();
+  private readonly pendingAutoHides = new Map<string, string>();
 
   private config: AutoHideConfig = {
     enabled: true,
@@ -51,7 +51,7 @@ export class AutoHideManager extends EventEmitter {
    * Setup preference change listeners
    */
   private setupPreferenceListeners(): void {
-    this.preferencesManager.on('shelf-settings-changed', (settings: unknown) => {
+    this.preferencesManager.on('shelf-settings-changed', (settings: { autoHideEmpty: boolean }) => {
       this.config.enabled = settings.autoHideEmpty;
 
       if (!this.config.enabled) {
@@ -121,7 +121,7 @@ export class AutoHideManager extends EventEmitter {
       `Auto-hide shelf ${shelfId}`
     );
 
-    this.pendingAutoHides.set(shelfId, timerId as any);
+    this.pendingAutoHides.set(shelfId, timerId);
     this.logger.info(`⏰ Scheduled auto-hide for shelf ${shelfId} in ${timeout}ms`);
   }
 

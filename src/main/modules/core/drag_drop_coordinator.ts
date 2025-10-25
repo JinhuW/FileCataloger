@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { Logger, createLogger } from '../utils/logger';
-import { MouseTracker, DragItem } from '@shared/types';
+import { MouseTracker, DragItem, MousePosition } from '@shared/types';
 import { DragShakeDetector, DragShakeEvent } from '../input/drag_shake_detector';
 import { ShelfLifecycleManager } from './shelf_lifecycle_manager';
 import {
@@ -50,7 +50,7 @@ export class DragDropCoordinator extends EventEmitter {
    */
   private setupEventHandlers(): void {
     // Mouse position updates
-    this.mouseTracker.on('position', (position: unknown) => {
+    this.mouseTracker.on('position', (position: MousePosition) => {
       this.handleMousePosition(position);
     });
 
@@ -73,15 +73,18 @@ export class DragDropCoordinator extends EventEmitter {
     });
 
     // Preference changes
-    this.preferencesManager.on('shake-settings-changed', (settings: unknown) => {
-      this.handleShakeSettingsChanged(settings);
-    });
+    this.preferencesManager.on(
+      'shake-settings-changed',
+      (settings: { enabled: boolean; dragShakeEnabled: boolean }) => {
+        this.handleShakeSettingsChanged(settings);
+      }
+    );
   }
 
   /**
    * Handle mouse position updates
    */
-  private handleMousePosition(position: unknown): void {
+  private handleMousePosition(position: MousePosition): void {
     // Log first position for debugging
     if (this.positionLogCount === 0) {
       this.logger.debug('First position received:', {
@@ -159,7 +162,14 @@ export class DragDropCoordinator extends EventEmitter {
 
         // Only create shelf if dragging files
         if (!event.isDragging || !event.items || event.items.length === 0) {
-          this.logger.info('⚠️ Shake detected but no drag operation - ignoring');
+          this.logger.warn(
+            '⚠️ Shake detected but no files being dragged - this should not happen after fix!'
+          );
+          this.logger.debug('Event details:', {
+            isDragging: event.isDragging,
+            itemsPresent: !!event.items,
+            itemCount: event.items?.length || 0,
+          });
           return;
         }
 
@@ -375,7 +385,10 @@ export class DragDropCoordinator extends EventEmitter {
   /**
    * Handle shake settings change
    */
-  private async handleShakeSettingsChanged(settings: unknown): Promise<void> {
+  private async handleShakeSettingsChanged(settings: {
+    enabled: boolean;
+    dragShakeEnabled: boolean;
+  }): Promise<void> {
     this.logger.info('🎯 Shake settings changed:', {
       enabled: settings.enabled,
       dragShakeEnabled: settings.dragShakeEnabled,

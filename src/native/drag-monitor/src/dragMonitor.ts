@@ -152,23 +152,15 @@ export class MacDragMonitor extends EventEmitter {
           const files = this.nativeMonitor.getDraggedFiles();
           logger.info('🎯 Native drag started via polling', { fileCount: files.length });
 
-          // Debug: Log raw file data
+          // CRITICAL FIX: Only emit dragStart if files were actually found
           if (files.length === 0) {
-            logger.warn('⚠️ Drag detected but no files found! This might be a timing issue.');
-            logger.debug('🔍 Attempting to get files again after delay...');
-            // Try again after a small delay
-            setTimeout(() => {
-              if (this.nativeMonitor) {
-                const retryFiles = this.nativeMonitor.getDraggedFiles();
-                logger.info('🔄 Retry getDraggedFiles:', { fileCount: retryFiles.length });
-                if (retryFiles.length > 0) {
-                  logger.info('✅ Files found on retry!', retryFiles);
-                }
-              }
-            }, 50);
-          } else {
-            logger.debug('📋 Raw file data from native:', files);
+            logger.warn('⚠️ Drag detected but no files found - ignoring (not a file drag)');
+            logger.debug('🔍 This might be a mouse drag without files or a Chromium internal drag');
+            // Don't emit dragStart - wait for actual files to be found
+            return;
           }
+
+          logger.debug('📋 Raw file data from native:', files);
 
           const items: DraggedItem[] = files.map(file => ({
             path: file.path,
@@ -186,6 +178,7 @@ export class MacDragMonitor extends EventEmitter {
             logger.debug(`  - ${item.type}: ${item.name}`);
           });
 
+          // Only emit events if we have actual items
           this.emit('dragStart', items);
           this.emit('dragging', items);
         } else if (!hasActiveDrag && this.wasActiveDrag) {

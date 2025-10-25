@@ -74,7 +74,7 @@ export function WithMutex(mutexPropertyName: string) {
   ): PropertyDescriptor {
     const originalMethod = descriptor.value;
 
-    descriptor.value = async function (this: unknown, ...args: any[]) {
+    descriptor.value = async function (this: any, ...args: any[]) {
       const mutex: AsyncMutex = this[mutexPropertyName];
       if (!mutex || !(mutex instanceof AsyncMutex)) {
         throw new Error(

@@ -233,7 +233,7 @@ export class PerformanceMonitor extends EventEmitter {
     return { idle, total };
   }
 
-  private calculateCpuUsage(currentInfo: unknown): number {
+  private calculateCpuUsage(currentInfo: { idle: number; total: number }): number {
     if (!this.lastCpuInfo) {
       this.lastCpuInfo = currentInfo;
       return 0;

@@ -235,11 +235,19 @@ bool DarwinDragMonitor::CheckForFileDrag() {
 
             NSInteger currentChangeCount = [dragPasteboard changeCount];
 
-            // Process if pasteboard has changed OR if no drag is active (force refresh)
-            // This ensures new drags are detected even with same changeCount
-            if (currentChangeCount <= lastPasteboardChangeCount.load() && hasActiveDrag.load()) {
+            // CRITICAL FIX: Only detect as drag if pasteboard INCREASED during drag
+            // This prevents click+shake from triggering (pasteboard doesn't change from click)
+            // Clicking on file sets changeCount=N, actually dragging it sets changeCount=N+1
+            if (currentChangeCount <= lastPasteboardChangeCount.load()) {
+                // Pasteboard hasn't changed since mouse-down = not a real drag
+                NSLog(@"[DragMonitor] Pasteboard unchanged (changeCount: %ld), ignoring - likely click+shake, not drag",
+                      static_cast<long>(currentChangeCount));
                 return false;
             }
+
+            NSLog(@"[DragMonitor] Pasteboard changed during drag (%d → %ld) - real drag detected!",
+                  lastPasteboardChangeCount.load(),
+                  static_cast<long>(currentChangeCount));
 
             NSArray* types = [dragPasteboard types];
             if (!types || types.count == 0) {
@@ -479,6 +487,19 @@ CGEventRef DarwinDragMonitor::DragEventCallback(CGEventTapProxy proxy,
         dragState.hasCircularMotion = false;
         dragState.hasZigzagPattern = false;
         monitor->isDragging.store(false);
+
+        // CRITICAL: Capture initial pasteboard state at mouse down
+        // This prevents detecting click+shake as drag (pasteboard has files from click)
+        @autoreleasepool {
+            NSPasteboard* dragPasteboard = [NSPasteboard pasteboardWithName:NSPasteboardNameDrag];
+            if (dragPasteboard) {
+                // Store the pasteboard change count at mouse down
+                // We only consider it a real drag if changeCount INCREASES during drag
+                monitor->lastPasteboardChangeCount.store([dragPasteboard changeCount]);
+                NSLog(@"[DragMonitor] Mouse down - captured pasteboard changeCount: %ld",
+                      static_cast<long>([dragPasteboard changeCount]));
+            }
+        }
     }
     
     // Handle mouse dragged
@@ -528,17 +549,28 @@ CGEventRef DarwinDragMonitor::DragEventCallback(CGEventTapProxy proxy,
         ).count();
         
         // Check for file drag only after minimum drag distance and time
-        // This helps filter out accidental clicks
-        const double MIN_DRAG_DISTANCE = 3.0;   // pixels - reduced for faster detection
-        const int MIN_DRAG_TIME = 10;           // milliseconds - much faster response
-        const int MIN_MOVE_COUNT = 1;           // number of drag events - immediate check
+        // CRITICAL: These thresholds prevent false positives from clicks+shake
+        // User must actually DRAG files, not just click and shake
+        const double MIN_DRAG_DISTANCE = 25.0;  // pixels - require real drag movement
+        const int MIN_DRAG_TIME = 50;          // milliseconds - time to initiate drag
+        const int MIN_MOVE_COUNT = 5;           // number of drag events - sustained movement
         
         bool shouldCheckForFiles =
             dragState.totalDistance >= MIN_DRAG_DISTANCE &&
             dragDuration >= MIN_DRAG_TIME &&
             dragState.moveCount >= MIN_MOVE_COUNT;
 
-        if (shouldCheckForFiles && !dragState.hasFiles && !monitor->isDragging.load()) {
+        // ADDITIONAL CHECK: Verify actual drag distance from start point
+        // This prevents click+shake from triggering (user clicks file, shakes in place)
+        double distanceFromStart = sqrt(
+            pow(location.x - dragState.startPoint.x, 2) +
+            pow(location.y - dragState.startPoint.y, 2)
+        );
+        const double MIN_DISTANCE_FROM_START = 20.0; // Must move 20px away from click point
+
+        bool isActualDrag = distanceFromStart >= MIN_DISTANCE_FROM_START;
+
+        if (shouldCheckForFiles && isActualDrag && !dragState.hasFiles && !monitor->isDragging.load()) {
             // CRITICAL FIX: Only mark as dragging if files are actually found
             // Perform file detection FIRST, before marking as dragging
             if (monitor->CheckForFileDrag()) {
