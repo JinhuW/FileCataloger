@@ -87,7 +87,8 @@ private:
     std::atomic<bool> shouldStop;
     std::atomic<bool> isDragging;
     std::atomic<int> lastPasteboardChangeCount;
-    
+    std::chrono::steady_clock::time_point mouseDownTime;
+
     // Polling state variables
     std::atomic<bool> hasActiveDrag;
     std::atomic<int> fileCount;
@@ -235,19 +236,29 @@ bool DarwinDragMonitor::CheckForFileDrag() {
 
             NSInteger currentChangeCount = [dragPasteboard changeCount];
 
-            // CRITICAL FIX: Only detect as drag if pasteboard INCREASED during drag
-            // This prevents click+shake from triggering (pasteboard doesn't change from click)
-            // Clicking on file sets changeCount=N, actually dragging it sets changeCount=N+1
-            if (currentChangeCount <= lastPasteboardChangeCount.load()) {
-                // Pasteboard hasn't changed since mouse-down = not a real drag
-                NSLog(@"[DragMonitor] Pasteboard unchanged (changeCount: %ld), ignoring - likely click+shake, not drag",
-                      static_cast<long>(currentChangeCount));
-                return false;
-            }
+            // UPDATED FIX: Allow drag detection even if pasteboard hasn't changed yet
+            // Some drags (especially from Finder) don't update the pasteboard immediately
+            // We'll rely on file type detection to determine if it's a real drag
+            // Only skip if we've explicitly stored a change count AND it's the same
+            int storedCount = lastPasteboardChangeCount.load();
+            if (storedCount >= 0 && currentChangeCount == storedCount) {
+                // Check if enough time has passed since mouse down (grace period for pasteboard update)
+                // If pasteboard still hasn't changed after 200ms, it's probably not a file drag
+                auto now = std::chrono::steady_clock::now();
+                auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - mouseDownTime).count();
 
-            NSLog(@"[DragMonitor] Pasteboard changed during drag (%d → %ld) - real drag detected!",
-                  lastPasteboardChangeCount.load(),
-                  static_cast<long>(currentChangeCount));
+                if (elapsed > 500) {  // Increased grace period for Finder drags
+                    NSLog(@"[DragMonitor] Pasteboard unchanged after 500ms (changeCount: %ld), ignoring - likely click+shake, not drag",
+                          static_cast<long>(currentChangeCount));
+                    return false;
+                }
+                // Within grace period - continue checking for files
+                NSLog(@"[DragMonitor] Pasteboard unchanged but within grace period (%lldms), checking for files...", elapsed);
+            } else if (currentChangeCount > storedCount) {
+                NSLog(@"[DragMonitor] Pasteboard changed during drag (%d → %ld) - real drag detected!",
+                      storedCount,
+                      static_cast<long>(currentChangeCount));
+            }
 
             NSArray* types = [dragPasteboard types];
             if (!types || types.count == 0) {
@@ -496,6 +507,7 @@ CGEventRef DarwinDragMonitor::DragEventCallback(CGEventTapProxy proxy,
                 // Store the pasteboard change count at mouse down
                 // We only consider it a real drag if changeCount INCREASES during drag
                 monitor->lastPasteboardChangeCount.store([dragPasteboard changeCount]);
+                monitor->mouseDownTime = std::chrono::steady_clock::now();
                 NSLog(@"[DragMonitor] Mouse down - captured pasteboard changeCount: %ld",
                       static_cast<long>([dragPasteboard changeCount]));
             }

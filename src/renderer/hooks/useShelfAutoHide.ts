@@ -2,6 +2,7 @@
  * @file useShelfAutoHide.ts
  * @description Custom hook for managing shelf auto-hide behavior.
  * Automatically hides empty unpinned shelves after a configurable delay.
+ * CRITICAL: Respects drag state to prevent hiding during active drag operations.
  */
 
 import { useEffect, useRef } from 'react';
@@ -54,6 +55,21 @@ export function useShelfAutoHide(
   const { delayMs = AUTO_HIDE.DELAY_MS, enabled = true, onClose } = options;
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
+  /**
+   * CRITICAL FIX: Disable renderer-side auto-hide
+   *
+   * The renderer process has no knowledge of drag state in the main process.
+   * This caused shelves to disappear while users were still dragging files.
+   *
+   * Auto-hide is now EXCLUSIVELY managed by the main process which has
+   * full visibility into drag operations, global drag lock, and state machine.
+   *
+   * The main process will send IPC messages to close shelves when appropriate.
+   *
+   * See: src/main/modules/core/auto_hide_manager.ts
+   *      src/main/modules/core/shelf_lifecycle_manager.ts
+   */
+
   useEffect(() => {
     // Clear any existing timeout
     if (timeoutRef.current) {
@@ -61,22 +77,15 @@ export function useShelfAutoHide(
       timeoutRef.current = null;
     }
 
-    // Only auto-hide if enabled, empty, and not pinned
-    if (!enabled || !isEmpty || isPinned) {
-      return;
-    }
+    // DISABLED: Renderer-side auto-hide is disabled to prevent premature shelf closure
+    // The main process handles all auto-hide logic with full drag state awareness
+    logger.debug(
+      `Renderer auto-hide disabled for shelf ${shelfId} - main process handles auto-hide`
+    );
 
-    logger.info(`⏰ Shelf ${shelfId} is empty and unpinned, scheduling auto-hide in ${delayMs}ms`);
-
-    timeoutRef.current = setTimeout(() => {
-      logger.info(`🗑️ Auto-hiding empty shelf ${shelfId}`);
-      onClose();
-    }, delayMs);
-
-    // Cleanup on unmount or when dependencies change
+    // Return cleanup function
     return () => {
       if (timeoutRef.current) {
-        logger.debug(`Clearing auto-hide timer for shelf ${shelfId}`);
         clearTimeout(timeoutRef.current);
         timeoutRef.current = null;
       }
