@@ -31,6 +31,7 @@
  */
 
 import React, { useState, useCallback } from 'react';
+import ReactDOM from 'react-dom';
 import { motion } from 'framer-motion';
 import { ShelfConfig, ShelfItem } from '@shared/types';
 import { ShelfHeader, ErrorBoundary, FileDropZone } from '@renderer/components/domain';
@@ -321,19 +322,21 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
           </div>
         </motion.div>
 
-        {/* Warning Dialog */}
-        {validationWarning && (
-          <WarningDialog
-            isOpen={showWarningDialog}
-            onClose={() => setShowWarningDialog(false)}
-            title="File Path/Name Warning"
-            message={validationWarning.message}
-            details={validationWarning.details}
-            onConfirm={performRename}
-            confirmText="Continue Anyway"
-            cancelText="Cancel"
-          />
-        )}
+        {/* Warning Dialog - Rendered via Portal to escape stacking context */}
+        {validationWarning &&
+          ReactDOM.createPortal(
+            <WarningDialog
+              isOpen={showWarningDialog}
+              onClose={() => setShowWarningDialog(false)}
+              title="File Path/Name Warning"
+              message={validationWarning.message}
+              details={validationWarning.details}
+              onConfirm={performRename}
+              confirmText="Continue Anyway"
+              cancelText="Cancel"
+            />,
+            document.body
+          )}
       </ErrorBoundary>
     );
   }

@@ -249,12 +249,60 @@ export interface ProcessFileListOptions {
    * Source of the files (for logging)
    */
   source?: 'drag' | 'input';
+  /**
+   * Pre-captured native file paths (bypasses IPC call to prevent race conditions)
+   * Map of filename → full path from native drag monitor
+   * If provided, this will be used instead of making an IPC call to drag:get-native-files
+   */
+  nativePathMap?: Map<string, string>;
+}
+
+/**
+ * Retrieves file paths from the native drag monitor module.
+ * The native module captures paths from NSPasteboard during drag operations.
+ * Returns a map of filename → full path for matching with File objects.
+ *
+ * @returns Map of filename to full path, or empty map if native paths unavailable
+ */
+async function getNativeFilePaths(): Promise<Map<string, string>> {
+  const pathMap = new Map<string, string>();
+
+  try {
+    const nativeFiles = (await window.api.invoke('drag:get-native-files')) as Array<{
+      path: string;
+      name: string;
+    }>;
+
+    if (nativeFiles && Array.isArray(nativeFiles) && nativeFiles.length > 0) {
+      logger.info(`📋 Retrieved ${nativeFiles.length} file paths from native drag monitor`);
+
+      for (const nativeFile of nativeFiles) {
+        if (nativeFile.path && nativeFile.name) {
+          // Extract filename from path as fallback if name is not provided
+          const filename = nativeFile.name || nativeFile.path.split('/').pop() || '';
+          if (filename) {
+            pathMap.set(filename, nativeFile.path);
+            logger.debug(`  ✓ ${filename} → ${nativeFile.path}`);
+          }
+        }
+      }
+    } else {
+      logger.debug('📋 No native file paths available (empty or invalid response)');
+    }
+  } catch (error) {
+    logger.warn('Failed to retrieve native file paths:', error);
+    logger.debug('Will fall back to Electron File.path property');
+  }
+
+  return pathMap;
 }
 
 /**
  * Processes a FileList and converts it to ShelfItems with type detection.
  * Handles duplicate detection and file type classification via IPC.
  * This function is optimized for batch processing with a single IPC call.
+ *
+ * ENHANCED: Now retrieves file paths from native drag monitor for complete path information.
  *
  * @param files - The FileList to process
  * @param options - Processing options including duplicate detection
@@ -264,7 +312,11 @@ export async function processFileList(
   files: FileList,
   options: ProcessFileListOptions = {}
 ): Promise<ProcessFilesResult> {
-  const { existingPaths = new Set<string>(), source = 'drag' } = options;
+  const {
+    existingPaths = new Set<string>(),
+    source = 'drag',
+    nativePathMap: providedPathMap,
+  } = options;
 
   const items: ShelfItem[] = [];
   const duplicatePaths = new Set<string>();
@@ -272,20 +324,38 @@ export async function processFileList(
 
   logger.info(`📦 processFileList: Processing ${files.length} files from ${source}`);
 
-  // Step 1: Collect paths for batch type checking
+  // Step 1: Get native file paths from drag monitor (for drag operations)
+  // Use provided map to avoid race conditions, otherwise fetch via IPC
+  const nativePathMap =
+    providedPathMap ?? (source === 'drag' ? await getNativeFilePaths() : new Map<string, string>());
+
+  if (providedPathMap) {
+    logger.debug(`Using pre-captured native paths (${providedPathMap.size} files)`);
+  }
+
+  // Step 2: Collect paths for batch type checking
   const pathsToCheck: string[] = [];
   const fileMap: Map<string, { file: File; index: number }> = new Map();
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    const filePath = getElectronFilePath(file);
+
+    // Try to get path from multiple sources (priority order):
+    // 1. Native drag monitor (most reliable for drag operations)
+    // 2. Electron File.path property (fallback)
+    const filePath = nativePathMap.get(file.name) || getElectronFilePath(file);
+
     if (filePath) {
       pathsToCheck.push(filePath);
       fileMap.set(filePath, { file, index: i });
+    } else {
+      logger.warn(`⚠️ No path available for file: ${file.name}`);
     }
   }
 
-  // Step 2: Batch check path types via IPC
+  logger.debug(`Resolved ${pathsToCheck.length} file paths out of ${files.length} files`);
+
+  // Step 3: Batch check path types via IPC
   let pathTypes: Record<string, 'file' | 'folder' | 'unknown'> = {};
   let pathTypeCheckFailed = false;
 
@@ -307,10 +377,12 @@ export async function processFileList(
     }
   }
 
-  // Step 3: Process each file
+  // Step 4: Process each file
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
-    const filePath = getElectronFilePath(file);
+
+    // Get path using same priority order as Step 2
+    const filePath = nativePathMap.get(file.name) || getElectronFilePath(file);
 
     // Skip duplicates (both from existing paths and within current batch)
     if (filePath) {
@@ -328,6 +400,7 @@ export async function processFileList(
     logger.debug(`Processed file ${i}:`, {
       name: file.name,
       path: filePath,
+      pathSource: nativePathMap.has(file.name) ? 'native' : 'electron',
       type,
       size: file.size,
     });

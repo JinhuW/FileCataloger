@@ -616,13 +616,68 @@ class FileCatalogerApp {
 
     // Check if path is a directory
     ipcMain.handle('fs:check-path-type', async (event, paths: string[]) => {
+      // Input validation for security
+      if (!Array.isArray(paths)) {
+        this.logger.error('fs:check-path-type: Invalid input - paths must be an array');
+        throw new Error('Invalid paths parameter: must be an array');
+      }
+
+      if (paths.length === 0) {
+        this.logger.debug('fs:check-path-type: Empty paths array');
+        return {};
+      }
+
+      if (paths.length > 100) {
+        this.logger.warn('fs:check-path-type: Too many paths requested', { count: paths.length });
+        throw new Error('Too many paths (maximum 100 allowed)');
+      }
+
       const results: Record<string, 'file' | 'folder' | 'unknown'> = {};
+      const userHome = app.getPath('home');
 
       for (const filePath of paths) {
+        // Validate input type
+        if (typeof filePath !== 'string' || filePath.length === 0) {
+          this.logger.warn('fs:check-path-type: Invalid path type', { filePath });
+          results[filePath] = 'unknown';
+          continue;
+        }
+
         try {
-          const stats = await fs.promises.stat(filePath);
+          // Normalize and validate path
+          const normalizedPath = path.normalize(filePath);
+
+          // Security: Prevent path traversal attacks
+          if (normalizedPath.includes('..')) {
+            this.logger.warn('fs:check-path-type: Rejected path with traversal', {
+              original: filePath,
+              normalized: normalizedPath,
+            });
+            results[filePath] = 'unknown';
+            continue;
+          }
+
+          // Security: Only allow paths in user directories or common application paths
+          const isInUserHome = normalizedPath.startsWith(userHome);
+          const isInApplications = normalizedPath.startsWith('/Applications');
+          const isInVolumes = normalizedPath.startsWith('/Volumes');
+
+          if (!isInUserHome && !isInApplications && !isInVolumes) {
+            this.logger.warn('fs:check-path-type: Rejected path outside allowed directories', {
+              path: normalizedPath,
+            });
+            results[filePath] = 'unknown';
+            continue;
+          }
+
+          // Check file type
+          const stats = await fs.promises.stat(normalizedPath);
           results[filePath] = stats.isDirectory() ? 'folder' : 'file';
         } catch (error) {
+          this.logger.debug('fs:check-path-type: Failed to stat path', {
+            path: filePath,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
           results[filePath] = 'unknown';
         }
       }
