@@ -72,6 +72,11 @@ export class DragDropCoordinator extends EventEmitter {
       this.handleFilesDetected(files);
     });
 
+    // Shelf lifecycle events
+    this.shelfLifecycleManager.on('shelf-destroyed', (shelfId: string) => {
+      this.handleShelfDestroyed(shelfId);
+    });
+
     // Preference changes
     this.preferencesManager.on(
       'shake-settings-changed',
@@ -214,6 +219,12 @@ export class DragDropCoordinator extends EventEmitter {
             this.shelfCreatedForCurrentDrag = true;
             this.shelfLifecycleManager.showShelf(context.activeShelfId);
             return;
+          } else {
+            // Shelf was destroyed but state machine still has reference
+            this.logger.info(
+              `⚠️ State machine references destroyed shelf ${context.activeShelfId}, clearing...`
+            );
+            this.stateMachine.send(StateMachineEvent.CLEANUP_COMPLETE);
           }
         }
 
@@ -380,6 +391,27 @@ export class DragDropCoordinator extends EventEmitter {
   private handleFilesDetected(files: string[]): void {
     this.logger.debug('📁 Files detected in drag:', files);
     this.emit('files-detected', files);
+  }
+
+  /**
+   * Handle shelf destroyed event
+   */
+  private handleShelfDestroyed(shelfId: string): void {
+    this.logger.info(`🗑️ Shelf destroyed: ${shelfId}`);
+
+    // If this was the shelf created for current drag session, reset tracking
+    if (this.dragSessionShelfId === shelfId) {
+      this.logger.info(`📋 Resetting drag session tracking for destroyed shelf ${shelfId}`);
+      this.shelfCreatedForCurrentDrag = false;
+      this.dragSessionShelfId = null;
+    }
+
+    // Check if state machine needs to transition to IDLE
+    const context = this.stateMachine.getContext();
+    if (context.activeShelfId === shelfId) {
+      this.logger.info(`🔄 Transitioning state machine to IDLE after shelf ${shelfId} destroyed`);
+      this.stateMachine.send(StateMachineEvent.CLEANUP_COMPLETE);
+    }
   }
 
   /**
