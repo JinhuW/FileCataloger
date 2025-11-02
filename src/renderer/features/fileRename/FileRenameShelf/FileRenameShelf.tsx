@@ -32,15 +32,16 @@
 
 import React, { useState, useCallback } from 'react';
 import ReactDOM from 'react-dom';
-import { motion } from 'framer-motion';
 import { ShelfConfig, ShelfItem } from '@shared/types';
+import { SHELF_CONSTANTS } from '@shared/constants';
 import { ShelfHeader, ErrorBoundary, FileDropZone } from '@renderer/components/domain';
+import { ResizableShelfContainer } from '@renderer/components/layout/ResizableShelfContainer';
 import { RenamePatternBuilder } from '../RenamePatternBuilder';
 import { FileRenamePreviewList } from '../FileRenamePreviewList';
 import { WarningDialog } from '@renderer/components/primitives';
 import { useToast } from '@renderer/stores/toastStore';
 import { useFileRename } from '@renderer/hooks/useFileRename';
-import { SHELF_DIMENSIONS, ANIMATION } from '@renderer/constants/ui';
+import { useWindowSize } from '@renderer/hooks/useWindowSize';
 import { logger } from '@shared/logger';
 
 export interface FileRenameShelfProps {
@@ -56,6 +57,13 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
     const [isDragOver, setIsDragOver] = useState(false);
     const [destinationPath, setDestinationPath] = useState('~/Downloads');
     const [showWarningDialog, setShowWarningDialog] = useState(false);
+
+    // Use window size management with main process sync
+    const { size, isResizing } = useWindowSize(
+      config.size?.width || SHELF_CONSTANTS.DEFAULT_WIDTH,
+      config.size?.height || SHELF_CONSTANTS.DEFAULT_HEIGHT
+    );
+
     const [validationWarning, setValidationWarning] = useState<{
       message: string;
       details: React.ReactNode;
@@ -69,8 +77,6 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
 
     // Use the file rename hook for all rename operations
     const {
-      components: renameComponents,
-      setComponents: setRenameComponents,
       previews: filePreview,
       executeRename,
       validate,
@@ -178,26 +184,24 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
 
     return (
       <ErrorBoundary>
-        <motion.div
+        <ResizableShelfContainer
+          width={size.width}
+          height={size.height}
+          minWidth={SHELF_CONSTANTS.MIN_WIDTH}
+          minHeight={SHELF_CONSTANTS.MIN_HEIGHT}
+          maxWidth={SHELF_CONSTANTS.MAX_WIDTH}
+          maxHeight={SHELF_CONSTANTS.MAX_HEIGHT}
           className="file-rename-shelf"
-          initial={{ opacity: 0.3, scale: 0.9 }}
-          animate={{
-            opacity: config.isVisible ? config.opacity : 0,
-            scale: config.isVisible ? 1 : 0.9,
-          }}
-          transition={{ duration: ANIMATION.DURATION, ease: ANIMATION.EASE }}
           style={{
             background: 'rgba(30, 30, 30, 0.95)',
             backdropFilter: 'blur(20px)',
-            border: '1px solid rgba(255, 255, 255, 0.1)',
+            border: 'none', // Remove border to prevent offset
             borderRadius: '16px',
-            width: `${SHELF_DIMENSIONS.WIDTH}px`,
-            height: `${SHELF_DIMENSIONS.HEIGHT}px`,
             display: 'flex',
             flexDirection: 'column',
             overflow: 'hidden',
-            pointerEvents: isRenaming ? 'none' : 'auto',
-            opacity: isRenaming ? 0.7 : 1,
+            pointerEvents: isRenaming || isResizing ? 'none' : 'auto',
+            opacity: isRenaming || isResizing ? 0.7 : config.opacity,
           }}
         >
           {/* Header */}
@@ -311,16 +315,14 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
               }}
             >
               <RenamePatternBuilder
-                components={renameComponents}
-                onChange={setRenameComponents}
-                onRename={handleRename}
                 hasFiles={selectedFiles.length > 0}
                 selectedFiles={selectedFiles}
                 onDestinationChange={setDestinationPath}
+                onRename={handleRename}
               />
             </div>
           </div>
-        </motion.div>
+        </ResizableShelfContainer>
 
         {/* Warning Dialog - Rendered via Portal to escape stacking context */}
         {validationWarning &&

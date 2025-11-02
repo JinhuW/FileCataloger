@@ -19,6 +19,7 @@ import { Logger, LogLevel } from './modules/utils/logger';
 import { LogEntry } from '@shared/logger';
 import { securityConfig } from './modules/config';
 import { ShelfConfig, ShelfItem } from '@shared/types';
+import { SHELF_CONSTANTS } from '@shared/constants';
 import { getGlobalTimerManager, destroyGlobalTimerManager } from './modules/utils';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -399,6 +400,15 @@ class FileCatalogerApp {
         this.logger.error('Failed to register pattern handlers:', error);
       });
 
+    // Register component library handlers
+    import('./ipc/component_handlers')
+      .then(({ registerComponentHandlers }) => {
+        registerComponentHandlers();
+      })
+      .catch(error => {
+        this.logger.error('Failed to register component handlers:', error);
+      });
+
     // Get application status
     ipcMain.handle('app:get-status', () => {
       if (!this.applicationController) {
@@ -557,6 +567,52 @@ class FileCatalogerApp {
         return false;
       }
       return await this.applicationController.destroyShelf(shelfId);
+    });
+
+    // Window resize handlers
+    ipcMain.handle('window:resize', async (event, width: number, height: number) => {
+      try {
+        const window = BrowserWindow.fromWebContents(event.sender);
+        if (!window) {
+          this.logger.warn('window:resize - Could not find window from sender');
+          return { success: false, error: 'Window not found' };
+        }
+
+        // Validate dimensions against constraints
+        const validWidth = Math.max(
+          SHELF_CONSTANTS.MIN_WIDTH,
+          Math.min(SHELF_CONSTANTS.MAX_WIDTH, Math.round(width))
+        );
+        const validHeight = Math.max(
+          SHELF_CONSTANTS.MIN_HEIGHT,
+          Math.min(SHELF_CONSTANTS.MAX_HEIGHT, Math.round(height))
+        );
+
+        // Apply resize with animation
+        window.setSize(validWidth, validHeight, true); // true = animate
+
+        this.logger.debug('Window resized via IPC', { width: validWidth, height: validHeight });
+
+        return { success: true, width: validWidth, height: validHeight };
+      } catch (error) {
+        this.logger.error('Failed to resize window via IPC:', error);
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    });
+
+    ipcMain.handle('window:get-bounds', async event => {
+      try {
+        const window = BrowserWindow.fromWebContents(event.sender);
+        if (!window) {
+          return null;
+        }
+
+        const bounds = window.getBounds();
+        return bounds;
+      } catch (error) {
+        this.logger.error('Failed to get window bounds:', error);
+        return null;
+      }
     });
 
     // Debug handler for renderer messages

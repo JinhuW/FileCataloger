@@ -1,9 +1,16 @@
 // Shared type definitions for the application
 
 import { DockPosition, ShelfItemType, ShelfMode } from './enums';
+import type {
+  ComponentDefinition,
+  ComponentInstance,
+  LegacyRenameComponent,
+} from './types/componentDefinition';
 
 // Re-export for convenience
 export { DockPosition, ShelfItemType, ShelfMode };
+export type { ComponentDefinition, ComponentInstance, LegacyRenameComponent };
+// Note: ComponentType and ComponentScope are exported from enums.ts
 
 export interface Vector2D {
   x: number;
@@ -93,6 +100,7 @@ export interface ShelfItem {
 export interface ShelfConfig {
   id: string;
   position: Vector2D;
+  size?: { width: number; height: number }; // Optional size for dynamic resizing
   dockPosition: DockPosition | null;
   isPinned: boolean;
   items: ShelfItem[];
@@ -111,6 +119,8 @@ export interface PerformanceMetrics {
 }
 
 // File Rename Types
+
+// Legacy type for backward compatibility (will be migrated to ComponentInstance)
 export interface RenameComponent {
   id: string;
   type: 'date' | 'fileName' | 'counter' | 'text' | 'project';
@@ -120,13 +130,14 @@ export interface RenameComponent {
 }
 
 export interface RenamePattern {
-  components: RenameComponent[];
+  components: RenameComponent[] | ComponentInstance[]; // Support both during migration
 }
 
 export interface SavedPattern {
   id: string;
   name: string;
-  components: RenameComponent[];
+  components: RenameComponent[] | ComponentInstance[]; // Support both during migration
+  componentDefinitions?: ComponentDefinition[]; // Component definitions used by instances
   createdAt: number;
   updatedAt: number;
   isBuiltIn: boolean;

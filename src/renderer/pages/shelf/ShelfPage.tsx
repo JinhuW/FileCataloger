@@ -203,10 +203,10 @@ export const ShelfPage: React.FC = () => {
         right: 0,
         bottom: 0,
         background: 'transparent',
-        padding: '20px',
+        padding: 0, // Remove padding so React UI fills entire window
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
+        alignItems: 'stretch', // Fill height
+        justifyContent: 'stretch', // Fill width
       }}
     >
       <FileRenameShelf

@@ -111,6 +111,19 @@ const validChannels = [
   'pattern:restore',
   'pattern:backup-to-file',
   'pattern:restore-from-file',
+  // Component Library channels
+  'component:save-library',
+  'component:load-library',
+  'component:export',
+  'component:export-multiple',
+  'component:import',
+  'component:get-stats',
+  'component:backup',
+  'component:clear-all',
+  // Window resize channels
+  'window:resize',
+  'window:resized',
+  'window:get-bounds',
 ] as const;
 
 // Export the type for use in other files

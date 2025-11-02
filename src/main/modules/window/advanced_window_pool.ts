@@ -182,14 +182,18 @@ export class AdvancedWindowPool {
    */
   private createWindow(): BrowserWindow {
     const window = new BrowserWindow({
-      width: SHELF_CONSTANTS.DEFAULT_WIDTH,
+      width: SHELF_CONSTANTS.DEFAULT_WIDTH, // Use constants for sizing
       height: SHELF_CONSTANTS.DEFAULT_HEIGHT,
+      minWidth: SHELF_CONSTANTS.MIN_WIDTH, // Add min constraints
+      minHeight: SHELF_CONSTANTS.MIN_HEIGHT,
+      maxWidth: SHELF_CONSTANTS.MAX_WIDTH, // Add max constraints
+      maxHeight: SHELF_CONSTANTS.MAX_HEIGHT,
       frame: false,
       transparent: true,
       backgroundColor: undefined,
       alwaysOnTop: true,
       skipTaskbar: true,
-      resizable: false,
+      resizable: SHELF_CONSTANTS.RESIZABLE,
       minimizable: false,
       maximizable: false,
       closable: false,
@@ -198,7 +202,8 @@ export class AdvancedWindowPool {
       movable: true,
       hasShadow: false,
       acceptFirstMouse: true,
-      titleBarStyle: 'hidden',
+      titleBarStyle: 'customButtonsOnHover', // Show traffic lights on hover
+      trafficLightPosition: { x: 20, y: 20 }, // Standard macOS position
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,
@@ -254,7 +259,8 @@ export class AdvancedWindowPool {
       window.removeAllListeners();
       window.hide();
       window.setPosition(0, 0);
-      window.setSize(SHELF_CONSTANTS.DEFAULT_WIDTH, SHELF_CONSTANTS.DEFAULT_HEIGHT);
+      // Don't reset size - preserve last used dimensions for better UX
+      // window.setSize(900, 600); // REMOVED to support dynamic sizing
       window.setOpacity(1.0);
     } catch (error) {
       this.logger.warn('Error cleaning window state:', error);
