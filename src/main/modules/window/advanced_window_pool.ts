@@ -194,16 +194,16 @@ export class AdvancedWindowPool {
       alwaysOnTop: true,
       skipTaskbar: true,
       resizable: SHELF_CONSTANTS.RESIZABLE,
-      minimizable: false,
+      minimizable: true,
       maximizable: false,
-      closable: false,
+      closable: true,
       focusable: true,
       show: false,
       movable: true,
       hasShadow: false,
       acceptFirstMouse: true,
-      titleBarStyle: 'customButtonsOnHover', // Show traffic lights on hover
-      trafficLightPosition: { x: 20, y: 20 }, // Standard macOS position
+      titleBarStyle: 'hiddenInset', // Show traffic lights always, hide title bar
+      trafficLightPosition: { x: 20, y: 15 }, // Position traffic lights at top of window
       webPreferences: {
         contextIsolation: true,
         nodeIntegration: false,

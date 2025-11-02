@@ -205,3 +205,39 @@ export enum TimerType {
   IMMEDIATE = 'immediate',
   ANIMATION_FRAME = 'animationFrame',
 }
+
+/**
+ * Component types for meta-component system
+ */
+export enum ComponentType {
+  TEXT = 'text',
+  SELECT = 'select',
+  DATE = 'date',
+  NUMBER = 'number',
+}
+
+/**
+ * Component scope (global or pattern-specific)
+ */
+export enum ComponentScope {
+  GLOBAL = 'global',
+  LOCAL = 'local',
+}
+
+/**
+ * Date source for date components
+ */
+export enum DateSource {
+  CURRENT = 'current',
+  FILE_CREATED = 'file-created',
+  FILE_MODIFIED = 'file-modified',
+  CUSTOM = 'custom',
+}
+
+/**
+ * Number format for number components
+ */
+export enum NumberFormat {
+  PLAIN = 'plain',
+  PADDED = 'padded',
+}

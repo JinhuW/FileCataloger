@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { enableMapSet } from 'immer';
-import { SavedPattern, RenameComponent } from '@shared/types';
+import { SavedPattern, RenameComponent, ComponentInstance } from '@shared/types';
 import { logger } from '@shared/logger';
 
 // Enable MapSet plugin for Immer to work with Map and Set
@@ -26,15 +26,28 @@ interface PatternState {
   // Bulk actions
   setPatternsFromStorage: (patterns: SavedPattern[]) => void;
 
-  // Component management
-  addComponentToPattern: (patternId: string, component: RenameComponent) => void;
+  // Component management (legacy - supports both RenameComponent and ComponentInstance)
+  addComponentToPattern: (
+    patternId: string,
+    component: RenameComponent | ComponentInstance
+  ) => void;
   updateComponentInPattern: (
     patternId: string,
     componentId: string,
-    updates: Partial<RenameComponent>
+    updates: Partial<RenameComponent | ComponentInstance>
   ) => void;
   removeComponentFromPattern: (patternId: string, componentId: string) => void;
   reorderComponentsInPattern: (patternId: string, fromIndex: number, toIndex: number) => void;
+
+  // Component instance management (new meta-component system)
+  addComponentInstance: (patternId: string, definitionId: string) => void;
+  updateComponentInstance: (
+    patternId: string,
+    instanceId: string,
+    updates: Partial<ComponentInstance>
+  ) => void;
+  removeComponentInstance: (patternId: string, instanceId: string) => void;
+  reorderComponentInstances: (patternId: string, fromIndex: number, toIndex: number) => void;
 
   // Getters
   getPattern: (id: string) => SavedPattern | undefined;
@@ -330,6 +343,117 @@ export const usePatternStore = create<PatternState>()(
           },
           false,
           'reorderComponentsInPattern'
+        ),
+
+      // Component instance management (new meta-component system)
+      addComponentInstance: (patternId, definitionId) =>
+        set(
+          state => {
+            const pattern = state.patterns.get(patternId);
+            if (!pattern || pattern.isBuiltIn) return state;
+
+            // Create new component instance
+            const instance: ComponentInstance = {
+              id: `instance-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              definitionId,
+              name: '', // Will be populated from definition when resolving
+              type: 'text', // Will be populated from definition when resolving
+              value: undefined,
+              overrides: undefined,
+            };
+
+            const updatedPattern = {
+              ...pattern,
+              components: [...(pattern.components as ComponentInstance[]), instance],
+              updatedAt: Date.now(),
+            };
+
+            const newPatterns = new Map(state.patterns);
+            newPatterns.set(patternId, updatedPattern);
+
+            logger.debug('Added component instance to pattern:', { patternId, definitionId });
+            return { patterns: newPatterns };
+          },
+          false,
+          'addComponentInstance'
+        ),
+
+      updateComponentInstance: (patternId, instanceId, updates) =>
+        set(
+          state => {
+            const pattern = state.patterns.get(patternId);
+            if (!pattern) return state;
+
+            const updatedPattern = {
+              ...pattern,
+              components: (pattern.components as ComponentInstance[]).map(c =>
+                c.id === instanceId ? { ...c, ...updates } : c
+              ),
+              updatedAt: Date.now(),
+            };
+
+            const newPatterns = new Map(state.patterns);
+            newPatterns.set(patternId, updatedPattern);
+
+            logger.debug('Updated component instance in pattern:', { patternId, instanceId });
+            return { patterns: newPatterns };
+          },
+          false,
+          'updateComponentInstance'
+        ),
+
+      removeComponentInstance: (patternId, instanceId) =>
+        set(
+          state => {
+            const pattern = state.patterns.get(patternId);
+            if (!pattern || pattern.isBuiltIn) return state;
+
+            const updatedPattern = {
+              ...pattern,
+              components: (pattern.components as ComponentInstance[]).filter(
+                c => c.id !== instanceId
+              ),
+              updatedAt: Date.now(),
+            };
+
+            const newPatterns = new Map(state.patterns);
+            newPatterns.set(patternId, updatedPattern);
+
+            logger.debug('Removed component instance from pattern:', { patternId, instanceId });
+            return { patterns: newPatterns };
+          },
+          false,
+          'removeComponentInstance'
+        ),
+
+      reorderComponentInstances: (patternId, fromIndex, toIndex) =>
+        set(
+          state => {
+            const pattern = state.patterns.get(patternId);
+            if (!pattern || pattern.isBuiltIn) return state;
+
+            const components = [...(pattern.components as ComponentInstance[])];
+            const [removed] = components.splice(fromIndex, 1);
+            components.splice(toIndex, 0, removed);
+
+            const updatedPattern = {
+              ...pattern,
+              components,
+              updatedAt: Date.now(),
+            };
+
+            const newPatterns = new Map(state.patterns);
+            newPatterns.set(patternId, updatedPattern);
+
+            logger.debug('Reordered component instances in pattern:', {
+              patternId,
+              fromIndex,
+              toIndex,
+            });
+            return { patterns: newPatterns };
+          },
+          false,
+          'reorderComponentInstances'
         ),
 
       // Getters

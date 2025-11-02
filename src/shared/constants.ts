@@ -8,10 +8,10 @@
  */
 export const SHELF_CONSTANTS = {
   DEFAULT_WIDTH: 900, // Updated to match current UI
-  DEFAULT_HEIGHT: 600, // Updated to match current UI
+  DEFAULT_HEIGHT: 800, // Increased to show all UI content
   MIN_WIDTH: 600, // Minimum width for usability
   MAX_WIDTH: 1600, // Maximum width for reasonable UI
-  MIN_HEIGHT: 400,
+  MIN_HEIGHT: 500,
   MAX_HEIGHT: 1200, // Reduced for better UX
   AUTO_HIDE_DELAY: 3000, // milliseconds
   EMPTY_TIMEOUT: 5000, // milliseconds

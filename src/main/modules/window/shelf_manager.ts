@@ -193,14 +193,8 @@ export class ShelfManager extends EventEmitter {
    * Configure shelf window with specific settings
    */
   private configureShelfWindow(window: BrowserWindow, config: ShelfConfig): void {
-    // Set window size based on mode
-    if (config.mode === ShelfMode.RENAME) {
-      // Larger size for rename UI - matches SHELF_DIMENSIONS in renderer
-      window.setSize(900, 600);
-    } else {
-      // Default shelf size
-      window.setSize(this.DEFAULT_SHELF_SIZE.width, this.DEFAULT_SHELF_SIZE.height);
-    }
+    // Set window size based on mode - use same size for all modes
+    window.setSize(this.DEFAULT_SHELF_SIZE.width, this.DEFAULT_SHELF_SIZE.height);
 
     // Validate and set position
     const x = Math.round(config.position.x || 100);

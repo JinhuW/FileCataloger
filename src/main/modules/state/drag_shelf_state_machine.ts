@@ -287,6 +287,44 @@ export class DragShelfStateMachine extends EventEmitter {
         ctx.autoHideScheduled = false;
       },
     },
+
+    // Missing cleanup_complete transitions for drag_started and shelf_active states
+    {
+      from: DragShelfState.DRAG_STARTED,
+      event: DragShelfEvent.CLEANUP_COMPLETE,
+      to: DragShelfState.IDLE,
+      action: ctx => {
+        ctx.isDragging = false;
+        ctx.activeShelfId = null;
+        ctx.hasItems = false;
+        ctx.dropInProgress = false;
+        ctx.autoHideScheduled = false;
+      },
+    },
+    {
+      from: DragShelfState.SHELF_ACTIVE,
+      event: DragShelfEvent.CLEANUP_COMPLETE,
+      to: DragShelfState.IDLE,
+      action: ctx => {
+        ctx.isDragging = false;
+        ctx.activeShelfId = null;
+        ctx.hasItems = false;
+        ctx.dropInProgress = false;
+        ctx.autoHideScheduled = false;
+      },
+    },
+    {
+      from: DragShelfState.SHELF_RECEIVING_DROP,
+      event: DragShelfEvent.CLEANUP_COMPLETE,
+      to: DragShelfState.IDLE,
+      action: ctx => {
+        ctx.isDragging = false;
+        ctx.activeShelfId = null;
+        ctx.hasItems = false;
+        ctx.dropInProgress = false;
+        ctx.autoHideScheduled = false;
+      },
+    },
   ];
 
   private eventData: Record<string, unknown> = {};
@@ -334,7 +372,7 @@ export class DragShelfStateMachine extends EventEmitter {
         `🚫 GUARD FAILED: Transition from '${this.currentState}' to '${transition.to}' blocked by guard condition`
       );
       this.logger.info(
-        `📊 Context at guard check: activeShelfId=${this.context.activeShelfId}, isDragging=${this.context.isDragging}`
+        `📊 Context at guard check: activeShelfId=${this.context.activeShelfId}, isDragging=${this.context.isDragging}, hasItems=${this.context.hasItems}, dropInProgress=${this.context.dropInProgress}, autoHideScheduled=${this.context.autoHideScheduled}`
       );
       return false;
     }
@@ -351,7 +389,7 @@ export class DragShelfStateMachine extends EventEmitter {
       `🔄 STATE TRANSITION: ${previousState} → ${this.currentState} (event: ${event})`
     );
     this.logger.debug(
-      `📊 Updated context: activeShelfId=${this.context.activeShelfId}, isDragging=${this.context.isDragging}`
+      `📊 Updated context: activeShelfId=${this.context.activeShelfId}, isDragging=${this.context.isDragging}, hasItems=${this.context.hasItems}, dropInProgress=${this.context.dropInProgress}, autoHideScheduled=${this.context.autoHideScheduled}`
     );
 
     // Emit state change event
