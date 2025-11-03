@@ -94,10 +94,11 @@ export function useComponentLibrary() {
     [store, saveToPreferences]
   );
 
-  // Load components from storage on mount
+  // Load components from storage on mount (only once)
   useEffect(() => {
     loadFromPreferences();
-  }, [loadFromPreferences]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty deps - only load once on mount
 
   return {
     // State

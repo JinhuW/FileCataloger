@@ -123,7 +123,6 @@ export const ComponentTypeDropdown: React.FC<ComponentTypeDropdownProps> = ({
           // Also check if the click is not on the "+ Add Component" button
           const buttonElement = dropdownRef.current.parentElement?.querySelector('button');
           if (buttonElement && !buttonElement.contains(target)) {
-            console.log('[ComponentTypeDropdown] Click outside detected, closing dropdown');
             onClose();
           }
         }
@@ -159,16 +158,8 @@ export const ComponentTypeDropdown: React.FC<ComponentTypeDropdownProps> = ({
   }, [isOpen, onClose]);
 
   if (!isOpen) {
-    console.log('[ComponentTypeDropdown] Not rendering - isOpen:', isOpen);
     return null;
   }
-
-  console.log(
-    '[ComponentTypeDropdown] Rendering dropdown - isOpen:',
-    isOpen,
-    'components:',
-    components.length
-  );
 
   return (
     <div
