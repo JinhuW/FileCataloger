@@ -180,7 +180,11 @@ export const useTooltip = (options: UseTooltipOptions = {}): UseTooltipReturn =>
     (mouseX?: number, mouseY?: number) => {
       if (!targetRef.current) return;
 
-      const targetRect = targetRef.current.getBoundingClientRect();
+      // Get the actual child element for positioning (display: contents makes the wrapper transparent)
+      const actualTarget = targetRef.current.firstElementChild as HTMLElement;
+      if (!actualTarget) return;
+
+      const targetRect = actualTarget.getBoundingClientRect();
       const tooltipEl = tooltipRef.current;
       const tooltipWidth = tooltipEl?.offsetWidth;
       const tooltipHeight = tooltipEl?.offsetHeight;
@@ -199,7 +203,14 @@ export const useTooltip = (options: UseTooltipOptions = {}): UseTooltipReturn =>
       setState(prev => ({
         ...prev,
         position: positionData,
-        targetRect,
+        targetRect: {
+          top: targetRect.top,
+          left: targetRect.left,
+          right: targetRect.right,
+          bottom: targetRect.bottom,
+          width: targetRect.width,
+          height: targetRect.height,
+        },
       }));
     },
     [calculatePosition, followMouse]
