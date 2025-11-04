@@ -27,6 +27,7 @@ import { EmptyState } from '@renderer/components/domain';
 import { LoadingSpinner, PatternBuilderSkeleton } from '@renderer/components/primitives';
 import { ComponentTypeDropdown } from './ComponentTypeDropdown';
 import { QuickCreatePopover } from './QuickCreatePopover';
+import { ComponentEditDialog } from './ComponentEditDialog';
 import { ComponentChipV2 } from './ComponentChipV2';
 import { RecentComponentsList } from './RecentComponentsList';
 import { ComponentBrowserDialog } from '../ComponentLibrary/ComponentBrowserDialog';
@@ -36,7 +37,7 @@ export interface RenamePatternBuilderV2Props {
   hasFiles: boolean;
   selectedFiles?: ShelfItem[];
   onDestinationChange?: (path: string) => void;
-  onRename: () => void;
+  onRename: (instances: ComponentInstance[]) => void;
 }
 
 const MAX_PATTERNS = PATTERN_VALIDATION.MAX_PATTERNS;
@@ -58,6 +59,7 @@ export const RenamePatternBuilderV2: React.FC<RenamePatternBuilderV2Props> = ({
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [quickCreateType, setQuickCreateType] = useState<ComponentType | null>(null);
   const [showLibraryBrowser, setShowLibraryBrowser] = useState(false);
+  const [editComponentId, setEditComponentId] = useState<string | null>(null);
 
   // Component instances for current pattern
   const [instances, setInstances] = useState<ComponentInstance[]>([]);
@@ -337,9 +339,8 @@ export const RenamePatternBuilderV2: React.FC<RenamePatternBuilderV2Props> = ({
             background: 'rgba(255, 255, 255, 0.05)',
             borderRadius: '8px',
             padding: '12px',
-            minHeight: '80px',
-            maxHeight: '120px',
-            overflow: instances.length > 6 ? 'auto' : 'hidden',
+            height: '168px',
+            overflow: 'hidden',
             position: 'relative',
           }}
           onDragOver={e => {
@@ -362,7 +363,7 @@ export const RenamePatternBuilderV2: React.FC<RenamePatternBuilderV2Props> = ({
               alignItems: instances.length === 0 ? 'center' : 'flex-start',
               alignContent: instances.length === 0 ? 'center' : 'flex-start',
               justifyContent: instances.length === 0 ? 'center' : 'flex-start',
-              minHeight: '88px',
+              minHeight: '144px',
             }}
           >
             {instances.length === 0 ? (
@@ -370,6 +371,7 @@ export const RenamePatternBuilderV2: React.FC<RenamePatternBuilderV2Props> = ({
                 icon="🎯"
                 title="No components yet"
                 description="Click [+ Add Component] below to start building your pattern"
+                compact={true}
                 style={{ width: '100%' }}
               />
             ) : (
@@ -458,11 +460,12 @@ export const RenamePatternBuilderV2: React.FC<RenamePatternBuilderV2Props> = ({
               letterSpacing: '0.5px',
             }}
           >
-            Recent Components ({getRecentComponents(9).length})
+            File MetaData Components ({getRecentComponents(10).length})
           </div>
 
           {/* Components grid */}
           <div
+            className="component-grid-scrollable"
             style={{
               background: 'rgba(255, 255, 255, 0.05)',
               border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -474,11 +477,10 @@ export const RenamePatternBuilderV2: React.FC<RenamePatternBuilderV2Props> = ({
           >
             <RecentComponentsList
               key={refreshKey}
-              recentComponents={getRecentComponents(9)}
+              recentComponents={getRecentComponents(10)}
               onSelectComponent={addComponentInstance}
               onSettingsClick={componentId => {
-                toast.info('Component Settings', `Editing component: ${componentId}`);
-                // TODO: Implement component editing modal
+                setEditComponentId(componentId);
               }}
               showTitle={false}
             />
@@ -606,7 +608,7 @@ export const RenamePatternBuilderV2: React.FC<RenamePatternBuilderV2Props> = ({
         )}
 
         <button
-          onClick={onRename}
+          onClick={() => onRename(instances)}
           disabled={!hasFiles || instances.length === 0}
           style={{
             background: hasFiles && instances.length > 0 ? '#3b82f6' : 'rgba(255, 255, 255, 0.1)',
@@ -717,7 +719,7 @@ export const RenamePatternBuilderV2: React.FC<RenamePatternBuilderV2Props> = ({
       )}
 
       <QuickCreatePopover
-        type={quickCreateType!}
+        type={quickCreateType || 'text'}
         isOpen={!!quickCreateType}
         onClose={() => setQuickCreateType(null)}
         onCreated={handleQuickCreateComplete}
@@ -733,6 +735,21 @@ export const RenamePatternBuilderV2: React.FC<RenamePatternBuilderV2Props> = ({
         onCreateNew={() => {
           setShowLibraryBrowser(false);
           toast.info('Create new component', 'Full creation modal coming soon!');
+        }}
+      />
+
+      <ComponentEditDialog
+        componentId={editComponentId}
+        isOpen={!!editComponentId}
+        onClose={() => setEditComponentId(null)}
+        onUpdated={_componentId => {
+          setEditComponentId(null);
+          setRefreshKey(prev => prev + 1); // Refresh recent components list
+          toast.success('Component Updated', 'Component has been updated successfully');
+        }}
+        onDeleted={_componentId => {
+          setEditComponentId(null);
+          setRefreshKey(prev => prev + 1); // Refresh recent components list
         }}
       />
     </div>

@@ -30,9 +30,10 @@
  * ```
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { ShelfConfig, ShelfItem } from '@shared/types';
+import type { ComponentInstance } from '@shared/types/componentDefinition';
 import { SHELF_CONSTANTS } from '@shared/constants';
 import { ShelfHeader, ErrorBoundary, FileDropZone } from '@renderer/components/domain';
 import { ResizableShelfContainer } from '@renderer/components/layout/ResizableShelfContainer';
@@ -40,8 +41,13 @@ import { RenamePatternBuilder } from '../RenamePatternBuilder';
 import { FileRenamePreviewList } from '../FileRenamePreviewList';
 import { WarningDialog } from '@renderer/components/primitives';
 import { useToast } from '@renderer/stores/toastStore';
-import { useFileRename } from '@renderer/hooks/useFileRename';
 import { useWindowSize } from '@renderer/hooks/useWindowSize';
+import { useComponentLibraryStore } from '@renderer/stores/componentLibraryStore';
+import {
+  generateRenamePreviewFromInstances,
+  executeFileRenames,
+} from '@renderer/utils/renameUtils';
+import { validateFileRenames, formatValidationWarning } from '@renderer/utils/fileValidation';
 import { logger } from '@shared/logger';
 
 export interface FileRenameShelfProps {
@@ -57,6 +63,7 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
     const [isDragOver, setIsDragOver] = useState(false);
     const [destinationPath, setDestinationPath] = useState('~/Downloads');
     const [showWarningDialog, setShowWarningDialog] = useState(false);
+    const [patternInstances, setPatternInstances] = useState<ComponentInstance[]>([]);
 
     // Use window size management with main process sync
     const { size, isResizing } = useWindowSize(
@@ -75,34 +82,30 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
     // Get toast notification system
     const toast = useToast();
 
-    // Use the file rename hook for all rename operations
-    const {
-      previews: filePreview,
-      executeRename,
-      validate,
-      isRenaming,
-    } = useFileRename(selectedFiles, {
-      onSuccess: results => {
-        const successCount = results.filter(r => r.success).length;
-        toast.success(
-          'Rename Complete',
-          `Successfully renamed ${successCount} of ${results.length} files`
-        );
-        // Clear files after successful rename
-        results.forEach(result => {
-          if (result.success) {
-            const file = selectedFiles.find(f => f.name === result.originalName);
-            if (file) onItemRemove(file.id);
-          }
-        });
-      },
-      onError: error => {
-        toast.error('Rename Failed', error.message);
-      },
-      onProgress: (completed, total) => {
-        logger.info(`Rename progress: ${completed}/${total}`);
-      },
-    });
+    // Get component library for resolving component definitions
+    const componentLibrary = useComponentLibraryStore(state => state.components);
+
+    // Generate previews from pattern instances
+    const filePreview = useMemo(() => {
+      if (selectedFiles.length === 0) {
+        return [];
+      }
+
+      // If no pattern is built yet, show original filenames
+      if (patternInstances.length === 0) {
+        return selectedFiles.map(file => ({
+          originalName: file.name,
+          newName: file.name, // Show original name as "preview"
+          selected: true,
+          type: file.type,
+        }));
+      }
+
+      return generateRenamePreviewFromInstances(selectedFiles, patternInstances, componentLibrary);
+    }, [selectedFiles, patternInstances, componentLibrary]);
+
+    // Renaming state
+    const [isRenaming, setIsRenaming] = useState(false);
 
     // Handle file drop
     const handleFileDrop = useCallback(
@@ -153,34 +156,105 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
       [selectedFiles, onItemRemove]
     );
 
-    // Handle rename action
-    const handleRename = useCallback(async () => {
-      // Validate the rename operations
-      const validation = validate(selectedFiles, destinationPath);
+    // Handle rename action - receives instances from pattern builder
+    const handleRename = useCallback(
+      async (instances: ComponentInstance[]) => {
+        // Store the instances for preview generation
+        setPatternInstances(instances);
 
-      if (!validation.isValid && validation.warning) {
-        // Show warning dialog
-        setValidationWarning(validation.warning);
-        setShowWarningDialog(true);
-        return;
-      }
+        // Generate previews with the new instances
+        const previews = generateRenamePreviewFromInstances(
+          selectedFiles,
+          instances,
+          componentLibrary
+        );
 
-      // Execute rename
-      try {
-        await executeRename(selectedFiles, destinationPath);
-      } catch (error) {
-        logger.error('Rename operation failed:', error);
-      }
-    }, [selectedFiles, destinationPath, validate, executeRename]);
+        // Create map for validation
+        const newNamesMap = new Map<string, string>();
+        selectedFiles.forEach((file, index) => {
+          const preview = previews[index];
+          if (preview) {
+            newNamesMap.set(file.id, preview.newName);
+          }
+        });
+
+        // Validate the rename operations
+        const validationResult = validateFileRenames(selectedFiles, newNamesMap, destinationPath);
+
+        if (!validationResult.isValid) {
+          const warning = formatValidationWarning(validationResult);
+          setValidationWarning(warning);
+          setShowWarningDialog(true);
+          return;
+        }
+
+        // Execute rename
+        setIsRenaming(true);
+        try {
+          const results = await executeFileRenames(selectedFiles, previews, {
+            onProgress: (completed, total) => {
+              logger.info(`Rename progress: ${completed}/${total}`);
+            },
+          });
+
+          const successCount = results.filter(r => r.success).length;
+          toast.success(
+            'Rename Complete',
+            `Successfully renamed ${successCount} of ${results.length} files`
+          );
+
+          // Clear files after successful rename
+          results.forEach(result => {
+            if (result.success) {
+              const file = selectedFiles.find(f => f.name === result.originalName);
+              if (file) onItemRemove(file.id);
+            }
+          });
+        } catch (error) {
+          logger.error('Rename operation failed:', error);
+          toast.error('Rename Failed', error instanceof Error ? error.message : 'Unknown error');
+        } finally {
+          setIsRenaming(false);
+        }
+      },
+      [selectedFiles, destinationPath, componentLibrary, toast, onItemRemove]
+    );
 
     // Perform rename (called from warning dialog)
     const performRename = useCallback(async () => {
+      if (filePreview.length === 0) {
+        toast.error('No Pattern', 'Please build a naming pattern first');
+        return;
+      }
+
+      setIsRenaming(true);
       try {
-        await executeRename(selectedFiles, destinationPath);
+        const results = await executeFileRenames(selectedFiles, filePreview, {
+          onProgress: (completed, total) => {
+            logger.info(`Rename progress: ${completed}/${total}`);
+          },
+        });
+
+        const successCount = results.filter(r => r.success).length;
+        toast.success(
+          'Rename Complete',
+          `Successfully renamed ${successCount} of ${results.length} files`
+        );
+
+        // Clear files after successful rename
+        results.forEach(result => {
+          if (result.success) {
+            const file = selectedFiles.find(f => f.name === result.originalName);
+            if (file) onItemRemove(file.id);
+          }
+        });
       } catch (error) {
         logger.error('Rename operation failed:', error);
+        toast.error('Rename Failed', error instanceof Error ? error.message : 'Unknown error');
+      } finally {
+        setIsRenaming(false);
       }
-    }, [selectedFiles, destinationPath, executeRename]);
+    }, [selectedFiles, filePreview, toast, onItemRemove]);
 
     return (
       <ErrorBoundary>

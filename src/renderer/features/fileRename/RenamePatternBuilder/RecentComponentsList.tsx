@@ -194,10 +194,11 @@ export const RecentComponentsList: React.FC<RecentComponentsListProps> = ({
             flexShrink: 0,
           }}
         >
-          Recent Components ({recentComponents.length})
+          File MetaData Components ({recentComponents.length})
         </div>
       )}
       <div
+        className="component-grid-scrollable"
         style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(3, 1fr)',

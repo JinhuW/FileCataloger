@@ -1,26 +1,39 @@
 /**
- * QuickCreatePopover.tsx
+ * ComponentEditDialog.tsx
  *
- * Compact popover for quickly creating components with minimal configuration.
- * Type-specific forms for Text, Select, Date, and Number components.
+ * Dialog for editing and deleting existing components.
+ * Pre-fills all component data and provides update/delete actions.
  */
 
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { ComponentType, SelectOption } from '@shared/types/componentDefinition';
+import type {
+  SelectOption,
+  SelectConfig,
+  DateConfig,
+  NumberConfig,
+  TextConfig,
+} from '@shared/types/componentDefinition';
+import {
+  isSelectComponent,
+  isDateComponent,
+  isNumberComponent,
+  isTextComponent,
+} from '@shared/types/componentDefinition';
 import {
   COMPONENT_TYPE_METADATA,
   DATE_FORMAT_OPTIONS,
   NUMBER_PADDING_OPTIONS,
 } from '@renderer/constants/componentTypes';
-import { ComponentService } from '@renderer/services/componentService';
 import { useComponentLibrary } from '@renderer/hooks/useComponentLibrary';
+import { useToast } from '@renderer/stores';
 import { EmojiIconPicker } from '@renderer/components/primitives';
 
-export interface QuickCreatePopoverProps {
-  type: ComponentType;
+export interface ComponentEditDialogProps {
+  componentId: string | null;
   isOpen: boolean;
   onClose: () => void;
-  onCreated: (componentId: string) => void;
+  onUpdated: (componentId: string) => void;
+  onDeleted: (componentId: string) => void;
 }
 
 const Input: React.FC<{
@@ -162,68 +175,56 @@ const Select: React.FC<{
   </div>
 );
 
-const Checkbox: React.FC<{
-  label: string;
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-}> = ({ label, checked, onChange }) => (
-  <div style={{ marginBottom: '16px' }}>
-    <label
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        color: 'rgba(255, 255, 255, 0.8)',
-        fontSize: '13px',
-        cursor: 'pointer',
-      }}
-    >
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={e => onChange(e.target.checked)}
-        style={{ cursor: 'pointer' }}
-      />
-      {label}
-    </label>
-  </div>
-);
-
-export const QuickCreatePopover: React.FC<QuickCreatePopoverProps> = ({
-  type,
+export const ComponentEditDialog: React.FC<ComponentEditDialogProps> = ({
+  componentId,
   isOpen,
   onClose,
-  onCreated,
+  onUpdated,
+  onDeleted,
 }) => {
-  const { createComponent } = useComponentLibrary();
+  const { getComponent, updateComponent, deleteComponent } = useComponentLibrary();
+  const toast = useToast();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [config, setConfig] = useState<Record<string, unknown>>({});
-  const [saveToLibrary, setSaveToLibrary] = useState(true);
   const [selectedIcon, setSelectedIcon] = useState('');
   const [showIconPicker, setShowIconPicker] = useState(false);
-  const popoverRef = useRef<HTMLDivElement>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
 
-  const metadata = COMPONENT_TYPE_METADATA[type];
+  const component = componentId ? getComponent(componentId) : null;
+  const metadata = component ? COMPONENT_TYPE_METADATA[component.type] : null;
 
-  // Reset state when popover opens
+  // Load component data when dialog opens
   useEffect(() => {
-    if (isOpen && metadata) {
-      setName('');
-      setDescription('');
-      setConfig({});
-      setSaveToLibrary(true);
-      setSelectedIcon(metadata.icon || '📝'); // Default to type icon
-      setShowIconPicker(false);
+    if (isOpen && component) {
+      setName(component.name);
+      setDescription(component.description || '');
+      setSelectedIcon(component.icon); // Load current icon
+      setShowDeleteConfirm(false); // Reset delete confirmation
+      setShowIconPicker(false); // Reset icon picker
+
+      // Load type-specific config
+      if (isSelectComponent(component)) {
+        const selectConfig = component.config as SelectConfig;
+        const optionsText = selectConfig.options.map(opt => opt.label).join('\n');
+        setConfig({ ...selectConfig, optionsText });
+      } else if (isDateComponent(component)) {
+        setConfig(component.config as DateConfig);
+      } else if (isNumberComponent(component)) {
+        setConfig(component.config as NumberConfig);
+      } else if (isTextComponent(component)) {
+        setConfig(component.config as TextConfig);
+      }
     }
-  }, [isOpen, type, metadata]);
+  }, [isOpen, component]);
 
   // Close on click outside
   useEffect(() => {
     if (!isOpen) return;
 
     const handleClickOutside = (e: MouseEvent) => {
-      if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
+      if (dialogRef.current && !dialogRef.current.contains(e.target as Node)) {
         onClose();
       }
     };
@@ -246,12 +247,12 @@ export const QuickCreatePopover: React.FC<QuickCreatePopoverProps> = ({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [isOpen, onClose]);
 
-  const handleCreate = useCallback(() => {
-    if (!name.trim()) return;
+  const handleUpdate = useCallback(() => {
+    if (!name.trim() || !component) return;
 
     // Parse options for select type
     let finalConfig = { ...config };
-    if (type === 'select' && config.optionsText) {
+    if (component.type === 'select' && config.optionsText) {
       const options: SelectOption[] = config.optionsText
         .split('\n')
         .filter((line: string) => line.trim())
@@ -263,40 +264,39 @@ export const QuickCreatePopover: React.FC<QuickCreatePopoverProps> = ({
       finalConfig = { ...config, options, optionsText: undefined };
     }
 
-    const component = ComponentService.createComponent(type, name.trim(), finalConfig);
+    // Update the component
+    updateComponent(component.id, {
+      name: name.trim(),
+      description: description.trim() || undefined,
+      icon: selectedIcon,
+      config: finalConfig,
+    });
 
-    // Add description if provided
-    if (description.trim()) {
-      component.description = description.trim();
-    }
-
-    // Set custom icon if selected
-    if (selectedIcon) {
-      component.icon = selectedIcon;
-    }
-
-    if (saveToLibrary) {
-      createComponent(component);
-      onCreated(component.id);
-    } else {
-      // For temporary components, just return the component (handled by parent)
-      onCreated(component.id);
-    }
-
+    toast.success('Component Updated', `${name} has been updated successfully`);
+    onUpdated(component.id);
     onClose();
   }, [
-    type,
+    component,
     name,
     description,
     selectedIcon,
     config,
-    saveToLibrary,
-    createComponent,
-    onCreated,
+    updateComponent,
+    onUpdated,
     onClose,
+    toast,
   ]);
 
-  if (!isOpen) return null;
+  const handleDelete = useCallback(() => {
+    if (!component) return;
+
+    deleteComponent(component.id);
+    toast.success('Component Deleted', `${component.name} has been removed from your library`);
+    onDeleted(component.id);
+    onClose();
+  }, [component, deleteComponent, onDeleted, onClose, toast]);
+
+  if (!isOpen || !component || !metadata) return null;
 
   return (
     <div
@@ -314,13 +314,16 @@ export const QuickCreatePopover: React.FC<QuickCreatePopoverProps> = ({
       }}
     >
       <div
-        ref={popoverRef}
+        ref={dialogRef}
+        className="component-grid-scrollable"
         style={{
           background: '#1a1a1a',
           border: '1px solid rgba(255, 255, 255, 0.2)',
           borderRadius: '12px',
           padding: '20px',
-          width: '360px',
+          width: '400px',
+          maxHeight: '90vh',
+          overflow: 'auto',
           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.5)',
         }}
       >
@@ -335,7 +338,7 @@ export const QuickCreatePopover: React.FC<QuickCreatePopoverProps> = ({
             gap: '8px',
           }}
         >
-          {selectedIcon || metadata?.icon || '📝'} Create {metadata?.label || 'New'} Component
+          {selectedIcon || metadata?.icon || '📝'} Edit {metadata?.label || 'Component'}
         </h3>
 
         {/* Name field with icon selector */}
@@ -387,7 +390,7 @@ export const QuickCreatePopover: React.FC<QuickCreatePopoverProps> = ({
               type="text"
               value={name}
               onChange={e => setName(e.target.value)}
-              placeholder="e.g., Project Name"
+              placeholder="Component name"
               autoFocus
               style={{
                 flex: 1,
@@ -425,16 +428,16 @@ export const QuickCreatePopover: React.FC<QuickCreatePopoverProps> = ({
         />
 
         {/* Type-specific config */}
-        {type === 'text' && (
+        {isTextComponent(component) && (
           <Input
             label="Default Value (optional)"
-            value={config.defaultValue || ''}
+            value={(config as TextConfig).defaultValue || ''}
             onChange={value => setConfig({ ...config, defaultValue: value })}
             placeholder="Optional default text"
           />
         )}
 
-        {type === 'select' && (
+        {isSelectComponent(component) && (
           <Textarea
             label="Options (one per line)"
             value={config.optionsText || ''}
@@ -444,10 +447,10 @@ export const QuickCreatePopover: React.FC<QuickCreatePopoverProps> = ({
           />
         )}
 
-        {type === 'date' && (
+        {isDateComponent(component) && (
           <Select
             label="Format"
-            value={config.dateFormat || 'YYYYMMDD'}
+            value={(config as DateConfig).dateFormat || 'YYYYMMDD'}
             onChange={value => setConfig({ ...config, dateFormat: value })}
             options={DATE_FORMAT_OPTIONS.map(opt => ({
               value: opt.format,
@@ -456,10 +459,10 @@ export const QuickCreatePopover: React.FC<QuickCreatePopoverProps> = ({
           />
         )}
 
-        {type === 'number' && (
+        {isNumberComponent(component) && (
           <Select
             label="Padding"
-            value={config.padding?.toString() || '3'}
+            value={(config as NumberConfig).padding?.toString() || '3'}
             onChange={value => setConfig({ ...config, padding: parseInt(value, 10) })}
             options={NUMBER_PADDING_OPTIONS.map(opt => ({
               value: opt.value.toString(),
@@ -468,43 +471,134 @@ export const QuickCreatePopover: React.FC<QuickCreatePopoverProps> = ({
           />
         )}
 
-        <Checkbox
-          label="Save to library for reuse"
-          checked={saveToLibrary}
-          onChange={setSaveToLibrary}
-        />
-
-        <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-          <button
-            onClick={onClose}
+        {/* Delete Confirmation */}
+        {showDeleteConfirm && (
+          <div
             style={{
-              padding: '8px 16px',
-              background: 'rgba(255, 255, 255, 0.1)',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
-              borderRadius: '6px',
-              color: '#fff',
-              fontSize: '13px',
-              cursor: 'pointer',
+              background: 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
+              borderRadius: '8px',
+              padding: '12px',
+              marginBottom: '16px',
             }}
           >
-            Cancel
-          </button>
+            <p
+              style={{
+                color: 'rgba(239, 68, 68, 1)',
+                fontSize: '13px',
+                margin: '0 0 12px 0',
+                fontWeight: 500,
+              }}
+            >
+              Are you sure you want to delete this component?
+            </p>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                style={{
+                  flex: 1,
+                  padding: '6px 12px',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  borderRadius: '6px',
+                  color: '#fff',
+                  fontSize: '12px',
+                  cursor: 'pointer',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                style={{
+                  flex: 1,
+                  padding: '6px 12px',
+                  background: '#ef4444',
+                  border: 'none',
+                  borderRadius: '6px',
+                  color: '#fff',
+                  fontSize: '12px',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Action Buttons */}
+        <div
+          style={{
+            display: 'flex',
+            gap: '8px',
+            justifyContent: 'space-between',
+            marginTop: showDeleteConfirm ? '0' : '16px',
+          }}
+        >
+          {/* Delete button on the left */}
           <button
-            onClick={handleCreate}
-            disabled={!name.trim()}
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={showDeleteConfirm}
             style={{
               padding: '8px 16px',
-              background: name.trim() ? '#3b82f6' : 'rgba(255, 255, 255, 0.1)',
-              border: 'none',
+              background: showDeleteConfirm ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.1)',
+              border: '1px solid rgba(239, 68, 68, 0.3)',
               borderRadius: '6px',
-              color: '#fff',
+              color: showDeleteConfirm ? 'rgba(239, 68, 68, 0.5)' : '#ef4444',
               fontSize: '13px',
               fontWeight: 500,
-              cursor: name.trim() ? 'pointer' : 'not-allowed',
+              cursor: showDeleteConfirm ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => {
+              if (!showDeleteConfirm) {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.2)';
+              }
+            }}
+            onMouseLeave={e => {
+              if (!showDeleteConfirm) {
+                e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)';
+              }
             }}
           >
-            Add
+            Delete
           </button>
+
+          {/* Save and Cancel on the right */}
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              onClick={onClose}
+              style={{
+                padding: '8px 16px',
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                borderRadius: '6px',
+                color: '#fff',
+                fontSize: '13px',
+                cursor: 'pointer',
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleUpdate}
+              disabled={!name.trim()}
+              style={{
+                padding: '8px 16px',
+                background: name.trim() ? '#3b82f6' : 'rgba(255, 255, 255, 0.1)',
+                border: 'none',
+                borderRadius: '6px',
+                color: '#fff',
+                fontSize: '13px',
+                fontWeight: 500,
+                cursor: name.trim() ? 'pointer' : 'not-allowed',
+              }}
+            >
+              Save
+            </button>
+          </div>
         </div>
       </div>
     </div>

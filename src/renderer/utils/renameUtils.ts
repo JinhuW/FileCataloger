@@ -5,8 +5,10 @@
  */
 
 import { RenameComponent, ShelfItem, FileRenamePreview } from '@shared/types';
+import type { ComponentInstance, ComponentDefinition } from '@shared/types/componentDefinition';
 import { FILE_OPERATIONS } from '@renderer/constants/ui';
 import { logger } from '@shared/logger';
+import { resolveComponentValue, ComponentResolutionContext } from './componentValueResolver';
 
 /**
  * Options for generating rename previews
@@ -64,6 +66,65 @@ export function generateRenamePreview(
           newName += component.value || 'Project';
           break;
       }
+    });
+
+    // Add file extension (not for folders)
+    if (preserveExtension && file.type !== 'folder') {
+      const ext = getFileExtension(file.name);
+      if (ext) newName += ext;
+    }
+
+    return {
+      originalName: file.name,
+      newName,
+      selected: true,
+      type: file.type,
+    };
+  });
+}
+
+/**
+ * Generates rename preview using the new ComponentInstance system.
+ * This is the modern approach that replaces the legacy RenameComponent system.
+ *
+ * @param files - Array of ShelfItems to rename
+ * @param instances - Component instances from the pattern builder
+ * @param definitions - Map of component definitions (id -> definition)
+ * @param options - Additional options for preview generation
+ * @returns Array of FileRenamePreview objects
+ */
+export function generateRenamePreviewFromInstances(
+  files: ShelfItem[],
+  instances: ComponentInstance[],
+  definitions: Map<string, ComponentDefinition>,
+  options: GenerateRenamePreviewOptions = {}
+): FileRenamePreview[] {
+  const { preserveExtension = true } = options;
+
+  return files.map((file, fileIndex) => {
+    let newName = '';
+
+    instances.forEach((instance, index) => {
+      if (index > 0) newName += '_'; // Add separator
+
+      const definition = definitions.get(instance.definitionId);
+      if (!definition) {
+        logger.warn(`Definition not found for instance: ${instance.definitionId}`);
+        return;
+      }
+
+      // Create resolution context with file-specific data
+      const context: ComponentResolutionContext = {
+        fileIndex,
+        fileName: file.name,
+        fileCreatedDate: file.metadata?.created,
+        fileModifiedDate: file.metadata?.modified,
+        batchSize: files.length,
+      };
+
+      // Resolve the component value
+      const value = resolveComponentValue(instance, definition, context);
+      newName += value;
     });
 
     // Add file extension (not for folders)
