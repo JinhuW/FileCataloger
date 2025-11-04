@@ -8,6 +8,8 @@
 import React, { useState } from 'react';
 import { ComponentDefinition } from '@shared/types/componentDefinition';
 import { COMPONENT_TYPE_METADATA } from '@renderer/constants/componentTypes';
+import { CustomTooltip } from '@renderer/components/primitives';
+import { buildActionTooltip } from '@renderer/utils/tooltipUtils';
 
 interface RecentComponentItemProps {
   component: ComponentDefinition;
@@ -23,6 +25,61 @@ const RecentComponentItem: React.FC<RecentComponentItemProps> = ({
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const typeMetadata = COMPONENT_TYPE_METADATA[component.type];
+
+  // Button content - reusable
+  const buttonContent = (
+    <button
+      onClick={e => {
+        e.preventDefault();
+        e.stopPropagation();
+        onSelect(component.id);
+      }}
+      draggable={false}
+      style={{
+        background: 'transparent',
+        border: 'none',
+        cursor: 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+        flex: 1,
+        padding: 0,
+        minWidth: 0,
+        color: '#fff',
+        pointerEvents: 'auto',
+      }}
+    >
+      {/* Icon */}
+      <span style={{ fontSize: '18px', flexShrink: 0 }}>{component.icon}</span>
+
+      {/* Text content */}
+      <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
+        <div
+          style={{
+            fontSize: '13px',
+            fontWeight: 600,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            color: component.color,
+          }}
+        >
+          {component.name}
+        </div>
+        <div
+          style={{
+            fontSize: '10px',
+            color: 'rgba(255, 255, 255, 0.4)',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {typeMetadata.label}
+        </div>
+      </div>
+    </button>
+  );
 
   return (
     <div
@@ -49,103 +106,55 @@ const RecentComponentItem: React.FC<RecentComponentItemProps> = ({
         minHeight: '44px',
       }}
     >
-      {/* Main clickable area */}
-      <button
-        onClick={e => {
-          e.preventDefault();
-          e.stopPropagation();
-          onSelect(component.id);
-        }}
-        draggable={false}
-        style={{
-          background: 'transparent',
-          border: 'none',
-          cursor: 'pointer',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px',
-          flex: 1,
-          padding: 0,
-          minWidth: 0,
-          color: '#fff',
-          pointerEvents: 'auto',
-        }}
-        title={
-          component.description
-            ? `${component.name}\n${component.description}`
-            : `${component.name} - ${typeMetadata.label}`
-        }
-      >
-        {/* Icon */}
-        <span style={{ fontSize: '18px', flexShrink: 0 }}>{component.icon}</span>
-
-        {/* Text content */}
-        <div style={{ flex: 1, minWidth: 0, textAlign: 'left' }}>
-          <div
-            style={{
-              fontSize: '13px',
-              fontWeight: 600,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              color: component.color,
-            }}
-          >
-            {component.name}
-          </div>
-          <div
-            style={{
-              fontSize: '10px',
-              color: 'rgba(255, 255, 255, 0.4)',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {typeMetadata.label}
-          </div>
-        </div>
-      </button>
+      {/* Main clickable area with conditional tooltip */}
+      {component.description ? (
+        <CustomTooltip content={component.description} position="top" showDelay={600}>
+          {buttonContent}
+        </CustomTooltip>
+      ) : (
+        buttonContent
+      )}
 
       {/* Settings button */}
       {onSettings && (
-        <button
-          onClick={e => {
-            e.preventDefault();
-            e.stopPropagation();
-            onSettings(component.id);
-          }}
-          draggable={false}
-          style={{
-            background: isHovered ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
-            border: 'none',
-            borderRadius: '4px',
-            width: '24px',
-            height: '24px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            flexShrink: 0,
-            color: 'rgba(255, 255, 255, 0.6)',
-            fontSize: '14px',
-            transition: 'all 0.15s',
-            pointerEvents: 'auto',
-          }}
-          onMouseEnter={e => {
-            e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
-            e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)';
-          }}
-          onMouseLeave={e => {
-            e.currentTarget.style.background = isHovered
-              ? 'rgba(255, 255, 255, 0.1)'
-              : 'transparent';
-            e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)';
-          }}
-          title="Component settings"
-        >
-          ⚙️
-        </button>
+        <CustomTooltip content={buildActionTooltip('Component settings')} position="top">
+          <button
+            onClick={e => {
+              e.preventDefault();
+              e.stopPropagation();
+              onSettings(component.id);
+            }}
+            draggable={false}
+            style={{
+              background: isHovered ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+              border: 'none',
+              borderRadius: '4px',
+              width: '24px',
+              height: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              flexShrink: 0,
+              color: 'rgba(255, 255, 255, 0.6)',
+              fontSize: '14px',
+              transition: 'all 0.15s',
+              pointerEvents: 'auto',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.background = isHovered
+                ? 'rgba(255, 255, 255, 0.1)'
+                : 'transparent';
+              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)';
+            }}
+          >
+            ⚙️
+          </button>
+        </CustomTooltip>
       )}
     </div>
   );

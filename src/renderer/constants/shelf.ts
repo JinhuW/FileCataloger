@@ -59,6 +59,17 @@ export const SHELF_CONSTANTS = {
   TOOLTIP_DELAY_MS: 1000,
   POSITION_UPDATE_THROTTLE_MS: 16, // ~60fps
 
+  // Custom tooltip configuration
+  CUSTOM_TOOLTIP_SHOW_DELAY_MS: 500, // Faster than default tooltip
+  CUSTOM_TOOLTIP_HIDE_DELAY_MS: 0,
+  CUSTOM_TOOLTIP_MAX_WIDTH: 320,
+  CUSTOM_TOOLTIP_MIN_WIDTH: 120,
+  CUSTOM_TOOLTIP_OFFSET: 8, // Distance from target element
+  CUSTOM_TOOLTIP_PADDING: '8px 12px',
+  CUSTOM_TOOLTIP_FONT_SIZE: 12,
+  CUSTOM_TOOLTIP_BORDER_RADIUS: 8,
+  CUSTOM_TOOLTIP_Z_INDEX: 1035, // Between dropdown and modal
+
   // File operations
   SUPPORTED_IMAGE_TYPES: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'],
   SUPPORTED_TEXT_EXTENSIONS:
