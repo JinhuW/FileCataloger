@@ -14,7 +14,7 @@
  * - Pattern persistence
  */
 
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { ShelfItem } from '@shared/types';
 import { ComponentType, ComponentInstance } from '@shared/types/componentDefinition';
 import { ScrollableTabContainer } from '@renderer/components/layout';
@@ -66,6 +66,9 @@ export const RenamePatternBuilderV2: React.FC<RenamePatternBuilderV2Props> = ({
 
   // Force refresh of recent components
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Ref for the Add Component button to position dropdown
+  const addComponentButtonRef = useRef<HTMLButtonElement>(null);
 
   const toast = useToast();
   const {
@@ -399,6 +402,7 @@ export const RenamePatternBuilderV2: React.FC<RenamePatternBuilderV2Props> = ({
         {/* Add Component Button */}
         <div style={{ position: 'relative' }}>
           <button
+            ref={addComponentButtonRef}
             onClick={_e => {
               _e.stopPropagation();
               setShowTypeDropdown(!showTypeDropdown);
@@ -444,6 +448,7 @@ export const RenamePatternBuilderV2: React.FC<RenamePatternBuilderV2Props> = ({
             isOpen={showTypeDropdown}
             onClose={() => setShowTypeDropdown(false)}
             onSelect={handleSelectType}
+            anchorRef={addComponentButtonRef}
           />
         </div>
 

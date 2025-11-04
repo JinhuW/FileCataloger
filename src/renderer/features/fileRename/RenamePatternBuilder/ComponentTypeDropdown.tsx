@@ -14,6 +14,7 @@ export interface ComponentTypeDropdownProps {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (selection: ComponentType | string) => void;
+  anchorRef?: React.RefObject<HTMLElement>;
 }
 
 const MenuItem: React.FC<{
@@ -86,10 +87,12 @@ export const ComponentTypeDropdown: React.FC<ComponentTypeDropdownProps> = ({
   isOpen,
   onClose,
   onSelect,
+  anchorRef,
 }) => {
   const { components } = useComponentLibrary();
   const [search, setSearch] = useState('');
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ top: 0, left: 0 });
 
   const filteredComponents = useMemo(() => {
     if (!search.trim()) return components;
@@ -107,6 +110,58 @@ export const ComponentTypeDropdown: React.FC<ComponentTypeDropdownProps> = ({
     },
     [onSelect]
   );
+
+  // Calculate dropdown position when it opens
+  useEffect(() => {
+    if (!isOpen || !anchorRef?.current) return;
+
+    const updatePosition = () => {
+      const anchorRect = anchorRef.current!.getBoundingClientRect();
+      const dropdownWidth = 320;
+      const dropdownMaxHeight = 400;
+      const offset = 4;
+
+      // Calculate position below the anchor
+      let top = anchorRect.bottom + offset;
+      let left = anchorRect.left;
+
+      // Prevent overflow on the right
+      const viewportWidth = window.innerWidth;
+      if (left + dropdownWidth > viewportWidth - 8) {
+        left = viewportWidth - dropdownWidth - 8;
+      }
+
+      // Prevent overflow on the left
+      if (left < 8) {
+        left = 8;
+      }
+
+      // Prevent overflow at the bottom (show above if needed)
+      const viewportHeight = window.innerHeight;
+      if (top + dropdownMaxHeight > viewportHeight - 8) {
+        // Show above the anchor instead
+        top = anchorRect.top - dropdownMaxHeight - offset;
+
+        // If it still overflows, position at the top
+        if (top < 8) {
+          top = 8;
+        }
+      }
+
+      setPosition({ top, left });
+    };
+
+    updatePosition();
+
+    // Recalculate on scroll or resize
+    window.addEventListener('scroll', updatePosition, { passive: true });
+    window.addEventListener('resize', updatePosition);
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [isOpen, anchorRef]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -165,10 +220,9 @@ export const ComponentTypeDropdown: React.FC<ComponentTypeDropdownProps> = ({
     <div
       ref={dropdownRef}
       style={{
-        position: 'absolute',
-        top: '100%',
-        left: 0,
-        marginTop: '4px',
+        position: 'fixed',
+        top: `${position.top}px`,
+        left: `${position.left}px`,
         background: '#1a1a1a',
         border: '1px solid rgba(255, 255, 255, 0.2)',
         borderRadius: '8px',

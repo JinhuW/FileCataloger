@@ -35,6 +35,7 @@ export const ComponentChipV2: React.FC<ComponentChipV2Props> = ({
   const [isHovered, setIsHovered] = useState(false);
   const [editValue, setEditValue] = useState(instance.value || '');
   const inputRef = useRef<HTMLInputElement>(null);
+  const chipRef = useRef<HTMLDivElement>(null);
   const { updateComponent } = useComponentLibrary();
 
   // Auto-focus input when editing starts
@@ -112,6 +113,7 @@ export const ComponentChipV2: React.FC<ComponentChipV2Props> = ({
       }}
     >
       <div
+        ref={chipRef}
         draggable={canDrag && !isEditing}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
@@ -274,6 +276,7 @@ export const ComponentChipV2: React.FC<ComponentChipV2Props> = ({
           onSave={handleSelectSave}
           onCancel={() => setIsEditing(false)}
           color={definition.color}
+          anchorRef={chipRef}
         />
       )}
     </div>

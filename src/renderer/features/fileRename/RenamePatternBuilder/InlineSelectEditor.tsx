@@ -14,6 +14,7 @@ export interface InlineSelectEditorProps {
   onSave: (optionId: string, newOption?: SelectOption) => void;
   onCancel: () => void;
   color: string;
+  anchorRef?: React.RefObject<HTMLElement>;
 }
 
 export const InlineSelectEditor: React.FC<InlineSelectEditorProps> = ({
@@ -22,11 +23,16 @@ export const InlineSelectEditor: React.FC<InlineSelectEditorProps> = ({
   onSave,
   onCancel,
   color,
+  anchorRef,
 }) => {
   const [search, setSearch] = useState('');
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({
+    top: window.innerHeight / 2,
+    left: window.innerWidth / 2,
+  });
 
   // Filter options by search
   const filteredOptions = options.filter(opt =>
@@ -40,6 +46,65 @@ export const InlineSelectEditor: React.FC<InlineSelectEditorProps> = ({
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
+
+  // Calculate dropdown position based on anchor
+  useEffect(() => {
+    if (!anchorRef?.current) {
+      // Fallback to center if no anchor provided
+      setPosition({
+        top: window.innerHeight / 2,
+        left: window.innerWidth / 2,
+      });
+      return;
+    }
+
+    const updatePosition = () => {
+      const anchorRect = anchorRef.current!.getBoundingClientRect();
+      const dropdownWidth = 300;
+      const dropdownMaxHeight = 250;
+      const offset = 4;
+
+      // Calculate position below the anchor
+      let top = anchorRect.bottom + offset;
+      let left = anchorRect.left;
+
+      // Prevent overflow on the right
+      const viewportWidth = window.innerWidth;
+      if (left + dropdownWidth > viewportWidth - 8) {
+        left = viewportWidth - dropdownWidth - 8;
+      }
+
+      // Prevent overflow on the left
+      if (left < 8) {
+        left = 8;
+      }
+
+      // Prevent overflow at the bottom (show above if needed)
+      const viewportHeight = window.innerHeight;
+      if (top + dropdownMaxHeight > viewportHeight - 8) {
+        // Show above the anchor instead
+        top = anchorRect.top - dropdownMaxHeight - offset;
+
+        // If it still overflows, position at the top
+        if (top < 8) {
+          top = 8;
+        }
+      }
+
+      setPosition({ top, left });
+    };
+
+    updatePosition();
+
+    // Recalculate on scroll or resize
+    window.addEventListener('scroll', updatePosition, { passive: true });
+    window.addEventListener('resize', updatePosition);
+
+    return () => {
+      window.removeEventListener('scroll', updatePosition);
+      window.removeEventListener('resize', updatePosition);
+    };
+  }, [anchorRef]);
 
   // Close on click outside
   useEffect(() => {
@@ -101,9 +166,9 @@ export const InlineSelectEditor: React.FC<InlineSelectEditorProps> = ({
       ref={dropdownRef}
       style={{
         position: 'fixed',
-        top: '50%',
-        left: '50%',
-        transform: 'translate(-50%, -50%)',
+        top: anchorRef ? `${position.top}px` : '50%',
+        left: anchorRef ? `${position.left}px` : '50%',
+        transform: anchorRef ? 'none' : 'translate(-50%, -50%)',
         background: '#1a1a1a',
         border: '1px solid rgba(255, 255, 255, 0.2)',
         borderRadius: '8px',
