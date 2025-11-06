@@ -1,11 +1,11 @@
 /**
  * Pattern Builder Demo
  *
- * Standalone demo page to test the new RenamePatternBuilderV2
+ * Standalone demo page to test the RenamePatternBuilder
  */
 
 import React, { useState } from 'react';
-import { RenamePatternBuilderV2 } from '../../features/fileRename/RenamePatternBuilder/RenamePatternBuilderV2';
+import { RenamePatternBuilder } from '../../features/fileRename/RenamePatternBuilder';
 import type { ShelfItem } from '@shared/types';
 
 export const PatternBuilderDemo: React.FC = () => {
@@ -70,7 +70,7 @@ export const PatternBuilderDemo: React.FC = () => {
             minHeight: '600px',
           }}
         >
-          <RenamePatternBuilderV2
+          <RenamePatternBuilder
             hasFiles={true}
             selectedFiles={selectedFiles}
             onDestinationChange={path => console.log('Destination changed:', path)}

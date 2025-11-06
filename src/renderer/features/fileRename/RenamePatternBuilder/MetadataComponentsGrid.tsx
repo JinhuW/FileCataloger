@@ -1,7 +1,7 @@
 /**
- * RecentComponentsList.tsx
+ * MetadataComponentsGrid.tsx
  *
- * Shows recently used components as draggable buttons.
+ * Displays all file metadata components from the library in a grid layout.
  * Users can click or drag components into the pattern area.
  */
 
@@ -11,13 +11,13 @@ import { COMPONENT_TYPE_METADATA } from '@renderer/constants/componentTypes';
 import { CustomTooltip } from '@renderer/components/primitives';
 import { buildActionTooltip } from '@renderer/utils/tooltipUtils';
 
-interface RecentComponentItemProps {
+interface MetadataComponentItemProps {
   component: ComponentDefinition;
   onSelect: (componentId: string) => void;
   onSettings?: (componentId: string) => void;
 }
 
-const RecentComponentItem: React.FC<RecentComponentItemProps> = ({
+const MetadataComponentItem: React.FC<MetadataComponentItemProps> = ({
   component,
   onSelect,
   onSettings,
@@ -160,20 +160,20 @@ const RecentComponentItem: React.FC<RecentComponentItemProps> = ({
   );
 };
 
-export interface RecentComponentsListProps {
-  recentComponents: ComponentDefinition[];
+export interface MetadataComponentsGridProps {
+  components: ComponentDefinition[];
   onSelectComponent: (componentId: string) => void;
   onSettingsClick?: (componentId: string) => void;
   showTitle?: boolean;
 }
 
-export const RecentComponentsList: React.FC<RecentComponentsListProps> = ({
-  recentComponents,
+export const MetadataComponentsGrid: React.FC<MetadataComponentsGridProps> = ({
+  components,
   onSelectComponent,
   onSettingsClick,
   showTitle = true,
 }) => {
-  if (recentComponents.length === 0) {
+  if (components.length === 0) {
     return (
       <div
         style={{
@@ -203,7 +203,7 @@ export const RecentComponentsList: React.FC<RecentComponentsListProps> = ({
             flexShrink: 0,
           }}
         >
-          File MetaData Components ({recentComponents.length})
+          File MetaData Components ({components.length})
         </div>
       )}
       <div
@@ -219,8 +219,8 @@ export const RecentComponentsList: React.FC<RecentComponentsListProps> = ({
           paddingRight: '4px', // Space for scrollbar
         }}
       >
-        {recentComponents.map(component => (
-          <RecentComponentItem
+        {components.map(component => (
+          <MetadataComponentItem
             key={component.id}
             component={component}
             onSelect={onSelectComponent}

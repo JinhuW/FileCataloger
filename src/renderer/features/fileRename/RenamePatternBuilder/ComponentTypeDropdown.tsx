@@ -301,7 +301,7 @@ export const ComponentTypeDropdown: React.FC<ComponentTypeDropdownProps> = ({
           <>
             <Divider />
             <Section title={`MY COMPONENTS (${filteredComponents.length})`}>
-              {filteredComponents.slice(0, 10).map(component => (
+              {filteredComponents.map(component => (
                 <MenuItem
                   key={component.id}
                   icon={component.icon}
@@ -310,18 +310,6 @@ export const ComponentTypeDropdown: React.FC<ComponentTypeDropdownProps> = ({
                   {component.name}
                 </MenuItem>
               ))}
-              {filteredComponents.length > 10 && (
-                <div
-                  style={{
-                    padding: '8px 12px',
-                    color: 'rgba(255, 255, 255, 0.4)',
-                    fontSize: '11px',
-                    fontStyle: 'italic',
-                  }}
-                >
-                  +{filteredComponents.length - 10} more...
-                </div>
-              )}
             </Section>
           </>
         )}
