@@ -7,6 +7,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { SelectOption } from '@shared/types/componentDefinition';
+import { generatePrefixedId } from '@renderer/utils/idGenerator';
 
 export interface InlineSelectEditorProps {
   options: SelectOption[];
@@ -132,7 +133,7 @@ export const InlineSelectEditor: React.FC<InlineSelectEditorProps> = ({
       if (isNewOption && highlightedIndex === filteredOptions.length) {
         // Create new option
         const newOption: SelectOption = {
-          id: `opt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          id: generatePrefixedId('opt'),
           label: search.trim(),
           color: color,
         };
@@ -153,7 +154,7 @@ export const InlineSelectEditor: React.FC<InlineSelectEditorProps> = ({
   const handleCreateOption = () => {
     if (search.trim()) {
       const newOption: SelectOption = {
-        id: `opt-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generatePrefixedId('opt'),
         label: search.trim(),
         color: color,
       };

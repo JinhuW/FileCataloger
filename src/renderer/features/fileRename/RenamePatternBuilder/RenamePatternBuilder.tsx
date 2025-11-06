@@ -32,6 +32,8 @@ import { ComponentChip } from './ComponentChip';
 import { MetadataComponentsGrid } from './MetadataComponentsGrid';
 import { ComponentBrowserDialog } from '../ComponentLibrary/ComponentBrowserDialog';
 import { PATTERN_VALIDATION } from '@renderer/constants/namingPatterns';
+import { generatePrefixedId } from '@renderer/utils/idGenerator';
+import { getStorageBoolean, setStorageBoolean } from '@renderer/utils/safeStorage';
 
 export interface RenamePatternBuilderProps {
   hasFiles: boolean;
@@ -64,7 +66,7 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
   // Component limit warning dialog
   const [showLimitWarning, setShowLimitWarning] = useState(false);
   const [dontShowLimitWarning, setDontShowLimitWarning] = useState(() => {
-    return localStorage.getItem('hideComponentLimitWarning') === 'true';
+    return getStorageBoolean('hideComponentLimitWarning', false);
   });
 
   // Component instances for current pattern
@@ -88,6 +90,9 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
     setActivePattern,
     error,
   } = usePatternManager();
+
+  // Get reorderPatterns from store for drag-and-drop
+  const reorderPatterns = usePatternStore(state => state.reorderPatterns);
 
   const { getComponent, incrementUsageCount, getRecentComponents } = useComponentLibrary();
 
@@ -164,7 +169,7 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
       }
 
       const newInstance: ComponentInstance = {
-        id: `instance-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        id: generatePrefixedId('instance'),
         definitionId: componentId,
         name: definition.name, // Cache name from definition
         type: definition.type, // Cache type from definition
@@ -269,6 +274,41 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
     [deletePattern, toast]
   );
 
+  const handlePatternDrop = useCallback(
+    (targetPatternId: string) => {
+      if (draggedPatternId && draggedPatternId !== targetPatternId) {
+        reorderPatterns(draggedPatternId, targetPatternId);
+      }
+      setDraggedPatternId(null);
+    },
+    [draggedPatternId, reorderPatterns]
+  );
+
+  const handleToggleDropdown = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation();
+    setShowTypeDropdown(prev => !prev);
+  }, []);
+
+  const handleButtonMouseEnter = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      if (!activePattern?.isBuiltIn) {
+        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.5)';
+      }
+    },
+    [activePattern?.isBuiltIn]
+  );
+
+  const handleButtonMouseLeave = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      if (!activePattern?.isBuiltIn) {
+        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+      }
+    },
+    [activePattern?.isBuiltIn]
+  );
+
   if (isLoading) {
     return <PatternBuilderSkeleton />;
   }
@@ -328,11 +368,7 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
               onDragOver={_e => _e.preventDefault()}
               onDrop={_e => {
                 _e.preventDefault();
-                if (draggedPatternId && draggedPatternId !== pattern.id) {
-                  const store = usePatternStore.getState();
-                  store.reorderPatterns(draggedPatternId, pattern.id);
-                }
-                setDraggedPatternId(null);
+                handlePatternDrop(pattern.id);
               }}
             />
           ))}
@@ -427,11 +463,11 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
         <div style={{ position: 'relative' }}>
           <button
             ref={addComponentButtonRef}
-            onClick={_e => {
-              _e.stopPropagation();
-              setShowTypeDropdown(!showTypeDropdown);
-            }}
+            onClick={handleToggleDropdown}
             disabled={activePattern?.isBuiltIn}
+            aria-label="Add component to pattern"
+            aria-expanded={showTypeDropdown}
+            aria-haspopup="menu"
             style={{
               width: '100%',
               background: activePattern?.isBuiltIn
@@ -452,18 +488,8 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
               gap: '6px',
               transition: 'all 0.2s',
             }}
-            onMouseEnter={e => {
-              if (!activePattern?.isBuiltIn) {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.5)';
-              }
-            }}
-            onMouseLeave={e => {
-              if (!activePattern?.isBuiltIn) {
-                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-                e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
-              }
-            }}
+            onMouseEnter={handleButtonMouseEnter}
+            onMouseLeave={handleButtonMouseLeave}
           >
             + Add Component ▼
           </button>
@@ -500,7 +526,7 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
               border: '1px solid rgba(255, 255, 255, 0.1)',
               borderRadius: '8px',
               padding: '12px',
-              maxHeight: '280px',
+              maxHeight: '252px',
               overflow: 'auto',
             }}
           >
@@ -895,7 +921,7 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
                   onChange={e => {
                     const checked = e.target.checked;
                     setDontShowLimitWarning(checked);
-                    localStorage.setItem('hideComponentLimitWarning', checked.toString());
+                    setStorageBoolean('hideComponentLimitWarning', checked);
                   }}
                   style={{
                     width: '16px',

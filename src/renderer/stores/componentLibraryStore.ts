@@ -13,6 +13,7 @@ import type {
   ComponentType,
 } from '../../shared/types/componentDefinition';
 import { isSelectComponent } from '../../shared/types/componentDefinition';
+import { generateUniqueId } from '@renderer/utils/idGenerator';
 
 // ============================================================================
 // State Interface
@@ -128,7 +129,7 @@ export const useComponentLibraryStore = create<ComponentLibraryState>()(
       const now = Date.now();
       const duplicated: ComponentDefinition = {
         ...component,
-        id: `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Simple UUID alternative
+        id: generateUniqueId(),
         name: newName,
         metadata: {
           createdAt: now,

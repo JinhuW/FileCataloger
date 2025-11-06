@@ -4,6 +4,7 @@ import { immer } from 'zustand/middleware/immer';
 import { enableMapSet } from 'immer';
 import { SavedPattern, RenameComponent, ComponentInstance } from '@shared/types';
 import { logger } from '@shared/logger';
+import { generatePrefixedId } from '@renderer/utils/idGenerator';
 
 // Enable MapSet plugin for Immer to work with Map and Set
 enableMapSet();
@@ -138,23 +139,21 @@ export const usePatternStore = create<PatternState>()(
         set(
           state => {
             const pattern = state.patterns.get(id);
-            if (!pattern) return state;
+            if (!pattern) return;
 
             if (pattern.isBuiltIn) {
               logger.warn('Cannot delete built-in pattern');
-              return { error: 'Cannot delete built-in patterns' };
+              state.error = 'Cannot delete built-in patterns';
+              return;
             }
 
-            const newPatterns = new Map(state.patterns);
-            newPatterns.delete(id);
+            state.patterns.delete(id);
             logger.debug('Deleted pattern:', id);
 
-            return {
-              patterns: newPatterns,
-              activePatternId:
-                state.activePatternId === id ? 'default-pattern' : state.activePatternId,
-              error: null,
-            };
+            if (state.activePatternId === id) {
+              state.activePatternId = 'default-pattern';
+            }
+            state.error = null;
           },
           false,
           'deletePattern'
@@ -165,10 +164,10 @@ export const usePatternStore = create<PatternState>()(
           state => {
             if (id && !state.patterns.has(id)) {
               logger.warn('Pattern not found:', id);
-              return state;
+              return;
             }
 
-            return { activePatternId: id };
+            state.activePatternId = id;
           },
           false,
           'setActivePattern'
@@ -185,7 +184,9 @@ export const usePatternStore = create<PatternState>()(
 
         if (state.patterns.size >= 20) {
           logger.warn('Maximum pattern limit reached');
-          set({ error: 'Maximum of 20 patterns allowed' });
+          set(draft => {
+            draft.error = 'Maximum of 20 patterns allowed';
+          });
           return null;
         }
 
@@ -212,16 +213,14 @@ export const usePatternStore = create<PatternState>()(
             const fromIndex = patternsArray.findIndex(([id]) => id === fromId);
             const toIndex = patternsArray.findIndex(([id]) => id === toId);
 
-            if (fromIndex === -1 || toIndex === -1) return state;
+            if (fromIndex === -1 || toIndex === -1) return;
 
             // Reorder array
             const [removed] = patternsArray.splice(fromIndex, 1);
             patternsArray.splice(toIndex, 0, removed);
 
-            // Convert back to Map
-            const newPatterns = new Map(patternsArray);
-
-            return { patterns: newPatterns };
+            // Convert back to Map and update state
+            state.patterns = new Map(patternsArray);
           },
           false,
           'reorderPatterns'
@@ -245,10 +244,8 @@ export const usePatternStore = create<PatternState>()(
 
             logger.debug('Loaded patterns from storage:', newPatterns.size);
 
-            return {
-              patterns: newPatterns,
-              isLoading: false,
-            };
+            state.patterns = newPatterns;
+            state.isLoading = false;
           },
           false,
           'setPatternsFromStorage'
@@ -259,7 +256,7 @@ export const usePatternStore = create<PatternState>()(
         set(
           state => {
             const pattern = state.patterns.get(patternId);
-            if (!pattern || pattern.isBuiltIn) return state;
+            if (!pattern || pattern.isBuiltIn) return;
 
             const updatedPattern = {
               ...pattern,
@@ -267,10 +264,7 @@ export const usePatternStore = create<PatternState>()(
               updatedAt: Date.now(),
             };
 
-            const newPatterns = new Map(state.patterns);
-            newPatterns.set(patternId, updatedPattern);
-
-            return { patterns: newPatterns };
+            state.patterns.set(patternId, updatedPattern);
           },
           false,
           'addComponentToPattern'
@@ -280,7 +274,7 @@ export const usePatternStore = create<PatternState>()(
         set(
           state => {
             const pattern = state.patterns.get(patternId);
-            if (!pattern) return state;
+            if (!pattern) return;
 
             const updatedPattern = {
               ...pattern,
@@ -290,10 +284,7 @@ export const usePatternStore = create<PatternState>()(
               updatedAt: Date.now(),
             };
 
-            const newPatterns = new Map(state.patterns);
-            newPatterns.set(patternId, updatedPattern);
-
-            return { patterns: newPatterns };
+            state.patterns.set(patternId, updatedPattern);
           },
           false,
           'updateComponentInPattern'
@@ -303,7 +294,7 @@ export const usePatternStore = create<PatternState>()(
         set(
           state => {
             const pattern = state.patterns.get(patternId);
-            if (!pattern || pattern.isBuiltIn) return state;
+            if (!pattern || pattern.isBuiltIn) return;
 
             const updatedPattern = {
               ...pattern,
@@ -311,10 +302,7 @@ export const usePatternStore = create<PatternState>()(
               updatedAt: Date.now(),
             };
 
-            const newPatterns = new Map(state.patterns);
-            newPatterns.set(patternId, updatedPattern);
-
-            return { patterns: newPatterns };
+            state.patterns.set(patternId, updatedPattern);
           },
           false,
           'removeComponentFromPattern'
@@ -324,7 +312,7 @@ export const usePatternStore = create<PatternState>()(
         set(
           state => {
             const pattern = state.patterns.get(patternId);
-            if (!pattern || pattern.isBuiltIn) return state;
+            if (!pattern || pattern.isBuiltIn) return;
 
             const components = [...pattern.components];
             const [removed] = components.splice(fromIndex, 1);
@@ -336,10 +324,7 @@ export const usePatternStore = create<PatternState>()(
               updatedAt: Date.now(),
             };
 
-            const newPatterns = new Map(state.patterns);
-            newPatterns.set(patternId, updatedPattern);
-
-            return { patterns: newPatterns };
+            state.patterns.set(patternId, updatedPattern);
           },
           false,
           'reorderComponentsInPattern'
@@ -350,11 +335,11 @@ export const usePatternStore = create<PatternState>()(
         set(
           state => {
             const pattern = state.patterns.get(patternId);
-            if (!pattern || pattern.isBuiltIn) return state;
+            if (!pattern || pattern.isBuiltIn) return;
 
             // Create new component instance
             const instance: ComponentInstance = {
-              id: `instance-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              id: generatePrefixedId('instance'),
               definitionId,
               name: '', // Will be populated from definition when resolving
               type: 'text', // Will be populated from definition when resolving
@@ -368,11 +353,9 @@ export const usePatternStore = create<PatternState>()(
               updatedAt: Date.now(),
             };
 
-            const newPatterns = new Map(state.patterns);
-            newPatterns.set(patternId, updatedPattern);
+            state.patterns.set(patternId, updatedPattern);
 
             logger.debug('Added component instance to pattern:', { patternId, definitionId });
-            return { patterns: newPatterns };
           },
           false,
           'addComponentInstance'
@@ -382,7 +365,7 @@ export const usePatternStore = create<PatternState>()(
         set(
           state => {
             const pattern = state.patterns.get(patternId);
-            if (!pattern) return state;
+            if (!pattern) return;
 
             const updatedPattern = {
               ...pattern,
@@ -392,11 +375,9 @@ export const usePatternStore = create<PatternState>()(
               updatedAt: Date.now(),
             };
 
-            const newPatterns = new Map(state.patterns);
-            newPatterns.set(patternId, updatedPattern);
+            state.patterns.set(patternId, updatedPattern);
 
             logger.debug('Updated component instance in pattern:', { patternId, instanceId });
-            return { patterns: newPatterns };
           },
           false,
           'updateComponentInstance'
@@ -406,7 +387,7 @@ export const usePatternStore = create<PatternState>()(
         set(
           state => {
             const pattern = state.patterns.get(patternId);
-            if (!pattern || pattern.isBuiltIn) return state;
+            if (!pattern || pattern.isBuiltIn) return;
 
             const updatedPattern = {
               ...pattern,
@@ -416,11 +397,9 @@ export const usePatternStore = create<PatternState>()(
               updatedAt: Date.now(),
             };
 
-            const newPatterns = new Map(state.patterns);
-            newPatterns.set(patternId, updatedPattern);
+            state.patterns.set(patternId, updatedPattern);
 
             logger.debug('Removed component instance from pattern:', { patternId, instanceId });
-            return { patterns: newPatterns };
           },
           false,
           'removeComponentInstance'
@@ -430,7 +409,7 @@ export const usePatternStore = create<PatternState>()(
         set(
           state => {
             const pattern = state.patterns.get(patternId);
-            if (!pattern || pattern.isBuiltIn) return state;
+            if (!pattern || pattern.isBuiltIn) return;
 
             const components = [...(pattern.components as ComponentInstance[])];
             const [removed] = components.splice(fromIndex, 1);
@@ -442,15 +421,13 @@ export const usePatternStore = create<PatternState>()(
               updatedAt: Date.now(),
             };
 
-            const newPatterns = new Map(state.patterns);
-            newPatterns.set(patternId, updatedPattern);
+            state.patterns.set(patternId, updatedPattern);
 
             logger.debug('Reordered component instances in pattern:', {
               patternId,
               fromIndex,
               toIndex,
             });
-            return { patterns: newPatterns };
           },
           false,
           'reorderComponentInstances'

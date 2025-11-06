@@ -1,4 +1,5 @@
 import { SavedPattern } from '@shared/types';
+import { generatePrefixedId } from '@renderer/utils/idGenerator';
 
 // Type for IPC response wrapper
 interface IPCResponse<T = any> {
@@ -210,7 +211,7 @@ export async function duplicatePattern(
 
   const duplicatedPattern: SavedPattern = {
     ...pattern,
-    id: `pattern-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    id: generatePrefixedId('pattern'),
     name,
     createdAt: Date.now(),
     updatedAt: Date.now(),

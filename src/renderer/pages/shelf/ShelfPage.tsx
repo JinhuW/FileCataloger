@@ -26,6 +26,8 @@ import { isShelfConfig } from '@renderer/utils/typeGuards';
 import { useShelfStore } from '@renderer/stores/shelfStore';
 import { useShelfAutoHide } from '@renderer/hooks/useShelfAutoHide';
 import { cleanupItemThumbnails } from '@renderer/utils/fileProcessing';
+import { FeatureErrorBoundary } from '@renderer/components/domain/FeatureErrorBoundary';
+import { devLogger } from '@renderer/utils/devLogger';
 
 export const ShelfPage: React.FC = () => {
   logger.info('ShelfPage component initializing');
@@ -33,8 +35,15 @@ export const ShelfPage: React.FC = () => {
   const [shelfId, setShelfId] = useState<string | null>(null);
   const { invoke, on, isConnected } = useIPC();
 
-  // Get config from Zustand store
-  const shelf = useShelfStore(state => (shelfId ? state.getShelf(shelfId) : null));
+  // Memoized selector for shelf config
+  const selectShelf = useCallback(
+    (state: ReturnType<typeof useShelfStore.getState>) =>
+      shelfId ? state.getShelf(shelfId) : null,
+    [shelfId]
+  );
+
+  // Get config from Zustand store with optimized selector
+  const shelf = useShelfStore(selectShelf);
   const addShelf = useShelfStore(state => state.addShelf);
   const updateShelf = useShelfStore(state => state.updateShelf);
   const addItemToShelf = useShelfStore(state => state.addItemToShelf);
@@ -43,23 +52,28 @@ export const ShelfPage: React.FC = () => {
   // Log component lifecycle and cleanup thumbnails on unmount
   useEffect(() => {
     logger.info('ShelfPage component mounted');
+    devLogger.component('ShelfPage', 'mount', { shelfId });
+
+    // Debug window API in development only
+    if (process.env.NODE_ENV === 'development') {
+      devLogger.debug('Window API available', {
+        category: 'component',
+        data: {
+          hasApi: !!window.api,
+          hasElectronAPI: !!window.electronAPI,
+        },
+      });
+    }
+
     return () => {
       logger.info('ShelfPage component unmounting');
+      devLogger.component('ShelfPage', 'unmount', { shelfId });
       // Cleanup any object URLs created for thumbnails
       if (shelf?.items) {
         cleanupItemThumbnails(shelf.items);
       }
     };
-  }, [shelf?.items]);
-
-  // Debug window API in development only
-  if (process.env.NODE_ENV === 'development') {
-    logger.debug('Window API debug on mount:');
-    logger.debug('  - window.api:', window.api);
-    logger.debug('  - window.electronAPI:', window.electronAPI);
-    logger.debug('  - typeof window.api:', typeof window.api);
-    logger.debug('  - typeof window.electronAPI:', typeof window.electronAPI);
-  }
+  }, [shelf?.items, shelfId]);
 
   // Listen for initial shelf config and subsequent updates
   useEffect(() => {
@@ -67,13 +81,10 @@ export const ShelfPage: React.FC = () => {
 
     const cleanup = on('shelf:config', (newConfig: unknown) => {
       if (isShelfConfig(newConfig)) {
-        logger.debug(
-          'Received shelf config:',
-          newConfig.id,
-          'with',
-          newConfig.items.length,
-          'items'
-        );
+        devLogger.ipc('shelf:config', 'receive', {
+          id: newConfig.id,
+          itemCount: newConfig.items.length,
+        });
 
         // Set shelf ID on first config (initialization)
         if (!shelfId) {
@@ -209,13 +220,18 @@ export const ShelfPage: React.FC = () => {
         justifyContent: 'stretch', // Fill width
       }}
     >
-      <FileRenameShelf
-        config={shelf}
-        onConfigChange={handleConfigChange}
-        onItemAdd={handleItemAdd}
-        onItemRemove={handleItemRemove}
-        onClose={handleClose}
-      />
+      <FeatureErrorBoundary
+        featureName="File Rename Shelf"
+        showDetails={process.env.NODE_ENV === 'development'}
+      >
+        <FileRenameShelf
+          config={shelf}
+          onConfigChange={handleConfigChange}
+          onItemAdd={handleItemAdd}
+          onItemRemove={handleItemRemove}
+          onClose={handleClose}
+        />
+      </FeatureErrorBoundary>
     </div>
   );
 };

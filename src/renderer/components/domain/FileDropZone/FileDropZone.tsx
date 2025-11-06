@@ -35,6 +35,7 @@ import { logger } from '@shared/logger';
 import { useToast } from '@renderer/stores/toastStore';
 import { processFileList } from '@renderer/utils/fileProcessing';
 import { DROP_ZONE } from '@renderer/constants/ui';
+import { getDuplicateMessage } from '@renderer/utils/duplicateDetection';
 
 export interface FileDropZoneProps {
   isDragOver: boolean;
@@ -81,12 +82,12 @@ export const FileDropZone = React.memo<FileDropZoneProps>(
             logger.warn('📦 FileDropZone: No items to drop from drag!');
           }
 
-          // Show toast notification for duplicates
+          // Show toast notification for duplicates using centralized utility
           if (duplicateCount > 0) {
-            toast.warning(
-              'Duplicate Files Skipped',
-              `${duplicateCount} file${duplicateCount === 1 ? '' : 's'} already exist${duplicateCount === 1 ? 's' : ''} on this shelf and ${duplicateCount === 1 ? 'was' : 'were'} skipped.`
-            );
+            const message = getDuplicateMessage(duplicateCount, 'shelf');
+            if (message) {
+              toast.warning(message.title, message.message);
+            }
           }
 
           // Show warning if path type detection failed

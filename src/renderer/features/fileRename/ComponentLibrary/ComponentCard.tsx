@@ -36,7 +36,7 @@ export const ComponentCard: React.FC<ComponentCardProps> = ({
         alignItems: 'center',
         gap: '8px',
         padding: '8px 12px',
-        minHeight: '44px',
+        minHeight: '30px',
       }}
     >
       {/* Main clickable area */}

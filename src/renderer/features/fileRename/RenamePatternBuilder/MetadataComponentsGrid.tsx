@@ -103,7 +103,7 @@ const MetadataComponentItem: React.FC<MetadataComponentItemProps> = ({
         borderRadius: '6px',
         cursor: isDragging ? 'grabbing' : 'default',
         transition: 'all 0.2s',
-        minHeight: '44px',
+        minHeight: '30px',
       }}
     >
       {/* Main clickable area with conditional tooltip */}
@@ -210,7 +210,7 @@ export const MetadataComponentsGrid: React.FC<MetadataComponentsGridProps> = ({
         className="component-grid-scrollable"
         style={{
           display: 'grid',
-          gridTemplateColumns: 'repeat(3, 1fr)',
+          gridTemplateColumns: 'repeat(3, minmax(0, 1.2fr))',
           gap: '8px',
           overflowY: 'auto', // Enable vertical scrolling
           overflowX: 'hidden',

@@ -29,7 +29,6 @@ export const PatternBuilderDemo: React.FC = () => {
   ]);
 
   const handleRename = () => {
-    console.log('Rename triggered!');
     alert('Rename functionality will be implemented in the next phase!');
   };
 
@@ -73,7 +72,7 @@ export const PatternBuilderDemo: React.FC = () => {
           <RenamePatternBuilder
             hasFiles={true}
             selectedFiles={selectedFiles}
-            onDestinationChange={path => console.log('Destination changed:', path)}
+            onDestinationChange={() => {}}
             onRename={handleRename}
           />
         </div>

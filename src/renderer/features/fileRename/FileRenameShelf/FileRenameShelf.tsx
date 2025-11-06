@@ -49,6 +49,7 @@ import {
 } from '@renderer/utils/renameUtils';
 import { validateFileRenames, formatValidationWarning } from '@renderer/utils/fileValidation';
 import { logger } from '@shared/logger';
+import { filterDuplicates, getDuplicateMessage } from '@renderer/utils/duplicateDetection';
 
 export interface FileRenameShelfProps {
   config: ShelfConfig;
@@ -115,26 +116,17 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
           items.map(i => i.name)
         );
 
-        // Check for duplicates against existing files
-        const existingPaths = new Set(selectedFiles.map(file => file.path).filter(Boolean));
-        const newItems = items.filter(item => {
-          if (item.path && existingPaths.has(item.path)) {
-            logger.info(`📋 Skipping duplicate file/folder: ${item.name} (${item.path})`);
-            return false;
-          }
-          return true;
+        // Use centralized duplicate detection
+        const { items: newItems, duplicateCount } = filterDuplicates(items, selectedFiles, {
+          logDuplicates: true,
         });
 
-        if (newItems.length < items.length) {
-          const duplicateCount = items.length - newItems.length;
-          logger.info(`📋 Filtered out ${duplicateCount} duplicate items from drop`);
-
-          // Show user feedback about duplicates
-          toast.warning(
-            'Duplicate Files Skipped',
-            `${duplicateCount} file${duplicateCount === 1 ? '' : 's'} already exist${duplicateCount === 1 ? 's' : ''} on this shelf and ${duplicateCount === 1 ? 'was' : 'were'} skipped.`,
-            4000
-          );
+        // Show user feedback about duplicates using centralized utility
+        if (duplicateCount > 0) {
+          const message = getDuplicateMessage(duplicateCount, 'rename');
+          if (message) {
+            toast.warning(message.title, message.message, 4000);
+          }
         }
 
         // Only add new (non-duplicate) items - state is managed by parent (ShelfPage)

@@ -23,6 +23,28 @@ import { SHELF_CONSTANTS, isImageTypeSupported, isTextFileExtension } from '../c
 import { logger } from '@shared/logger';
 
 /**
+ * Type guard for native file response from IPC
+ */
+interface NativeFile {
+  path: string;
+  name: string;
+}
+
+function isNativeFileArray(value: unknown): value is NativeFile[] {
+  if (!Array.isArray(value)) return false;
+
+  return value.every(
+    item =>
+      typeof item === 'object' &&
+      item !== null &&
+      'path' in item &&
+      'name' in item &&
+      typeof item.path === 'string' &&
+      typeof item.name === 'string'
+  );
+}
+
+/**
  * Generate a unique ID for a shelf item
  */
 const generateItemId = (type: string | ShelfItemType, index: number): string => {
@@ -268,15 +290,18 @@ async function getNativeFilePaths(): Promise<Map<string, string>> {
   const pathMap = new Map<string, string>();
 
   try {
-    const nativeFiles = (await window.api.invoke('drag:get-native-files')) as Array<{
-      path: string;
-      name: string;
-    }>;
+    const response = await window.api.invoke('drag:get-native-files');
 
-    if (nativeFiles && Array.isArray(nativeFiles) && nativeFiles.length > 0) {
-      logger.info(`📋 Retrieved ${nativeFiles.length} file paths from native drag monitor`);
+    // Validate IPC response instead of using type assertion
+    if (!isNativeFileArray(response)) {
+      logger.warn('Invalid native files response from IPC:', response);
+      return pathMap;
+    }
 
-      for (const nativeFile of nativeFiles) {
+    if (response.length > 0) {
+      logger.info(`📋 Retrieved ${response.length} file paths from native drag monitor`);
+
+      for (const nativeFile of response) {
         if (nativeFile.path && nativeFile.name) {
           // Extract filename from path as fallback if name is not provided
           const filename = nativeFile.name || nativeFile.path.split('/').pop() || '';
