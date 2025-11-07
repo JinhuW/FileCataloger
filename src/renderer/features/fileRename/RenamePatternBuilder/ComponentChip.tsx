@@ -22,6 +22,9 @@ export interface ComponentChipProps {
   onRemove: () => void;
   onUpdateInstance?: (updates: Partial<ComponentInstance>) => void;
   canDrag?: boolean;
+  onDragStart?: (e: React.DragEvent) => void;
+  onDragEnd?: (e: React.DragEvent) => void;
+  isDragging?: boolean;
 }
 
 export const ComponentChip: React.FC<ComponentChipProps> = ({
@@ -30,6 +33,9 @@ export const ComponentChip: React.FC<ComponentChipProps> = ({
   onRemove,
   onUpdateInstance,
   canDrag = true,
+  onDragStart,
+  onDragEnd,
+  isDragging = false,
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
@@ -115,22 +121,44 @@ export const ComponentChip: React.FC<ComponentChipProps> = ({
       <div
         ref={chipRef}
         draggable={canDrag && !isEditing}
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
         style={{
           display: 'inline-flex',
           alignItems: 'center',
           gap: '6px',
-          padding: '6px 10px',
+          padding: '6px 8px 6px 6px',
           background: `${definition.color}20`,
           border: `1px solid ${definition.color}`,
           borderRadius: '6px',
-          cursor: canDrag && !isEditing ? 'grab' : 'default',
+          cursor: isDragging ? 'grabbing' : canDrag && !isEditing ? 'grab' : 'default',
+          opacity: isDragging ? 0.5 : 1,
           transition: 'all 0.2s',
           position: 'relative',
           maxWidth: '300px',
         }}
       >
+        {/* Drag Handle */}
+        {canDrag && !isEditing && (
+          <span
+            style={{
+              fontSize: '14px',
+              color: 'rgba(255, 255, 255, 0.5)',
+              cursor: isDragging ? 'grabbing' : 'grab',
+              flexShrink: 0,
+              userSelect: 'none',
+              lineHeight: 1,
+              transition: 'color 0.2s',
+              marginRight: '2px',
+            }}
+            title="Drag to reorder"
+          >
+            ⋮⋮
+          </span>
+        )}
+
         {/* Icon */}
         <span style={{ fontSize: '14px', flexShrink: 0 }}>{definition.icon}</span>
 

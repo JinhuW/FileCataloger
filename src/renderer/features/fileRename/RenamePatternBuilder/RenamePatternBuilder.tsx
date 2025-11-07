@@ -56,6 +56,7 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
   const [showNewPatternDialog, setShowNewPatternDialog] = useState(false);
   const [newPatternName, setNewPatternName] = useState('');
   const [draggedPatternId, setDraggedPatternId] = useState<string | null>(null);
+  const [draggedInstanceId, setDraggedInstanceId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -291,6 +292,37 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
     [draggedPatternId, reorderPatterns]
   );
 
+  const handleInstanceDragStart = useCallback((instanceId: string) => {
+    setDraggedInstanceId(instanceId);
+  }, []);
+
+  const handleInstanceDragEnd = useCallback(() => {
+    setDraggedInstanceId(null);
+  }, []);
+
+  const handleInstanceDragOver = useCallback((_instanceId: string, e: React.DragEvent) => {
+    e.preventDefault();
+  }, []);
+
+  const handleInstanceDrop = useCallback(
+    (targetInstanceId: string) => {
+      if (draggedInstanceId && draggedInstanceId !== targetInstanceId) {
+        const fromIndex = instances.findIndex(inst => inst.id === draggedInstanceId);
+        const toIndex = instances.findIndex(inst => inst.id === targetInstanceId);
+
+        if (fromIndex !== -1 && toIndex !== -1) {
+          // Reorder in local state
+          const reordered = [...instances];
+          const [removed] = reordered.splice(fromIndex, 1);
+          reordered.splice(toIndex, 0, removed);
+          setInstances(reordered);
+        }
+      }
+      setDraggedInstanceId(null);
+    },
+    [draggedInstanceId, instances]
+  );
+
   const handleToggleDropdown = useCallback((e: React.MouseEvent) => {
     e.stopPropagation();
     setShowTypeDropdown(prev => !prev);
@@ -452,13 +484,25 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
                 return (
                   <React.Fragment key={instance.id}>
                     {index > 0 && <span style={{ color: 'rgba(255, 255, 255, 0.3)' }}>_</span>}
-                    <ComponentChip
-                      instance={instance}
-                      definition={definition}
-                      onRemove={() => removeInstance(instance.id)}
-                      onUpdateInstance={updates => updateInstance(instance.id, updates)}
-                      canDrag={!activePattern?.isBuiltIn}
-                    />
+                    <div
+                      onDragOver={e => handleInstanceDragOver(instance.id, e)}
+                      onDrop={e => {
+                        e.preventDefault();
+                        handleInstanceDrop(instance.id);
+                      }}
+                      style={{ display: 'inline-block' }}
+                    >
+                      <ComponentChip
+                        instance={instance}
+                        definition={definition}
+                        onRemove={() => removeInstance(instance.id)}
+                        onUpdateInstance={updates => updateInstance(instance.id, updates)}
+                        canDrag={!activePattern?.isBuiltIn}
+                        onDragStart={() => handleInstanceDragStart(instance.id)}
+                        onDragEnd={handleInstanceDragEnd}
+                        isDragging={draggedInstanceId === instance.id}
+                      />
+                    </div>
                   </React.Fragment>
                 );
               })

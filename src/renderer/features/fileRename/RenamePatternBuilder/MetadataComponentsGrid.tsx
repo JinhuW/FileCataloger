@@ -101,7 +101,7 @@ const MetadataComponentItem: React.FC<MetadataComponentItemProps> = ({
         background: isHovered ? `${component.color}25` : `${component.color}15`,
         border: `1px solid ${isHovered ? component.color : `${component.color}40`}`,
         borderRadius: '6px',
-        cursor: isDragging ? 'grabbing' : 'default',
+        cursor: isDragging ? 'grabbing' : 'grab',
         transition: 'all 0.2s',
         minHeight: '30px',
       }}
