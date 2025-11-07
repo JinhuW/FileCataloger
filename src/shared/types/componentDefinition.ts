@@ -9,10 +9,28 @@
 // Component Type Enums
 // ============================================================================
 
-export type ComponentType = 'text' | 'select' | 'date' | 'number';
+export type ComponentType = 'text' | 'select' | 'date' | 'number' | 'fileMetadata';
 export type ComponentScope = 'global' | 'local';
 export type DateSource = 'current' | 'file-created' | 'file-modified' | 'custom';
 export type NumberFormat = 'plain' | 'padded';
+
+// File Metadata Field Types
+export type FileMetadataField =
+  // Basic file info
+  | 'fileName' // Name without extension
+  | 'fileNameWithExtension' // Full name with extension
+  | 'fileExtension' // Extension only
+  | 'fileSize' // Formatted size
+  | 'filePath' // Full file path
+  // Date information
+  | 'fileCreatedDate' // File creation date
+  | 'fileModifiedDate' // Last modified date
+  | 'fileAccessedDate' // Last access date
+  // Image metadata
+  | 'imageDimensions' // Width x Height
+  | 'cameraModel' // Camera/phone model
+  | 'gpsLocation' // GPS coordinates
+  | 'imageResolution'; // DPI information
 
 // ============================================================================
 // Select Component Types
@@ -55,6 +73,12 @@ export interface NumberConfig {
   incrementStep?: number;
 }
 
+export interface FileMetadataConfig {
+  selectedField: FileMetadataField;
+  dateFormat?: string; // For date fields
+  fallbackValue?: string; // Value to use when metadata is unavailable
+}
+
 // ============================================================================
 // Component Configuration Union Type
 // ============================================================================
@@ -63,7 +87,8 @@ export type ComponentConfig =
   | { type: 'text'; config: TextConfig }
   | { type: 'select'; config: SelectConfig }
   | { type: 'date'; config: DateConfig }
-  | { type: 'number'; config: NumberConfig };
+  | { type: 'number'; config: NumberConfig }
+  | { type: 'fileMetadata'; config: FileMetadataConfig };
 
 // ============================================================================
 // Component Definition (The Schema)
@@ -79,7 +104,7 @@ export interface ComponentDefinition {
   scope: ComponentScope;
 
   // Type-specific configuration
-  config: TextConfig | SelectConfig | DateConfig | NumberConfig;
+  config: TextConfig | SelectConfig | DateConfig | NumberConfig | FileMetadataConfig;
 
   // Metadata
   metadata: {
@@ -102,7 +127,7 @@ export interface ComponentInstance {
   name: string; // Display name (cached from definition)
   type: ComponentType; // Cached from definition
   value?: any; // Current value for this instance
-  overrides?: Partial<TextConfig | SelectConfig | DateConfig | NumberConfig>; // Pattern-specific overrides
+  overrides?: Partial<TextConfig | SelectConfig | DateConfig | NumberConfig | FileMetadataConfig>; // Pattern-specific overrides
 }
 
 // ============================================================================
@@ -133,6 +158,12 @@ export function isNumberComponent(
   return component.type === 'number';
 }
 
+export function isFileMetadataComponent(
+  component: ComponentDefinition
+): component is ComponentDefinition & { type: 'fileMetadata'; config: FileMetadataConfig } {
+  return component.type === 'fileMetadata';
+}
+
 // ============================================================================
 // Helper Types
 // ============================================================================
@@ -146,7 +177,7 @@ export interface ComponentValidationResult {
 export interface ResolvedComponent {
   instance: ComponentInstance;
   definition: ComponentDefinition;
-  effectiveConfig: TextConfig | SelectConfig | DateConfig | NumberConfig;
+  effectiveConfig: TextConfig | SelectConfig | DateConfig | NumberConfig | FileMetadataConfig;
 }
 
 // ============================================================================

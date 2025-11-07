@@ -15,12 +15,14 @@ interface MetadataComponentItemProps {
   component: ComponentDefinition;
   onSelect: (componentId: string) => void;
   onSettings?: (componentId: string) => void;
+  isSystemComponent?: boolean;
 }
 
 const MetadataComponentItem: React.FC<MetadataComponentItemProps> = ({
   component,
   onSelect,
   onSettings,
+  isSystemComponent = false,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -115,53 +117,74 @@ const MetadataComponentItem: React.FC<MetadataComponentItemProps> = ({
         buttonContent
       )}
 
-      {/* Settings button */}
-      {onSettings && (
-        <CustomTooltip content={buildActionTooltip('Component settings')} position="top">
-          <button
-            onClick={e => {
-              e.preventDefault();
-              e.stopPropagation();
-              onSettings(component.id);
-            }}
-            draggable={false}
+      {/* Lock icon for system components or Settings button for user components */}
+      {isSystemComponent ? (
+        <CustomTooltip content="System component - cannot be deleted" position="top">
+          <div
             style={{
-              background: isHovered ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
-              border: 'none',
-              borderRadius: '4px',
               width: '24px',
               height: '24px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              cursor: 'pointer',
               flexShrink: 0,
-              color: 'rgba(255, 255, 255, 0.6)',
-              fontSize: '14px',
-              transition: 'all 0.15s',
-              pointerEvents: 'auto',
-            }}
-            onMouseEnter={e => {
-              e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
-              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)';
-            }}
-            onMouseLeave={e => {
-              e.currentTarget.style.background = isHovered
-                ? 'rgba(255, 255, 255, 0.1)'
-                : 'transparent';
-              e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)';
+              color: 'rgba(255, 255, 255, 0.3)',
+              fontSize: '12px',
+              pointerEvents: 'none',
             }}
           >
-            ⚙️
-          </button>
+            🔒
+          </div>
         </CustomTooltip>
+      ) : (
+        onSettings && (
+          <CustomTooltip content={buildActionTooltip('Component settings')} position="top">
+            <button
+              onClick={e => {
+                e.preventDefault();
+                e.stopPropagation();
+                onSettings(component.id);
+              }}
+              draggable={false}
+              style={{
+                background: isHovered ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+                border: 'none',
+                borderRadius: '4px',
+                width: '24px',
+                height: '24px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                flexShrink: 0,
+                color: 'rgba(255, 255, 255, 0.6)',
+                fontSize: '14px',
+                transition: 'all 0.15s',
+                pointerEvents: 'auto',
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(255, 255, 255, 0.15)';
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.9)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = isHovered
+                  ? 'rgba(255, 255, 255, 0.1)'
+                  : 'transparent';
+                e.currentTarget.style.color = 'rgba(255, 255, 255, 0.6)';
+              }}
+            >
+              ⚙️
+            </button>
+          </CustomTooltip>
+        )
       )}
     </div>
   );
 };
 
 export interface MetadataComponentsGridProps {
-  components: ComponentDefinition[];
+  components: ComponentDefinition[]; // User components
+  systemComponents?: ComponentDefinition[]; // System components
   onSelectComponent: (componentId: string) => void;
   onSettingsClick?: (componentId: string) => void;
   showTitle?: boolean;
@@ -169,11 +192,14 @@ export interface MetadataComponentsGridProps {
 
 export const MetadataComponentsGrid: React.FC<MetadataComponentsGridProps> = ({
   components,
+  systemComponents = [],
   onSelectComponent,
   onSettingsClick,
   showTitle = true,
 }) => {
-  if (components.length === 0) {
+  const totalComponents = systemComponents.length + components.length;
+
+  if (totalComponents === 0) {
     return (
       <div
         style={{
@@ -203,7 +229,7 @@ export const MetadataComponentsGrid: React.FC<MetadataComponentsGridProps> = ({
             flexShrink: 0,
           }}
         >
-          File MetaData Components ({components.length})
+          File MetaData Components ({totalComponents})
         </div>
       )}
       <div
@@ -219,12 +245,24 @@ export const MetadataComponentsGrid: React.FC<MetadataComponentsGridProps> = ({
           paddingRight: '4px', // Space for scrollbar
         }}
       >
+        {/* Render system components first */}
+        {systemComponents.map(component => (
+          <MetadataComponentItem
+            key={component.id}
+            component={component}
+            onSelect={onSelectComponent}
+            onSettings={undefined} // System components cannot be edited
+            isSystemComponent={true}
+          />
+        ))}
+        {/* Then render user components */}
         {components.map(component => (
           <MetadataComponentItem
             key={component.id}
             component={component}
             onSelect={onSelectComponent}
             onSettings={onSettingsClick}
+            isSystemComponent={false}
           />
         ))}
       </div>

@@ -95,6 +95,24 @@ export interface ShelfItem {
   size?: number;
   createdAt: number;
   thumbnail?: string;
+  // Extended file metadata
+  metadata?: {
+    extension?: string; // File extension (e.g., 'jpg', 'pdf')
+    birthtime?: number; // File creation timestamp (Unix timestamp)
+    mtime?: number; // Last modified timestamp (Unix timestamp)
+    atime?: number; // Last accessed timestamp (Unix timestamp)
+    // Image metadata (only for image files)
+    image?: {
+      width?: number;
+      height?: number;
+      dpi?: number;
+      camera?: string;
+      gps?: {
+        latitude?: number;
+        longitude?: number;
+      };
+    };
+  };
 }
 
 export interface ShelfConfig {

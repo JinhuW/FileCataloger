@@ -48,7 +48,108 @@ export const COMPONENT_TYPE_METADATA: Record<ComponentType, ComponentTypeMetadat
     color: '#8b5cf6', // purple
     description: 'Numeric values with optional auto-increment',
   },
+  fileMetadata: {
+    type: 'fileMetadata',
+    label: 'File Metadata',
+    icon: '📋',
+    color: '#f59e0b', // amber
+    description: 'Extract file information and properties',
+  },
 };
+
+// ============================================================================
+// File Metadata Field Options
+// ============================================================================
+
+export interface FileMetadataFieldOption {
+  value: string;
+  label: string;
+  category: 'basic' | 'dates' | 'images';
+  description: string;
+  requiresImageFile?: boolean;
+}
+
+export const FILE_METADATA_FIELD_OPTIONS: FileMetadataFieldOption[] = [
+  // Basic file info
+  {
+    value: 'fileName',
+    label: 'File Name',
+    category: 'basic',
+    description: 'Name without extension (e.g., "document")',
+  },
+  {
+    value: 'fileNameWithExtension',
+    label: 'File Name with Extension',
+    category: 'basic',
+    description: 'Full name with extension (e.g., "document.pdf")',
+  },
+  {
+    value: 'fileExtension',
+    label: 'File Extension',
+    category: 'basic',
+    description: 'Extension only (e.g., "pdf")',
+  },
+  {
+    value: 'fileSize',
+    label: 'File Size',
+    category: 'basic',
+    description: 'Formatted size (e.g., "2.4 MB")',
+  },
+  {
+    value: 'filePath',
+    label: 'File Path',
+    category: 'basic',
+    description: 'Full file path',
+  },
+  // Date information
+  {
+    value: 'fileCreatedDate',
+    label: 'Created Date',
+    category: 'dates',
+    description: 'File creation date',
+  },
+  {
+    value: 'fileModifiedDate',
+    label: 'Modified Date',
+    category: 'dates',
+    description: 'Last modified date',
+  },
+  {
+    value: 'fileAccessedDate',
+    label: 'Accessed Date',
+    category: 'dates',
+    description: 'Last access date',
+  },
+  // Image metadata
+  {
+    value: 'imageDimensions',
+    label: 'Image Dimensions',
+    category: 'images',
+    description: 'Width x Height (e.g., "1920x1080")',
+    requiresImageFile: true,
+  },
+  {
+    value: 'cameraModel',
+    label: 'Camera Model',
+    category: 'images',
+    description: 'Camera/phone model from EXIF',
+    requiresImageFile: true,
+  },
+  {
+    value: 'gpsLocation',
+    label: 'GPS Location',
+    category: 'images',
+    description: 'GPS coordinates from EXIF',
+    requiresImageFile: true,
+  },
+  {
+    value: 'imageResolution',
+    label: 'Image Resolution',
+    category: 'images',
+    description: 'DPI information',
+    requiresImageFile: true,
+  },
+];
 
 // ============================================================================
 // Date Format Options
@@ -191,6 +292,12 @@ export const DEFAULT_NUMBER_CONFIG = {
   autoIncrement: true,
   startNumber: 1,
   incrementStep: 1,
+};
+
+export const DEFAULT_FILE_METADATA_CONFIG = {
+  selectedField: 'fileName' as const,
+  dateFormat: 'YYYY-MM-DD',
+  fallbackValue: 'N/A',
 };
 
 // ============================================================================

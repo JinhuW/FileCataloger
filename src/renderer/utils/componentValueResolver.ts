@@ -12,13 +12,17 @@ import type {
   SelectConfig,
   DateConfig,
   NumberConfig,
+  FileMetadataConfig,
+  FileMetadataField,
 } from '../../shared/types/componentDefinition';
 import {
   isTextComponent,
   isSelectComponent,
   isDateComponent,
   isNumberComponent,
+  isFileMetadataComponent,
 } from '../../shared/types/componentDefinition';
+import type { ShelfItem } from '../../shared/types';
 
 // ============================================================================
 // Resolution Context
@@ -29,7 +33,9 @@ export interface ComponentResolutionContext {
   fileName?: string; // Original file name
   fileCreatedDate?: number; // File creation timestamp
   fileModifiedDate?: number; // File modification timestamp
+  fileAccessedDate?: number; // File last accessed timestamp
   batchSize?: number; // Total number of files in batch
+  fileItem?: ShelfItem; // Full file item with metadata
 }
 
 // ============================================================================
@@ -64,6 +70,10 @@ export function resolveComponentValue(
 
   if (isNumberComponent(definition)) {
     return resolveNumberValue(instance, effectiveConfig as NumberConfig, context);
+  }
+
+  if (isFileMetadataComponent(definition)) {
+    return resolveFileMetadataValue(instance, effectiveConfig as FileMetadataConfig, context);
   }
 
   // Fallback (should never happen with proper typing)
@@ -180,6 +190,144 @@ function resolveNumberValue(
   }
 
   return formatted;
+}
+
+/**
+ * Resolve FILE METADATA component value
+ */
+function resolveFileMetadataValue(
+  instance: ComponentInstance,
+  config: FileMetadataConfig,
+  context: ComponentResolutionContext
+): string {
+  // Get the selected field from instance value or config
+  const field: FileMetadataField =
+    (instance.value as FileMetadataField) || config.selectedField || 'fileName';
+
+  const fileItem = context.fileItem;
+  const fileName = context.fileName || fileItem?.name || '';
+  const fallback = config.fallbackValue || 'N/A';
+
+  // Extract file name parts
+  const lastDotIndex = fileName.lastIndexOf('.');
+  const nameWithoutExt = lastDotIndex > 0 ? fileName.substring(0, lastDotIndex) : fileName;
+  const extension = lastDotIndex > 0 ? fileName.substring(lastDotIndex + 1) : '';
+
+  // Helper to check if file is an image
+  const isImageFile = (): boolean => {
+    if (!extension) return false;
+    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'svg'];
+    return imageExtensions.includes(extension.toLowerCase());
+  };
+
+  switch (field) {
+    // Basic file info
+    case 'fileName':
+      return nameWithoutExt || fallback;
+
+    case 'fileNameWithExtension':
+      return fileName || fallback;
+
+    case 'fileExtension':
+      return extension || fallback;
+
+    case 'fileSize':
+      if (fileItem?.size !== undefined) {
+        return formatFileSize(fileItem.size);
+      }
+      return fallback;
+
+    case 'filePath':
+      // Only return parent folder name for security, not full system path
+      if (fileItem?.path) {
+        const pathParts = fileItem.path.split('/');
+        pathParts.pop(); // Remove filename
+        return pathParts[pathParts.length - 1] || fallback;
+      }
+      return fallback;
+
+    // Date information
+    case 'fileCreatedDate': {
+      let timestamp = Date.now();
+      if (context.fileCreatedDate && !isNaN(context.fileCreatedDate)) {
+        timestamp = context.fileCreatedDate;
+      } else if (fileItem?.metadata?.birthtime && !isNaN(fileItem.metadata.birthtime)) {
+        timestamp = fileItem.metadata.birthtime;
+      }
+      return formatDate(timestamp, config.dateFormat || 'YYYY-MM-DD');
+    }
+
+    case 'fileModifiedDate': {
+      let timestamp = Date.now();
+      if (context.fileModifiedDate && !isNaN(context.fileModifiedDate)) {
+        timestamp = context.fileModifiedDate;
+      } else if (fileItem?.metadata?.mtime && !isNaN(fileItem.metadata.mtime)) {
+        timestamp = fileItem.metadata.mtime;
+      }
+      return formatDate(timestamp, config.dateFormat || 'YYYY-MM-DD');
+    }
+
+    case 'fileAccessedDate': {
+      let timestamp = Date.now();
+      if (context.fileAccessedDate && !isNaN(context.fileAccessedDate)) {
+        timestamp = context.fileAccessedDate;
+      } else if (fileItem?.metadata?.atime && !isNaN(fileItem.metadata.atime)) {
+        timestamp = fileItem.metadata.atime;
+      }
+      return formatDate(timestamp, config.dateFormat || 'YYYY-MM-DD');
+    }
+
+    // Image metadata (validate file is an image first)
+    case 'imageDimensions':
+      if (!isImageFile()) return fallback;
+      if (fileItem?.metadata?.image?.width && fileItem?.metadata?.image?.height) {
+        return `${fileItem.metadata.image.width}x${fileItem.metadata.image.height}`;
+      }
+      return fallback;
+
+    case 'cameraModel':
+      if (!isImageFile()) return fallback;
+      return fileItem?.metadata?.image?.camera || fallback;
+
+    case 'gpsLocation':
+      if (!isImageFile()) return fallback;
+      if (fileItem?.metadata?.image?.gps) {
+        const { latitude, longitude } = fileItem.metadata.image.gps;
+        if (
+          latitude !== undefined &&
+          longitude !== undefined &&
+          !isNaN(latitude) &&
+          !isNaN(longitude)
+        ) {
+          return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
+        }
+      }
+      return fallback;
+
+    case 'imageResolution':
+      if (!isImageFile()) return fallback;
+      if (fileItem?.metadata?.image?.dpi) {
+        return `${fileItem.metadata.image.dpi} DPI`;
+      }
+      return fallback;
+
+    default:
+      return fallback;
+  }
+}
+
+/**
+ * Format file size to human-readable format
+ */
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return '0 B';
+
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const k = 1024;
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  const value = bytes / Math.pow(k, i);
+
+  return `${value.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
 // ============================================================================

@@ -14,6 +14,33 @@ import type {
 } from '../../shared/types/componentDefinition';
 import { isSelectComponent } from '../../shared/types/componentDefinition';
 import { generateUniqueId } from '@renderer/utils/idGenerator';
+import { DEFAULT_FILE_METADATA_CONFIG } from '@renderer/constants/componentTypes';
+
+// ============================================================================
+// System Components
+// ============================================================================
+
+/**
+ * System File Metadata Component
+ * Always appears first in the library, unremovable
+ */
+export const SYSTEM_FILE_METADATA_COMPONENT: ComponentDefinition = {
+  id: 'system-file-metadata',
+  name: 'File Metadata',
+  description: 'Extract file information and properties',
+  type: 'fileMetadata',
+  icon: '📋',
+  color: '#f59e0b', // amber
+  scope: 'global',
+  config: DEFAULT_FILE_METADATA_CONFIG,
+  metadata: {
+    createdAt: 0, // System component
+    updatedAt: 0,
+    usageCount: 0,
+    isTemplate: false,
+    favorite: false,
+  },
+};
 
 // ============================================================================
 // State Interface
@@ -49,10 +76,13 @@ interface ComponentLibraryState {
   // Getters
   getComponent: (id: string) => ComponentDefinition | undefined;
   getAllComponents: () => ComponentDefinition[];
+  getUserComponents: () => ComponentDefinition[]; // User components only (excluding system)
+  getSystemComponents: () => ComponentDefinition[]; // System components only
   getComponentsByType: (type: ComponentType) => ComponentDefinition[];
   getFavoriteComponents: () => ComponentDefinition[];
   getRecentComponents: (limit: number) => ComponentDefinition[];
   getComponentCount: () => number;
+  isSystemComponent: (id: string) => boolean;
 
   // Utility Actions
   toggleFavorite: (id: string) => void;
@@ -71,7 +101,7 @@ interface ComponentLibraryState {
 export const useComponentLibraryStore = create<ComponentLibraryState>()(
   immer((set, get) => ({
     // Initial State
-    components: new Map(),
+    components: new Map([[SYSTEM_FILE_METADATA_COMPONENT.id, SYSTEM_FILE_METADATA_COMPONENT]]),
     isLoading: false,
     error: null,
 
@@ -108,6 +138,12 @@ export const useComponentLibraryStore = create<ComponentLibraryState>()(
 
     deleteComponent: id => {
       set(state => {
+        // Prevent deletion of system components
+        if (id === SYSTEM_FILE_METADATA_COMPONENT.id) {
+          state.error = 'System components cannot be deleted';
+          return;
+        }
+
         const deleted = state.components.delete(id);
         if (!deleted) {
           state.error = `Component with id ${id} not found`;
@@ -256,7 +292,11 @@ export const useComponentLibraryStore = create<ComponentLibraryState>()(
 
     setComponentsFromStorage: components => {
       set(state => {
-        state.components = new Map(components.map(c => [c.id, c]));
+        // Always include system components
+        state.components = new Map([
+          [SYSTEM_FILE_METADATA_COMPONENT.id, SYSTEM_FILE_METADATA_COMPONENT],
+          ...components.map(c => [c.id, c] as [string, ComponentDefinition]),
+        ]);
         state.error = null;
       });
     },
@@ -300,6 +340,16 @@ export const useComponentLibraryStore = create<ComponentLibraryState>()(
       return Array.from(get().components.values());
     },
 
+    getUserComponents: () => {
+      return Array.from(get().components.values()).filter(
+        c => c.id !== SYSTEM_FILE_METADATA_COMPONENT.id
+      );
+    },
+
+    getSystemComponents: () => {
+      return [SYSTEM_FILE_METADATA_COMPONENT];
+    },
+
     getComponentsByType: type => {
       return Array.from(get().components.values()).filter(c => c.type === type);
     },
@@ -323,6 +373,10 @@ export const useComponentLibraryStore = create<ComponentLibraryState>()(
 
     getComponentCount: () => {
       return get().components.size;
+    },
+
+    isSystemComponent: id => {
+      return id === SYSTEM_FILE_METADATA_COMPONENT.id;
     },
 
     // ========================================================================
@@ -434,3 +488,14 @@ export const useComponentLibraryLoading = () => useComponentLibraryStore(state =
  * Subscribe to error state
  */
 export const useComponentLibraryError = () => useComponentLibraryStore(state => state.error);
+
+/**
+ * Subscribe to user components only (excluding system)
+ */
+export const useUserComponents = () => useComponentLibraryStore(state => state.getUserComponents());
+
+/**
+ * Subscribe to system components only
+ */
+export const useSystemComponents = () =>
+  useComponentLibraryStore(state => state.getSystemComponents());

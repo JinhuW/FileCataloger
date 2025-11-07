@@ -11,10 +11,14 @@ import {
   ComponentDefinition,
   SelectConfig,
   SelectOption,
+  FileMetadataConfig,
+  FileMetadataField,
 } from '@shared/types/componentDefinition';
 import { resolveComponentValue } from '@renderer/utils/componentValueResolver';
 import { InlineSelectEditor } from './InlineSelectEditor';
+import { InlineFileMetadataEditor } from './InlineFileMetadataEditor';
 import { useComponentLibrary } from '@renderer/hooks/useComponentLibrary';
+import { FILE_METADATA_FIELD_OPTIONS } from '@renderer/constants/componentTypes';
 
 export interface ComponentChipProps {
   instance: ComponentInstance;
@@ -53,7 +57,12 @@ export const ComponentChip: React.FC<ComponentChipProps> = ({
   }, [isEditing]);
 
   const handleClick = () => {
-    if (definition.type === 'text' || definition.type === 'select' || definition.type === 'date') {
+    if (
+      definition.type === 'text' ||
+      definition.type === 'select' ||
+      definition.type === 'date' ||
+      definition.type === 'fileMetadata'
+    ) {
       setIsEditing(true);
       // For date type, convert to YYYY-MM-DD format if needed
       if (definition.type === 'date' && instance.value) {
@@ -90,6 +99,22 @@ export const ComponentChip: React.FC<ComponentChipProps> = ({
     setIsEditing(false);
   };
 
+  const handleFileMetadataSave = (field: FileMetadataField) => {
+    // Update the instance with the selected field
+    onUpdateInstance?.({ value: field });
+
+    // Also update the component definition config with type guard
+    if (definition.type === 'fileMetadata') {
+      updateComponent(definition.id, {
+        config: {
+          ...(definition.config as FileMetadataConfig),
+          selectedField: field,
+        },
+      });
+    }
+    setIsEditing(false);
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleSave();
@@ -109,6 +134,12 @@ export const ComponentChip: React.FC<ComponentChipProps> = ({
       opt => opt.id === instance.value
     );
     displayValue = selectedOption?.label || instance.value;
+  }
+
+  // For fileMetadata type, show the field label
+  if (definition.type === 'fileMetadata' && instance.value) {
+    const fieldOption = FILE_METADATA_FIELD_OPTIONS.find(opt => opt.value === instance.value);
+    displayValue = fieldOption?.label || instance.value;
   }
 
   return (
@@ -173,7 +204,8 @@ export const ComponentChip: React.FC<ComponentChipProps> = ({
               cursor:
                 definition.type === 'text' ||
                 definition.type === 'select' ||
-                definition.type === 'date'
+                definition.type === 'date' ||
+                definition.type === 'fileMetadata'
                   ? 'pointer'
                   : 'default',
               minWidth: 0,
@@ -219,6 +251,11 @@ export const ComponentChip: React.FC<ComponentChipProps> = ({
           // Select type shows placeholder while dropdown is rendered below
           <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '12px' }}>
             Select an option...
+          </span>
+        ) : definition.type === 'fileMetadata' ? (
+          // File metadata type shows placeholder while dropdown is rendered below
+          <span style={{ color: 'rgba(255, 255, 255, 0.5)', fontSize: '12px' }}>
+            Select metadata field...
           </span>
         ) : // Inline editing for text/date
         definition.type === 'date' ? (
@@ -302,6 +339,17 @@ export const ComponentChip: React.FC<ComponentChipProps> = ({
           options={(definition.config as SelectConfig).options}
           value={instance.value || ''}
           onSave={handleSelectSave}
+          onCancel={() => setIsEditing(false)}
+          color={definition.color}
+          anchorRef={chipRef}
+        />
+      )}
+
+      {/* Inline File Metadata Editor */}
+      {isEditing && definition.type === 'fileMetadata' && (
+        <InlineFileMetadataEditor
+          value={(instance.value as FileMetadataField) || 'fileName'}
+          onSave={handleFileMetadataSave}
           onCancel={() => setIsEditing(false)}
           color={definition.color}
           anchorRef={chipRef}

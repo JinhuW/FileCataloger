@@ -97,7 +97,13 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
   // Get reorderPatterns from store for drag-and-drop
   const reorderPatterns = usePatternStore(state => state.reorderPatterns);
 
-  const { getComponent, incrementUsageCount, getRecentComponents } = useComponentLibrary();
+  const {
+    getComponent,
+    incrementUsageCount,
+    getRecentComponents,
+    userComponents,
+    systemComponents,
+  } = useComponentLibrary();
 
   // Initialize loading state
   useEffect(() => {
@@ -583,7 +589,8 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
           >
             <MetadataComponentsGrid
               key={refreshKey}
-              components={getRecentComponents(Infinity)}
+              components={userComponents}
+              systemComponents={systemComponents}
               onSelectComponent={addComponentInstance}
               onSettingsClick={componentId => {
                 setEditComponentId(componentId);

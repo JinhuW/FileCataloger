@@ -103,6 +103,8 @@ export function useComponentLibrary() {
   return {
     // State
     components: store.getAllComponents(),
+    userComponents: store.getUserComponents(),
+    systemComponents: store.getSystemComponents(),
     favoriteComponents: store.getFavoriteComponents(),
     componentCount: store.getComponentCount(),
     isLoading: store.isLoading,
@@ -121,6 +123,7 @@ export function useComponentLibrary() {
     getComponentsByType: store.getComponentsByType,
     searchComponents: store.searchComponents,
     getRecentComponents: store.getRecentComponents,
+    isSystemComponent: store.isSystemComponent,
 
     // Utility
     reloadComponents: loadFromPreferences,
