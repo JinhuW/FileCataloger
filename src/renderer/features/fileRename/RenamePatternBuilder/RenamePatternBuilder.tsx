@@ -40,6 +40,7 @@ export interface RenamePatternBuilderProps {
   selectedFiles?: ShelfItem[];
   onDestinationChange?: (path: string) => void;
   onRename: (instances: ComponentInstance[]) => void;
+  onPatternChange?: (instances: ComponentInstance[]) => void;
 }
 
 const MAX_PATTERNS = PATTERN_VALIDATION.MAX_PATTERNS;
@@ -49,6 +50,7 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
   selectedFiles = [],
   onDestinationChange,
   onRename,
+  onPatternChange,
 }) => {
   const [destinationPath, setDestinationPath] = useState('');
   const [showNewPatternDialog, setShowNewPatternDialog] = useState(false);
@@ -135,6 +137,11 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
       setInstances([]);
     }
   }, [activePattern]);
+
+  // Notify parent of pattern changes for real-time preview
+  useEffect(() => {
+    onPatternChange?.(instances);
+  }, [instances, onPatternChange]);
 
   const handlePathEdit = useCallback(async () => {
     try {

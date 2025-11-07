@@ -148,6 +148,11 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
       [selectedFiles, onItemRemove]
     );
 
+    // Handle pattern change for real-time preview updates
+    const handlePatternChange = useCallback((instances: ComponentInstance[]) => {
+      setPatternInstances(instances);
+    }, []);
+
     // Handle rename action - receives instances from pattern builder
     const handleRename = useCallback(
       async (instances: ComponentInstance[]) => {
@@ -385,6 +390,7 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
                 selectedFiles={selectedFiles}
                 onDestinationChange={setDestinationPath}
                 onRename={handleRename}
+                onPatternChange={handlePatternChange}
               />
             </div>
           </div>
