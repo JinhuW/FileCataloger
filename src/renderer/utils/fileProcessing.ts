@@ -441,6 +441,46 @@ export async function processFileList(
     items.push(item);
   }
 
+  // Step 5: Fetch metadata for items with paths (batch request for efficiency)
+  const itemsWithPaths = items.filter((item): item is ShelfItem & { path: string } => !!item.path);
+  if (itemsWithPaths.length > 0) {
+    try {
+      const paths = itemsWithPaths.map(item => item.path);
+      logger.debug(`Fetching metadata for ${paths.length} files`);
+
+      const metadataResponse = (await window.api.invoke('file:get-metadata-batch', paths)) as {
+        success: boolean;
+        data?: Record<
+          string,
+          {
+            extension?: string;
+            birthtime?: number;
+            mtime?: number;
+            atime?: number;
+          }
+        >;
+        error?: string;
+      };
+
+      if (metadataResponse.success && metadataResponse.data) {
+        // Apply metadata to items
+        for (const item of itemsWithPaths) {
+          const metadata = metadataResponse.data[item.path];
+          if (metadata && Object.keys(metadata).length > 0) {
+            item.metadata = metadata;
+            logger.debug(`Applied metadata to ${item.name}:`, metadata);
+          }
+        }
+        logger.info(`✅ Successfully fetched metadata for ${itemsWithPaths.length} files`);
+      } else {
+        logger.warn('Failed to fetch file metadata:', metadataResponse.error);
+      }
+    } catch (error) {
+      logger.error('Error fetching file metadata:', error);
+      // Continue without metadata - not critical for basic functionality
+    }
+  }
+
   logger.info(
     `📦 processFileList: Processed ${items.length} items, skipped ${duplicateCount} duplicates`
   );

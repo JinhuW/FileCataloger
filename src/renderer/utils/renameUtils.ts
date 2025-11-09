@@ -69,9 +69,12 @@ export function generateRenamePreview(
     });
 
     // Add file extension (not for folders)
+    // But only if it's not already included in the generated name
     if (preserveExtension && file.type !== 'folder') {
       const ext = getFileExtension(file.name);
-      if (ext) newName += ext;
+      if (ext && !newName.endsWith(ext)) {
+        newName += ext;
+      }
     }
 
     return {
@@ -101,6 +104,31 @@ export function generateRenamePreviewFromInstances(
 ): FileRenamePreview[] {
   const { preserveExtension = true } = options;
 
+  // Determine if we should automatically append the extension
+  // We should only auto-append if:
+  // 1. Pattern includes fileExtension component (explicit extension control)
+  // 2. Pattern includes fileNameWithExtension component (already has extension)
+  // 3. Pattern has NO fileMetadata components AND user wants extension preserved
+
+  const hasFileMetadataComponent = instances.some(instance => {
+    const definition = definitions.get(instance.definitionId);
+    return definition?.type === 'fileMetadata';
+  });
+
+  const hasExplicitExtension = instances.some(instance => {
+    const definition = definitions.get(instance.definitionId);
+    if (!definition || definition.type !== 'fileMetadata') {
+      return false;
+    }
+    const selectedField = instance.value || definition.config.selectedField;
+    return selectedField === 'fileExtension' || selectedField === 'fileNameWithExtension';
+  });
+
+  // Auto-append extension only if:
+  // - No file metadata components at all (traditional text/date/number components)
+  // - OR explicitly using fileExtension/fileNameWithExtension
+  const shouldAutoAppendExtension = !hasFileMetadataComponent || hasExplicitExtension;
+
   return files.map((file, fileIndex) => {
     let newName = '';
 
@@ -117,9 +145,10 @@ export function generateRenamePreviewFromInstances(
       const context: ComponentResolutionContext = {
         fileIndex,
         fileName: file.name,
-        fileCreatedDate: file.metadata?.created,
-        fileModifiedDate: file.metadata?.modified,
+        fileCreatedDate: file.metadata?.birthtime,
+        fileModifiedDate: file.metadata?.mtime,
         batchSize: files.length,
+        fileItem: file, // Add the complete file item for metadata access
       };
 
       // Resolve the component value
@@ -128,9 +157,12 @@ export function generateRenamePreviewFromInstances(
     });
 
     // Add file extension (not for folders)
-    if (preserveExtension && file.type !== 'folder') {
+    // Only auto-append if no file metadata OR if explicitly using extension fields
+    if (preserveExtension && file.type !== 'folder' && shouldAutoAppendExtension) {
       const ext = getFileExtension(file.name);
-      if (ext) newName += ext;
+      if (ext && !newName.endsWith(ext)) {
+        newName += ext;
+      }
     }
 
     return {

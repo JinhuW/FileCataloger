@@ -124,6 +124,9 @@ const validChannels = [
   'window:resize',
   'window:resized',
   'window:get-bounds',
+  // File metadata channels
+  'file:get-metadata',
+  'file:get-metadata-batch',
 ] as const;
 
 // Export the type for use in other files

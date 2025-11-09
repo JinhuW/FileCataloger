@@ -64,9 +64,8 @@ export const COMPONENT_TYPE_METADATA: Record<ComponentType, ComponentTypeMetadat
 export interface FileMetadataFieldOption {
   value: string;
   label: string;
-  category: 'basic' | 'dates' | 'images';
+  category: 'basic' | 'dates';
   description: string;
-  requiresImageFile?: boolean;
 }
 
 export const FILE_METADATA_FIELD_OPTIONS: FileMetadataFieldOption[] = [
@@ -87,7 +86,7 @@ export const FILE_METADATA_FIELD_OPTIONS: FileMetadataFieldOption[] = [
     value: 'fileExtension',
     label: 'File Extension',
     category: 'basic',
-    description: 'Extension only (e.g., "pdf")',
+    description: 'Extension with dot (e.g., ".pdf") - prevents automatic extension',
   },
   {
     value: 'fileSize',
@@ -99,7 +98,7 @@ export const FILE_METADATA_FIELD_OPTIONS: FileMetadataFieldOption[] = [
     value: 'filePath',
     label: 'File Path',
     category: 'basic',
-    description: 'Full file path',
+    description: 'Directory path without filename (e.g., "/Users/name/Documents")',
   },
   // Date information
   {
@@ -119,35 +118,6 @@ export const FILE_METADATA_FIELD_OPTIONS: FileMetadataFieldOption[] = [
     label: 'Accessed Date',
     category: 'dates',
     description: 'Last access date',
-  },
-  // Image metadata
-  {
-    value: 'imageDimensions',
-    label: 'Image Dimensions',
-    category: 'images',
-    description: 'Width x Height (e.g., "1920x1080")',
-    requiresImageFile: true,
-  },
-  {
-    value: 'cameraModel',
-    label: 'Camera Model',
-    category: 'images',
-    description: 'Camera/phone model from EXIF',
-    requiresImageFile: true,
-  },
-  {
-    value: 'gpsLocation',
-    label: 'GPS Location',
-    category: 'images',
-    description: 'GPS coordinates from EXIF',
-    requiresImageFile: true,
-  },
-  {
-    value: 'imageResolution',
-    label: 'Image Resolution',
-    category: 'images',
-    description: 'DPI information',
-    requiresImageFile: true,
   },
 ];
 

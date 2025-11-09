@@ -211,14 +211,7 @@ function resolveFileMetadataValue(
   // Extract file name parts
   const lastDotIndex = fileName.lastIndexOf('.');
   const nameWithoutExt = lastDotIndex > 0 ? fileName.substring(0, lastDotIndex) : fileName;
-  const extension = lastDotIndex > 0 ? fileName.substring(lastDotIndex + 1) : '';
-
-  // Helper to check if file is an image
-  const isImageFile = (): boolean => {
-    if (!extension) return false;
-    const imageExtensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff', 'svg'];
-    return imageExtensions.includes(extension.toLowerCase());
-  };
+  const extensionWithDot = lastDotIndex > 0 ? fileName.substring(lastDotIndex) : '';
 
   switch (field) {
     // Basic file info
@@ -229,7 +222,7 @@ function resolveFileMetadataValue(
       return fileName || fallback;
 
     case 'fileExtension':
-      return extension || fallback;
+      return extensionWithDot || fallback;
 
     case 'fileSize':
       if (fileItem?.size !== undefined) {
@@ -238,11 +231,11 @@ function resolveFileMetadataValue(
       return fallback;
 
     case 'filePath':
-      // Only return parent folder name for security, not full system path
+      // Return full directory path (without filename)
       if (fileItem?.path) {
         const pathParts = fileItem.path.split('/');
         pathParts.pop(); // Remove filename
-        return pathParts[pathParts.length - 1] || fallback;
+        return pathParts.join('/') || fallback;
       }
       return fallback;
 
@@ -276,40 +269,6 @@ function resolveFileMetadataValue(
       }
       return formatDate(timestamp, config.dateFormat || 'YYYY-MM-DD');
     }
-
-    // Image metadata (validate file is an image first)
-    case 'imageDimensions':
-      if (!isImageFile()) return fallback;
-      if (fileItem?.metadata?.image?.width && fileItem?.metadata?.image?.height) {
-        return `${fileItem.metadata.image.width}x${fileItem.metadata.image.height}`;
-      }
-      return fallback;
-
-    case 'cameraModel':
-      if (!isImageFile()) return fallback;
-      return fileItem?.metadata?.image?.camera || fallback;
-
-    case 'gpsLocation':
-      if (!isImageFile()) return fallback;
-      if (fileItem?.metadata?.image?.gps) {
-        const { latitude, longitude } = fileItem.metadata.image.gps;
-        if (
-          latitude !== undefined &&
-          longitude !== undefined &&
-          !isNaN(latitude) &&
-          !isNaN(longitude)
-        ) {
-          return `${latitude.toFixed(6)}, ${longitude.toFixed(6)}`;
-        }
-      }
-      return fallback;
-
-    case 'imageResolution':
-      if (!isImageFile()) return fallback;
-      if (fileItem?.metadata?.image?.dpi) {
-        return `${fileItem.metadata.image.dpi} DPI`;
-      }
-      return fallback;
 
     default:
       return fallback;

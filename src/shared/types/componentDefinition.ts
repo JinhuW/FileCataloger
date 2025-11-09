@@ -25,12 +25,7 @@ export type FileMetadataField =
   // Date information
   | 'fileCreatedDate' // File creation date
   | 'fileModifiedDate' // Last modified date
-  | 'fileAccessedDate' // Last access date
-  // Image metadata
-  | 'imageDimensions' // Width x Height
-  | 'cameraModel' // Camera/phone model
-  | 'gpsLocation' // GPS coordinates
-  | 'imageResolution'; // DPI information
+  | 'fileAccessedDate'; // Last access date
 
 // ============================================================================
 // Select Component Types
@@ -126,7 +121,7 @@ export interface ComponentInstance {
   definitionId: string; // Links to ComponentDefinition
   name: string; // Display name (cached from definition)
   type: ComponentType; // Cached from definition
-  value?: any; // Current value for this instance
+  value?: unknown; // Current value for this instance
   overrides?: Partial<TextConfig | SelectConfig | DateConfig | NumberConfig | FileMetadataConfig>; // Pattern-specific overrides
 }
 

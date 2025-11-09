@@ -409,6 +409,15 @@ class FileCatalogerApp {
         this.logger.error('Failed to register component handlers:', error);
       });
 
+    // Register file metadata handlers
+    import('./ipc/file_metadata_handlers')
+      .then(({ registerFileMetadataHandlers }) => {
+        registerFileMetadataHandlers();
+      })
+      .catch(error => {
+        this.logger.error('Failed to register file metadata handlers:', error);
+      });
+
     // Get application status
     ipcMain.handle('app:get-status', () => {
       if (!this.applicationController) {
