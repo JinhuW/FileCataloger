@@ -340,8 +340,20 @@ export class DragDropCoordinator extends EventEmitter {
     this.shelfCreatedForCurrentDrag = false;
     this.dragSessionShelfId = null;
 
-    // Clear native dragged files immediately
-    this.nativeDraggedFiles = [];
+    // FIX: Schedule delayed clearing of native dragged files (2 seconds)
+    // This gives the renderer time to retrieve file paths via IPC after drop
+    this.logger.info(
+      `📁 Keeping ${this.nativeDraggedFiles.length} file paths cached for 2 seconds`
+    );
+    this.timerManager.setTimeout(
+      'clear-native-files',
+      () => {
+        this.nativeDraggedFiles = [];
+        this.logger.info('🗑️ Cleared cached native dragged files (delayed clear)');
+      },
+      2000,
+      'Delayed clearing of native file paths to prevent race condition'
+    );
 
     // Schedule cleanup operations
     this.schedulePostDragCleanup();
@@ -369,9 +381,8 @@ export class DragDropCoordinator extends EventEmitter {
             this.logger.info('🧹 Checking for empty shelves');
             this.shelfLifecycleManager.clearEmptyShelves();
 
-            // Clear native dragged files
-            this.nativeDraggedFiles = [];
-            this.logger.info('🗑️ Cleared native dragged files');
+            // NOTE: Native dragged files are cleared separately in handleDragEnd()
+            // with a 2-second delay to prevent race condition with IPC calls
 
             // Re-evaluate remaining shelves
             this.shelfLifecycleManager.reevaluateEmptyShelvesForAutoHide();

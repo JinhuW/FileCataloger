@@ -133,6 +133,10 @@ private:
         std::deque<CGPoint> trajectory;  // Copy for thread safety
     };
     std::queue<AnalysisTask> analysisQueue;
+
+    // Delayed file path clearing to prevent race condition
+    CFTimerWrapper clearPathsTimer;
+    std::atomic<bool> hasPendingClear{false};
     
     static CGEventRef DragEventCallback(CGEventTapProxy proxy, 
                                         CGEventType type, 
@@ -144,6 +148,10 @@ private:
     bool DetectCircularMotion();
     bool DetectZigzagPattern();
     double CalculateAngle(CGPoint p1, CGPoint p2, CGPoint p3);
+
+    // Delayed file path clearing
+    void ScheduleClearFilePaths();
+    static void ClearFilePathsCallback(CFRunLoopTimerRef timer, void* info);
 };
 
 Napi::FunctionReference DarwinDragMonitor::constructor;
@@ -482,6 +490,14 @@ CGEventRef DarwinDragMonitor::DragEventCallback(CGEventTapProxy proxy,
     
     // Handle mouse down - potential drag start
     if (type == kCGEventLeftMouseDown) {
+        // If there's a pending clear, execute it immediately to prevent stale data
+        if (monitor->hasPendingClear.load()) {
+            NSLog(@"[DragMonitor] New drag starting - clearing stale file paths immediately");
+            std::lock_guard<std::mutex> lock(monitor->filePathsMutex);
+            monitor->draggedFilePaths.clear();
+            monitor->hasPendingClear.store(false);
+        }
+
         // Reset drag state
         dragState.startPoint = location;
         dragState.lastPoint = location;
@@ -602,7 +618,7 @@ CGEventRef DarwinDragMonitor::DragEventCallback(CGEventTapProxy proxy,
     // Handle mouse up - drag end
     else if (type == kCGEventLeftMouseUp) {
         bool wasDragging = monitor->isDragging.exchange(false);
-        
+
         if (wasDragging) {
             // Clear drag state for polling
             monitor->hasActiveDrag.store(false);
@@ -611,10 +627,12 @@ CGEventRef DarwinDragMonitor::DragEventCallback(CGEventTapProxy proxy,
             // Reset pasteboard change count to force fresh detection on next drag
             monitor->lastPasteboardChangeCount.store(-1);
 
-            std::lock_guard<std::mutex> lock(monitor->filePathsMutex);
-            monitor->draggedFilePaths.clear();
+            // FIX: Schedule delayed clearing instead of immediate clearing
+            // This gives the renderer time to retrieve file paths via IPC
+            NSLog(@"[DragMonitor] Drag ended - scheduling file path clearing in 1 second");
+            monitor->ScheduleClearFilePaths();
         }
-        
+
         // Reset state
         dragState.hasFiles = false;
         dragState.totalDistance = 0;
@@ -994,6 +1012,45 @@ void DarwinDragMonitor::RunAnalysisThread() {
             lock.lock();
         }
     }
+}
+
+// Schedule delayed file path clearing to prevent race condition
+void DarwinDragMonitor::ScheduleClearFilePaths() {
+    // Cancel any existing timer
+    clearPathsTimer.~CFTimerWrapper();
+    new (&clearPathsTimer) CFTimerWrapper();
+
+    // Create one-shot timer for 1 second delay
+    CFRunLoopTimerContext context = {0, this, NULL, NULL, NULL};
+    CFRunLoopTimerRef timer = CFRunLoopTimerCreate(
+        kCFAllocatorDefault,
+        CFAbsoluteTimeGetCurrent() + 0.5,  // Fire in 0.5 second
+        0,  // Non-repeating (one-shot)
+        0, 0,
+        ClearFilePathsCallback,
+        &context
+    );
+
+    if (timer) {
+        CFRunLoopRef runLoop = CFRunLoopGetMain();
+        CFRunLoopAddTimer(runLoop, timer, kCFRunLoopCommonModes);
+        hasPendingClear.store(true);
+        NSLog(@"[DragMonitor] Scheduled file path clearing timer (1 second delay)");
+        CFRelease(timer);
+    }
+}
+
+// Static callback for timer
+void DarwinDragMonitor::ClearFilePathsCallback(CFRunLoopTimerRef timer, void* info) {
+    DarwinDragMonitor* monitor = static_cast<DarwinDragMonitor*>(info);
+
+    NSLog(@"[DragMonitor] Clearing file paths (delayed clearing executed)");
+
+    std::lock_guard<std::mutex> lock(monitor->filePathsMutex);
+    monitor->draggedFilePaths.clear();
+    monitor->hasPendingClear.store(false);
+
+    NSLog(@"[DragMonitor] File paths cleared successfully");
 }
 
 // Module initialization

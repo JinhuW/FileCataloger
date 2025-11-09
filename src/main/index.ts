@@ -743,17 +743,26 @@ class FileCatalogerApp {
 
     // Native drag file resolution
     ipcMain.handle('drag:get-native-files', async () => {
+      const requestTime = Date.now();
       if (!this.applicationController) {
         this.logger.debug('📁 No applicationController, returning empty array');
         return [];
       }
       const nativeFiles = this.applicationController.getNativeDraggedFiles();
-      this.logger.debug('📁 Returning native dragged files:', {
+      this.logger.info('📁 IPC: drag:get-native-files requested', {
+        timestamp: new Date(requestTime).toISOString(),
         count: nativeFiles.length,
-        files: nativeFiles,
+        files: nativeFiles.map(f => ({ name: f.name, hasPath: !!f.path })),
         type: typeof nativeFiles,
         isArray: Array.isArray(nativeFiles),
       });
+
+      if (nativeFiles.length === 0) {
+        this.logger.warn('⚠️ IPC returned empty file list - possible race condition!');
+      } else {
+        this.logger.info(`✅ Successfully retrieved ${nativeFiles.length} file path(s) from cache`);
+      }
+
       return nativeFiles;
     });
 
