@@ -20,7 +20,7 @@ export function useComponentTemplates() {
 
   // Import template component
   const importTemplate = useCallback(
-    (templateId: string) => {
+    async (templateId: string) => {
       const allComponents = store.getAllComponents();
 
       // Find template in all packs
@@ -36,8 +36,24 @@ export function useComponentTemplates() {
 
           // Import template
           store.addComponent(template);
-          logger.debug('Template imported:', template.name);
-          return { success: true, componentId: template.id };
+
+          // Save to preferences
+          const updatedComponents = store.getAllComponents();
+          try {
+            const result = await window.electronAPI.invoke(
+              'component:save-library',
+              updatedComponents
+            );
+            if (result.success) {
+              logger.debug('Template imported and saved:', template.name);
+              return { success: true, componentId: template.id };
+            } else {
+              throw new Error(result.error || 'Failed to save component library');
+            }
+          } catch (error) {
+            logger.error('Failed to save imported template:', error);
+            return { success: false, error: 'Failed to save component to library' };
+          }
         }
       }
 
@@ -48,7 +64,7 @@ export function useComponentTemplates() {
 
   // Import all templates from a pack
   const importTemplatePack = useCallback(
-    (packId: string, selectedIds?: string[]) => {
+    async (packId: string, selectedIds?: string[]) => {
       const pack = getTemplatePack(packId);
       if (!pack) {
         return { success: false, error: 'Template pack not found', imported: 0 };
@@ -72,6 +88,28 @@ export function useComponentTemplates() {
 
         store.addComponent(template);
         imported++;
+      }
+
+      // Save to preferences if any components were imported
+      if (imported > 0) {
+        const updatedComponents = store.getAllComponents();
+        try {
+          const result = await window.electronAPI.invoke(
+            'component:save-library',
+            updatedComponents
+          );
+          if (!result.success) {
+            throw new Error(result.error || 'Failed to save component library');
+          }
+        } catch (error) {
+          logger.error('Failed to save imported template pack:', error);
+          return {
+            success: false,
+            imported: 0,
+            total: componentsToImport.length,
+            error: 'Failed to save components to library',
+          };
+        }
       }
 
       logger.debug('Template pack imported:', { packId, imported, errors: errors.length });

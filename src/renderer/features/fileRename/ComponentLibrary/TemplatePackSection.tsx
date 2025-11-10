@@ -17,11 +17,19 @@ export const TemplatePackSection: React.FC<TemplatePackSectionProps> = ({ onSele
   const { templatePacks, importTemplate } = useComponentTemplates();
   const [expandedPack, setExpandedPack] = useState<string | null>(null);
 
-  const handleImportTemplate = (templateId: string) => {
-    const result = importTemplate(templateId);
-    if (result.success && result.componentId) {
-      onSelect(result.componentId);
-      onClose();
+  const handleImportTemplate = async (templateId: string) => {
+    try {
+      const result = await importTemplate(templateId);
+      if (result.success && result.componentId) {
+        onSelect(result.componentId);
+        onClose();
+      } else {
+        // eslint-disable-next-line no-console
+        console.error('Failed to import template:', result.error || 'Unknown error');
+      }
+    } catch (error) {
+      // eslint-disable-next-line no-console
+      console.error('Failed to import template:', error);
     }
   };
 

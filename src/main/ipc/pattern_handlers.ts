@@ -1,4 +1,4 @@
-import { ipcMain, dialog } from 'electron';
+import { ipcMain, dialog, BrowserWindow } from 'electron';
 import { SavedPattern } from '@shared/types';
 import { patternPersistenceManager } from '../modules/storage/pattern_persistence_manager';
 import { logger } from '../modules/utils/logger';
@@ -253,34 +253,47 @@ export function registerPatternHandlers(): void {
   );
 
   // Import from file dialog
-  ipcMain.handle('pattern:import-from-file', async (): Promise<IPCResponse<SavedPattern[]>> => {
-    return handleAsyncIPC(async () => {
-      const result = await dialog.showOpenDialog({
-        title: 'Import Patterns',
-        filters: [
-          { name: 'JSON Files', extensions: ['json'] },
-          { name: 'All Files', extensions: ['*'] },
-        ],
-        properties: ['openFile'],
-      });
+  ipcMain.handle(
+    'pattern:import-from-file',
+    async (event): Promise<IPCResponse<SavedPattern[]>> => {
+      return handleAsyncIPC(async () => {
+        const senderWindow = BrowserWindow.fromWebContents(event.sender);
 
-      if (result.canceled || result.filePaths.length === 0) {
-        throw new Error('Import canceled by user');
-      }
+        if (!senderWindow) {
+          logger.warn('Failed to find parent window for import dialog, using global dialog');
+        }
 
-      const fs = await import('fs/promises');
-      const data = await fs.readFile(result.filePaths[0], 'utf8');
+        const dialogOptions = {
+          title: 'Import Patterns',
+          filters: [
+            { name: 'JSON Files', extensions: ['json'] },
+            { name: 'All Files', extensions: ['*'] },
+          ],
+          properties: ['openFile' as const],
+        };
 
-      // Try to import as multiple patterns first, fallback to single pattern
-      try {
-        return await patternPersistenceManager.importPatterns(data);
-      } catch (error) {
-        // If multiple import fails, try single pattern import
-        const singlePattern = await patternPersistenceManager.importPattern(data);
-        return [singlePattern];
-      }
-    }, 'pattern:import-from-file');
-  });
+        const result = senderWindow
+          ? await dialog.showOpenDialog(senderWindow, dialogOptions)
+          : await dialog.showOpenDialog(dialogOptions);
+
+        if (result.canceled || result.filePaths.length === 0) {
+          throw new Error('Import canceled by user');
+        }
+
+        const fs = await import('fs/promises');
+        const data = await fs.readFile(result.filePaths[0], 'utf8');
+
+        // Try to import as multiple patterns first, fallback to single pattern
+        try {
+          return await patternPersistenceManager.importPatterns(data);
+        } catch (error) {
+          // If multiple import fails, try single pattern import
+          const singlePattern = await patternPersistenceManager.importPattern(data);
+          return [singlePattern];
+        }
+      }, 'pattern:import-from-file');
+    }
+  );
 
   // Maintenance operations
   ipcMain.handle('pattern:vacuum', async (): Promise<IPCResponse<void>> => {
@@ -329,16 +342,26 @@ export function registerPatternHandlers(): void {
     }, 'pattern:backup-to-file');
   });
 
-  ipcMain.handle('pattern:restore-from-file', async (): Promise<IPCResponse<void>> => {
+  ipcMain.handle('pattern:restore-from-file', async (event): Promise<IPCResponse<void>> => {
     return handleAsyncIPC(async () => {
-      const result = await dialog.showOpenDialog({
+      const senderWindow = BrowserWindow.fromWebContents(event.sender);
+
+      if (!senderWindow) {
+        logger.warn('Failed to find parent window for restore dialog, using global dialog');
+      }
+
+      const dialogOptions = {
         title: 'Restore Patterns from Backup',
         filters: [
           { name: 'JSON Files', extensions: ['json'] },
           { name: 'All Files', extensions: ['*'] },
         ],
-        properties: ['openFile'],
-      });
+        properties: ['openFile' as const],
+      };
+
+      const result = senderWindow
+        ? await dialog.showOpenDialog(senderWindow, dialogOptions)
+        : await dialog.showOpenDialog(dialogOptions);
 
       if (result.canceled || result.filePaths.length === 0) {
         throw new Error('Restore canceled by user');

@@ -661,12 +661,22 @@ class FileCatalogerApp {
 
     // Handle folder selection dialog
     ipcMain.handle('dialog:select-folder', async (event, defaultPath?: string) => {
-      const result = await dialog.showOpenDialog({
+      const senderWindow = BrowserWindow.fromWebContents(event.sender);
+
+      if (!senderWindow) {
+        this.logger.warn('Failed to find parent window for folder dialog, using global dialog');
+      }
+
+      const dialogOptions = {
         defaultPath: defaultPath || app.getPath('downloads'),
-        properties: ['openDirectory', 'createDirectory'],
+        properties: ['openDirectory' as const, 'createDirectory' as const],
         title: 'Select Destination Folder',
         buttonLabel: 'Select Folder',
-      });
+      };
+
+      const result = senderWindow
+        ? await dialog.showOpenDialog(senderWindow, dialogOptions)
+        : await dialog.showOpenDialog(dialogOptions);
 
       if (!result.canceled && result.filePaths.length > 0) {
         return result.filePaths[0];

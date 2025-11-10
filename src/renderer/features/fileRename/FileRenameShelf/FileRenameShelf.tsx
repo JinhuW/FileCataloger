@@ -311,33 +311,6 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
             >
               <div
                 style={{
-                  padding: '12px',
-                  borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-                }}
-              >
-                <h3
-                  style={{
-                    color: '#fff',
-                    fontSize: '14px',
-                    fontWeight: 600,
-                    margin: 0,
-                  }}
-                >
-                  Preview
-                </h3>
-                <p
-                  style={{
-                    color: 'rgba(255, 255, 255, 0.6)',
-                    fontSize: '12px',
-                    margin: '2px 0 0',
-                  }}
-                >
-                  {selectedFiles.length} files selected
-                </p>
-              </div>
-
-              <div
-                style={{
                   flex: 1,
                   overflow: 'hidden',
                   position: 'relative',
@@ -354,7 +327,11 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
                 ) : (
                   <>
                     <div style={{ flex: 1, overflow: 'auto' }}>
-                      <FileRenamePreviewList previews={filePreview} onRemove={handleFileRemove} />
+                      <FileRenamePreviewList
+                        previews={filePreview}
+                        files={selectedFiles}
+                        onRemove={handleFileRemove}
+                      />
                     </div>
                     <div
                       style={{
