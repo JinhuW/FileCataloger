@@ -81,6 +81,12 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
   // Ref for the Add Component button to position dropdown
   const addComponentButtonRef = useRef<HTMLButtonElement>(null);
 
+  // Ref to track if we're currently syncing from pattern to avoid auto-save loop
+  const isSyncingFromPattern = useRef(false);
+
+  // Ref to track the last saved instances to prevent redundant saves
+  const lastSavedInstances = useRef<ComponentInstance[]>([]);
+
   const toast = useToast();
   const {
     patterns,
@@ -138,17 +144,94 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
 
   // Sync instances with active pattern
   useEffect(() => {
+    // Set flag to indicate we're syncing from pattern (to prevent auto-save loop)
+    isSyncingFromPattern.current = true;
+
     if (activePattern?.components) {
-      // Convert legacy components to instances if needed
-      // For now, we'll start with empty instances
-      setInstances([]);
+      // Load instances from pattern components
+      const loadedInstances: ComponentInstance[] = activePattern.components.map(component => {
+        // Check if it's already a ComponentInstance
+        if ('definitionId' in component) {
+          return component as ComponentInstance;
+        }
+        // Legacy RenameComponent - convert to instance format
+        return {
+          id: component.id,
+          definitionId: component.id,
+          name: component.name || 'Unknown',
+          type: component.type,
+          value: undefined,
+          overrides: {},
+        } as ComponentInstance;
+      });
+
+      // Only update if instances actually changed to prevent infinite loop
+      setInstances(prevInstances => {
+        const hasChanged =
+          prevInstances.length !== loadedInstances.length ||
+          prevInstances.some((inst, idx) => inst.id !== loadedInstances[idx]?.id);
+
+        if (hasChanged) {
+          // Update last saved reference
+          lastSavedInstances.current = loadedInstances;
+        }
+
+        return hasChanged ? loadedInstances : prevInstances;
+      });
+    } else {
+      setInstances(prevInstances => {
+        if (prevInstances.length > 0) {
+          lastSavedInstances.current = [];
+          return [];
+        }
+        return prevInstances;
+      });
     }
+
+    // Reset flag after a tick to allow auto-save to work on user changes
+    setTimeout(() => {
+      isSyncingFromPattern.current = false;
+    }, 0);
   }, [activePattern]);
 
   // Notify parent of pattern changes for real-time preview
   useEffect(() => {
     onPatternChange?.(instances);
-  }, [instances, onPatternChange]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instances]); // Exclude onPatternChange to avoid infinite loop
+
+  // Auto-save instances to pattern whenever they change
+  useEffect(() => {
+    // Skip if we're currently syncing FROM the pattern (prevents loop)
+    if (isSyncingFromPattern.current) {
+      return;
+    }
+
+    if (activePattern && !activePattern.isBuiltIn && activePatternId) {
+      // Check if instances have changed from last saved state
+      const hasChanged =
+        instances.length !== lastSavedInstances.current.length ||
+        instances.some(
+          (inst, idx) =>
+            !lastSavedInstances.current[idx] ||
+            inst.id !== lastSavedInstances.current[idx].id ||
+            inst.value !== lastSavedInstances.current[idx].value
+        );
+
+      if (hasChanged) {
+        // Update last saved reference BEFORE calling updatePattern
+        lastSavedInstances.current = instances;
+
+        // Debounce the actual save call
+        const timeoutId = setTimeout(() => {
+          updatePattern(activePatternId, { components: instances as any });
+        }, 300); // 300ms debounce
+
+        return () => clearTimeout(timeoutId);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instances, activePatternId]);
 
   const handlePathEdit = useCallback(async () => {
     try {
