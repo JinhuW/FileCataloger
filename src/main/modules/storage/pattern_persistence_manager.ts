@@ -21,8 +21,6 @@ const SavedPatternSchema = z.object({
   components: z.array(RenameComponentSchema).min(0).max(20),
   createdAt: z.number(),
   updatedAt: z.number(),
-  isBuiltIn: z.boolean(),
-  isDefault: z.boolean(),
   metadata: z
     .object({
       description: z.string().optional(),
@@ -38,15 +36,12 @@ interface ListOptions {
   offset?: number;
   sortBy?: 'name' | 'createdAt' | 'updatedAt' | 'usageCount';
   sortOrder?: 'asc' | 'desc';
-  includeBuiltIn?: boolean;
   favorite?: boolean;
   tags?: string[];
 }
 
 interface PatternUsageStats {
   totalPatterns: number;
-  customPatterns: number;
-  builtInPatterns: number;
   mostUsedPattern: SavedPattern | null;
   recentPatterns: SavedPattern[];
   favoritePatterns: SavedPattern[];
@@ -243,8 +238,8 @@ export class PatternPersistenceManager {
           validatedPattern.createdAt,
           validatedPattern.updatedAt,
           validatedPattern.metadata?.usageCount || 0,
-          validatedPattern.isBuiltIn ? 1 : 0,
-          validatedPattern.isDefault ? 1 : 0,
+          0, // is_built_in (removed - always 0)
+          0, // is_default (removed - always 0)
           validatedPattern.metadata?.description || null,
           validatedPattern.metadata ? JSON.stringify(validatedPattern.metadata) : null
         );
@@ -313,8 +308,6 @@ export class PatternPersistenceManager {
         components,
         createdAt: patternRow.created_at,
         updatedAt: patternRow.updated_at,
-        isBuiltIn: patternRow.is_built_in === 1,
-        isDefault: patternRow.is_default === 1,
         metadata: {
           ...(patternRow.metadata ? JSON.parse(patternRow.metadata) : {}),
           usageCount: patternRow.usage_count,
@@ -354,10 +347,6 @@ export class PatternPersistenceManager {
       const pattern = await this.loadPattern(id);
       if (!pattern) return false;
 
-      if (pattern.isBuiltIn) {
-        throw new Error('Cannot delete built-in patterns');
-      }
-
       const deletePattern = this.statements.get('deletePattern');
       const result = deletePattern!.run(id);
 
@@ -380,7 +369,6 @@ export class PatternPersistenceManager {
       offset = 0,
       sortBy = 'updatedAt',
       sortOrder = 'desc',
-      includeBuiltIn = true,
       favorite,
       tags = [],
     } = options;
@@ -392,10 +380,6 @@ export class PatternPersistenceManager {
 
       const conditions: string[] = [];
       const params: any[] = [];
-
-      if (!includeBuiltIn) {
-        conditions.push('p.is_built_in = 0');
-      }
 
       if (favorite !== undefined) {
         if (favorite) {
@@ -530,7 +514,7 @@ export class PatternPersistenceManager {
   }
 
   public async exportAllPatterns(): Promise<string> {
-    const patterns = await this.listPatterns({ includeBuiltIn: false });
+    const patterns = await this.listPatterns();
 
     const exportData = {
       version: '1.0.0',
@@ -564,8 +548,6 @@ export class PatternPersistenceManager {
       pattern.id = `imported-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
       pattern.createdAt = Date.now();
       pattern.updatedAt = Date.now();
-      pattern.isBuiltIn = false;
-      pattern.isDefault = false;
 
       await this.savePattern(pattern);
 
@@ -633,8 +615,6 @@ export class PatternPersistenceManager {
     if (!this.db) {
       return {
         totalPatterns: 0,
-        customPatterns: 0,
-        builtInPatterns: 0,
         mostUsedPattern: null,
         recentPatterns: [],
         favoritePatterns: [],
@@ -645,12 +625,6 @@ export class PatternPersistenceManager {
       const totalPatterns = this.db.prepare('SELECT COUNT(*) as count FROM patterns').get() as {
         count: number;
       };
-      const customPatterns = this.db
-        .prepare('SELECT COUNT(*) as count FROM patterns WHERE is_built_in = 0')
-        .get() as { count: number };
-      const builtInPatterns = this.db
-        .prepare('SELECT COUNT(*) as count FROM patterns WHERE is_built_in = 1')
-        .get() as { count: number };
 
       const mostUsedRow = this.db
         .prepare('SELECT id FROM patterns ORDER BY usage_count DESC LIMIT 1')
@@ -662,8 +636,6 @@ export class PatternPersistenceManager {
 
       return {
         totalPatterns: totalPatterns.count,
-        customPatterns: customPatterns.count,
-        builtInPatterns: builtInPatterns.count,
         mostUsedPattern,
         recentPatterns,
         favoritePatterns,

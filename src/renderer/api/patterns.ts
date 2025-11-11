@@ -14,7 +14,6 @@ interface ListOptions {
   offset?: number;
   sortBy?: 'name' | 'createdAt' | 'updatedAt' | 'usageCount';
   sortOrder?: 'asc' | 'desc';
-  includeBuiltIn?: boolean;
   favorite?: boolean;
   tags?: string[];
 }
@@ -215,8 +214,6 @@ export async function duplicatePattern(
     name,
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    isBuiltIn: false,
-    isDefault: false,
     metadata: {
       ...pattern.metadata,
       usageCount: 0,

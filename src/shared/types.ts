@@ -147,8 +147,6 @@ export interface SavedPattern {
   componentDefinitions?: ComponentDefinition[]; // Component definitions used by instances
   createdAt: number;
   updatedAt: number;
-  isBuiltIn: boolean;
-  isDefault: boolean;
   metadata?: {
     description?: string;
     usageCount?: number;

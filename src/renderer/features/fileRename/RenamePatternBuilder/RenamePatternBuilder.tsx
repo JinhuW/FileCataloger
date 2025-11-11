@@ -207,7 +207,7 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
       return;
     }
 
-    if (activePattern && !activePattern.isBuiltIn && activePatternId) {
+    if (activePattern && activePatternId) {
       // Check if instances have changed from last saved state
       const hasChanged =
         instances.length !== lastSavedInstances.current.length ||
@@ -417,25 +417,15 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
     setShowTypeDropdown(prev => !prev);
   }, []);
 
-  const handleButtonMouseEnter = useCallback(
-    (e: React.MouseEvent<HTMLButtonElement>) => {
-      if (!activePattern?.isBuiltIn) {
-        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
-        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.5)';
-      }
-    },
-    [activePattern?.isBuiltIn]
-  );
+  const handleButtonMouseEnter = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.5)';
+  }, []);
 
-  const handleButtonMouseLeave = useCallback(
-    (e: React.MouseEvent<HTMLButtonElement>) => {
-      if (!activePattern?.isBuiltIn) {
-        e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
-        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
-      }
-    },
-    [activePattern?.isBuiltIn]
-  );
+  const handleButtonMouseLeave = useCallback((e: React.MouseEvent<HTMLButtonElement>) => {
+    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)';
+    e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.3)';
+  }, []);
 
   if (isLoading) {
     return <PatternBuilderSkeleton />;
@@ -486,7 +476,7 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
               id={pattern.id}
               name={pattern.name}
               active={pattern.id === activePatternId}
-              editable={!pattern.isBuiltIn}
+              editable={true}
               isDragging={draggedPatternId === pattern.id}
               onClick={() => setActivePattern(pattern.id)}
               onClose={() => handleDeletePattern(pattern.id)}
@@ -586,7 +576,7 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
                         definition={definition}
                         onRemove={() => removeInstance(instance.id)}
                         onUpdateInstance={updates => updateInstance(instance.id, updates)}
-                        canDrag={!activePattern?.isBuiltIn}
+                        canDrag={true}
                         onDragStart={() => handleInstanceDragStart(instance.id)}
                         onDragEnd={handleInstanceDragEnd}
                         isDragging={draggedInstanceId === instance.id}
@@ -604,22 +594,17 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
           <button
             ref={addComponentButtonRef}
             onClick={handleToggleDropdown}
-            disabled={activePattern?.isBuiltIn}
             aria-label="Add component to pattern"
             aria-expanded={showTypeDropdown}
             aria-haspopup="menu"
             style={{
               width: '100%',
-              background: activePattern?.isBuiltIn
-                ? 'rgba(255, 255, 255, 0.02)'
-                : 'rgba(255, 255, 255, 0.05)',
+              background: 'rgba(255, 255, 255, 0.05)',
               border: '1px dashed rgba(255, 255, 255, 0.3)',
               borderRadius: '8px',
               padding: '10px 16px',
-              color: activePattern?.isBuiltIn
-                ? 'rgba(255, 255, 255, 0.3)'
-                : 'rgba(255, 255, 255, 0.8)',
-              cursor: activePattern?.isBuiltIn ? 'not-allowed' : 'pointer',
+              color: 'rgba(255, 255, 255, 0.8)',
+              cursor: 'pointer',
               fontSize: '13px',
               fontWeight: 500,
               display: 'flex',
@@ -682,23 +667,6 @@ export const RenamePatternBuilder: React.FC<RenamePatternBuilderProps> = ({
             />
           </div>
         </div>
-
-        {/* Pattern Info */}
-        {activePattern?.isBuiltIn && (
-          <div
-            style={{
-              background: 'rgba(255, 255, 255, 0.05)',
-              borderRadius: '8px',
-              padding: '12px',
-              fontSize: '12px',
-              color: 'rgba(255, 255, 255, 0.6)',
-            }}
-          >
-            <p style={{ margin: 0 }}>
-              This is a built-in pattern. Create a custom pattern to add components.
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Action Buttons */}
