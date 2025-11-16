@@ -192,6 +192,7 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
             onProgress: (completed, total) => {
               logger.info(`Rename progress: ${completed}/${total}`);
             },
+            destinationPath,
           });
 
           const successCount = results.filter(r => r.success).length;
@@ -230,6 +231,7 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
           onProgress: (completed, total) => {
             logger.info(`Rename progress: ${completed}/${total}`);
           },
+          destinationPath,
         });
 
         const successCount = results.filter(r => r.success).length;
@@ -251,7 +253,7 @@ export const FileRenameShelf = React.memo<FileRenameShelfProps>(
       } finally {
         setIsRenaming(false);
       }
-    }, [selectedFiles, filePreview, toast, onItemRemove]);
+    }, [selectedFiles, filePreview, destinationPath, toast, onItemRemove]);
 
     return (
       <ErrorBoundary>

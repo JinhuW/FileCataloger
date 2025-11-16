@@ -266,6 +266,11 @@ export interface ExecuteRenameOptions {
    * Callback for individual file completion
    */
   onFileComplete?: (result: RenameResult) => void;
+  /**
+   * Destination path for renamed files (optional)
+   * If not provided, files will be renamed in their original directory
+   */
+  destinationPath?: string;
 }
 
 /**
@@ -286,12 +291,16 @@ export async function executeFileRenames(
     maxConcurrent = FILE_OPERATIONS.MAX_CONCURRENT_RENAMES,
     onProgress,
     onFileComplete,
+    destinationPath,
   } = options;
 
   const results: RenameResult[] = [];
   const total = files.length;
 
   logger.info(`🔧 executeFileRenames: Starting rename of ${total} files`);
+  if (destinationPath) {
+    logger.info(`🎯 Destination path: ${destinationPath}`);
+  }
 
   // Process files in batches
   for (let i = 0; i < files.length; i += maxConcurrent) {
@@ -300,7 +309,7 @@ export async function executeFileRenames(
 
     const batchPromises = batch.map(async (file, batchIndex) => {
       const preview = batchPreviews[batchIndex];
-      return renameFile(file, preview);
+      return renameFile(file, preview, destinationPath);
     });
 
     const batchResults = await Promise.all(batchPromises);
@@ -325,9 +334,14 @@ export async function executeFileRenames(
  *
  * @param file - The ShelfItem to rename
  * @param preview - The rename preview with new name
+ * @param destinationPath - Optional destination directory for the renamed file
  * @returns RenameResult object
  */
-async function renameFile(file: ShelfItem, preview: FileRenamePreview): Promise<RenameResult> {
+async function renameFile(
+  file: ShelfItem,
+  preview: FileRenamePreview,
+  destinationPath?: string
+): Promise<RenameResult> {
   // Validate that the file has a valid path
   if (!file.path || !file.path.includes('/')) {
     const error = 'No valid file path available';
@@ -343,7 +357,8 @@ async function renameFile(file: ShelfItem, preview: FileRenamePreview): Promise<
   }
 
   const oldPath = file.path;
-  const directory = oldPath.substring(0, oldPath.lastIndexOf('/'));
+  // Use destinationPath if provided, otherwise use original directory
+  const directory = destinationPath || oldPath.substring(0, oldPath.lastIndexOf('/'));
   const newPath = directory + '/' + preview.newName;
 
   try {
