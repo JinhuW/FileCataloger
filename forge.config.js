@@ -13,6 +13,13 @@ module.exports = {
       entitlements: './entitlements.mac.plist',
       'entitlements-inherit': './entitlements.mac.plist'
     },
+    // macOS universal binary support - merge arm64 and x64 into single binary
+    osxUniversal: {
+      // Merge x64 and arm64 native modules
+      x64ArchFiles: '**/mouse_tracker_darwin.node',
+      // Force rebuild for universal architecture
+      mergeASARs: true
+    },
     // Windows specific settings
     win32metadata: {
       CompanyName: 'FileCataloger',
