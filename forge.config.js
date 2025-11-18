@@ -5,13 +5,20 @@ module.exports = {
     appCopyright: 'Copyright © 2024',
     name: 'FileCataloger',
     executableName: 'FileCataloger',
-    // Ad-hoc signing for distribution without Developer ID
+    // macOS Ad-hoc signing for distribution without Developer ID
     osxSign: {
       identity: '-', // Ad-hoc signing
       hardenedRuntime: false,
       gatekeeperAssess: false,
       entitlements: './entitlements.mac.plist',
       'entitlements-inherit': './entitlements.mac.plist'
+    },
+    // Windows specific settings
+    win32metadata: {
+      CompanyName: 'FileCataloger',
+      FileDescription: 'FileCataloger - Floating shelf for file management',
+      ProductName: 'FileCataloger',
+      InternalName: 'filecataloger'
     },
     // Native modules need to be unpacked
     asarUnpack: [
@@ -23,20 +30,35 @@ module.exports = {
   },
   rebuildConfig: {},
   makers: [
+    // Windows Squirrel installer
     {
       name: '@electron-forge/maker-squirrel',
       config: {
-        name: 'filecataloger'
+        name: 'FileCataloger',
+        authors: 'FileCataloger Team',
+        description: 'Floating shelf for temporary file storage',
+        // iconUrl and setupIcon can be added when icons are available
+        // iconUrl: 'https://example.com/icon.ico',
+        // setupIcon: './assets/icon.ico',
+        noMsi: false
       }
     },
+    // macOS ZIP
     {
       name: '@electron-forge/maker-zip',
-      platforms: ['darwin']
+      platforms: ['darwin', 'win32']
     },
+    // Linux DEB
     {
       name: '@electron-forge/maker-deb',
-      config: {}
+      config: {
+        options: {
+          maintainer: 'FileCataloger Team',
+          homepage: 'https://github.com/example/filecataloger'
+        }
+      }
     },
+    // macOS DMG
     {
       name: '@electron-forge/maker-dmg',
       config: {

@@ -50,18 +50,30 @@ export function createMouseTracker(): IMouseTracker {
       }
     }
 
-    case 'win32':
-      // Native Windows tracker not yet implemented
-      throw new Error('Windows native tracker not yet implemented. Platform not supported.');
+    case 'win32': {
+      try {
+        // Use optimized native Windows tracker with event batching and memory pooling
+        const { WindowsMouseTracker } = require('./windowsMouseTracker');
+        const tracker = new WindowsMouseTracker();
+        logger.info('Successfully initialized optimized Windows mouse tracker');
+        return tracker;
+      } catch (error) {
+        logger.error('Failed to initialize Windows mouse tracker:', error);
+        throw new Error(
+          `Failed to initialize Windows mouse tracker: ${error instanceof Error ? error.message : 'Unknown error'}`
+        );
+      }
+    }
 
     case 'linux':
       // Native Linux tracker not yet implemented
       throw new Error('Linux native tracker not yet implemented. Platform not supported.');
 
     default:
-      throw new Error(`Unsupported platform: ${platform}. Supported platforms: darwin (macOS)`);
+      throw new Error(`Unsupported platform: ${platform}. Supported platforms: darwin (macOS), win32 (Windows)`);
   }
 }
 
-// Export the main tracker class for direct use if needed
+// Export the main tracker classes for direct use if needed
 export { MacOSMouseTracker };
+export { WindowsMouseTracker } from './windowsMouseTracker';

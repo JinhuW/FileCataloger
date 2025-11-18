@@ -79,9 +79,20 @@ class NativeModuleInstaller {
   async tryElectronRebuild() {
     console.log('  🔨 Using electron-rebuild (recommended)...');
 
+    // Determine which modules to build based on platform
+    let modules;
+    if (this.platform === 'darwin') {
+      modules = 'mouse_tracker_darwin,drag_monitor_darwin';
+    } else if (this.platform === 'win32') {
+      modules = 'mouse_tracker_win32,drag_monitor_win32';
+    } else {
+      console.log('  ℹ️  No native modules available for this platform');
+      return true;
+    }
+
     await this.runCommand('electron-rebuild', [
       '-f',
-      '-w', 'mouse_tracker_darwin,drag_monitor_darwin',
+      '-w', modules,
       '--electronVersion', this.electronVersion
     ]);
     return true;
@@ -92,15 +103,18 @@ class NativeModuleInstaller {
 
     const nativeDir = path.join(this.projectRoot, 'src', 'native');
 
+    // Determine platform-specific directories
+    const platformDir = this.platform === 'win32' ? 'win32' : 'darwin';
+
     // Build mouse-tracker
-    const mouseTrackerDir = path.join(nativeDir, 'mouse-tracker', 'darwin');
+    const mouseTrackerDir = path.join(nativeDir, 'mouse-tracker', platformDir);
     if (fs.existsSync(mouseTrackerDir)) {
       process.chdir(mouseTrackerDir);
       await this.runCommand('node-gyp', ['rebuild']);
     }
 
     // Build drag-monitor
-    const dragMonitorDir = path.join(nativeDir, 'drag-monitor');
+    const dragMonitorDir = path.join(nativeDir, 'drag-monitor', platformDir);
     if (fs.existsSync(dragMonitorDir)) {
       process.chdir(dragMonitorDir);
       await this.runCommand('node-gyp', ['rebuild']);
@@ -113,15 +127,19 @@ class NativeModuleInstaller {
   async validateInstallation() {
     console.log('\\n🔍 Validating installation...');
 
-    const distMain = path.join(this.projectRoot, 'dist', 'main');
-    const expectedModules = [
-      'mouse_tracker_darwin.node',
-      'drag_monitor_darwin.node'
-    ];
+    // Determine platform-specific paths
+    let mouseTrackerPath, dragMonitorPath;
 
-    // Check source modules first
-    const mouseTrackerPath = path.join(this.projectRoot, 'src/native/mouse-tracker/darwin/build/Release/mouse_tracker_darwin.node');
-    const dragMonitorPath = path.join(this.projectRoot, 'src/native/drag-monitor/build/Release/drag_monitor_darwin.node');
+    if (this.platform === 'darwin') {
+      mouseTrackerPath = path.join(this.projectRoot, 'src/native/mouse-tracker/darwin/build/Release/mouse_tracker_darwin.node');
+      dragMonitorPath = path.join(this.projectRoot, 'src/native/drag-monitor/darwin/build/Release/drag_monitor_darwin.node');
+    } else if (this.platform === 'win32') {
+      mouseTrackerPath = path.join(this.projectRoot, 'src/native/mouse-tracker/win32/build/Release/mouse_tracker_win32.node');
+      dragMonitorPath = path.join(this.projectRoot, 'src/native/drag-monitor/win32/build/Release/drag_monitor_win32.node');
+    } else {
+      console.log('  ℹ️  No native modules to validate for this platform');
+      return;
+    }
 
     if (!fs.existsSync(mouseTrackerPath)) {
       throw new Error('Mouse tracker module not built');
@@ -182,10 +200,18 @@ class NativeModuleInstaller {
     console.log('\\n🆘 Troubleshooting Native Module Installation');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('\\n1. **Install build tools:**');
-    console.log('   xcode-select --install                    # macOS');
+    if (this.platform === 'darwin') {
+      console.log('   xcode-select --install                    # macOS');
+    } else if (this.platform === 'win32') {
+      console.log('   npm install -g windows-build-tools        # Windows');
+      console.log('   Or install Visual Studio Build Tools manually');
+    }
     console.log('   npm install -g node-gyp                   # Global node-gyp');
     console.log('\\n2. **Check Python version:**');
     console.log('   python3 --version                         # Should be 3.x');
+    if (this.platform === 'win32') {
+      console.log('   python --version                          # or python (Windows)');
+    }
     console.log('\\n3. **Manual rebuild:**');
     console.log('   yarn rebuild:native                       # Force rebuild');
     console.log('\\n4. **Clean build:**');

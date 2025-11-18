@@ -33,12 +33,12 @@ export interface BatchedEvent {
 }
 
 /**
- * Native drag and shake detection for macOS
+ * Native drag and shake detection for macOS and Windows
  * ONLY works with proper native module - no fallbacks
  *
  * Detection sequence:
- * 1. CGEventTap monitors mouse events globally
- * 2. When drag detected, checks NSPasteboard for files
+ * 1. Native hook monitors mouse events globally (CGEventTap on macOS, SetWindowsHookEx on Windows)
+ * 2. When drag detected, checks clipboard for files (NSPasteboard on macOS, OLE on Windows)
  * 3. During active file drag, monitors for shake gesture
  * 4. Shows shelf when both conditions met
  * 5. Hides shelf immediately on mouse release
@@ -76,9 +76,10 @@ export class DragShakeDetector extends EventEmitter {
   }
 
   private initializeNativeDragMonitor(): void {
-    if (process.platform !== 'darwin') {
-      this.logger.error('❌ This application only works on macOS');
-      throw new Error('macOS required for drag detection');
+    const platform = process.platform;
+    if (platform !== 'darwin' && platform !== 'win32') {
+      this.logger.error(`❌ This application only works on macOS and Windows (current: ${platform})`);
+      throw new Error('macOS or Windows required for drag detection');
     }
 
     try {
@@ -93,14 +94,18 @@ export class DragShakeDetector extends EventEmitter {
         );
         this.logger.debug(`🔧 DEBUG: start method type: ${typeof this.dragMonitor.start}`);
       }
-      this.logger.info('✅ Native drag monitor initialized');
+      this.logger.info(`✅ Native drag monitor initialized for ${platform}`);
     } catch (error: unknown) {
       this.logger.error('❌ FATAL: Native drag monitor could not be initialized');
       this.logger.error('Error:', error instanceof Error ? error.message : String(error));
       this.logger.error('');
       this.logger.error('To fix:');
       this.logger.error('1. Rebuild native modules: npm run rebuild:native');
-      this.logger.error('2. Grant accessibility permissions in System Settings');
+      if (platform === 'darwin') {
+        this.logger.error('2. Grant accessibility permissions in System Settings');
+      } else if (platform === 'win32') {
+        this.logger.error('2. Ensure Visual Studio Build Tools are installed');
+      }
       this.logger.error('3. Restart the application');
       throw error;
     }
