@@ -1,0 +1,276 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release (e.g., v1.0.0)'
+        required: true
+        type: string
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      version: ${{ steps.get_version.outputs.version }}
+    steps:
+      - name: Get version
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          release_name: FileCataloger ${{ steps.get_version.outputs.version }}
+          draft: true
+          prerelease: false
+          body: |
+            ## FileCataloger ${{ steps.get_version.outputs.version }}
+
+            ### Downloads
+            - **macOS Universal** (Apple Silicon + Intel): `FileCataloger-${{ steps.get_version.outputs.version }}-universal.dmg`
+            - **macOS ARM64** (Apple Silicon): `FileCataloger-${{ steps.get_version.outputs.version }}-arm64.dmg`
+            - **macOS Intel**: `FileCataloger-${{ steps.get_version.outputs.version }}-x64.dmg`
+            - **Windows x64**: `FileCataloger-${{ steps.get_version.outputs.version }}-win-x64.exe`
+            - **Windows ia32**: `FileCataloger-${{ steps.get_version.outputs.version }}-win-ia32.exe`
+
+            ### Installation
+            - **macOS**: Download the appropriate DMG, open it, and drag FileCataloger to Applications
+            - **Windows**: Download the installer and run it
+
+            ### What's Changed
+            <!-- Add changelog here -->
+
+  build-macos-universal:
+    needs: create-release
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Run typecheck
+        run: yarn typecheck
+
+      - name: Run tests
+        run: yarn test
+
+      - name: Build Universal Binary
+        run: yarn dist:mac:universal
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload Universal DMG
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./out/make/FileCataloger-universal.dmg
+          asset_name: FileCataloger-${{ needs.create-release.outputs.version }}-universal.dmg
+          asset_content_type: application/x-apple-diskimage
+
+      - name: Upload Universal ZIP
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./out/make/FileCataloger-darwin-universal.zip
+          asset_name: FileCataloger-${{ needs.create-release.outputs.version }}-universal.zip
+          asset_content_type: application/zip
+
+  build-macos-arm64:
+    needs: create-release
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build ARM64
+        run: yarn dist:mac:arm64
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload ARM64 DMG
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./out/make/FileCataloger-arm64.dmg
+          asset_name: FileCataloger-${{ needs.create-release.outputs.version }}-arm64.dmg
+          asset_content_type: application/x-apple-diskimage
+
+  build-macos-x64:
+    needs: create-release
+    runs-on: macos-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build Intel x64
+        run: yarn dist:mac:x64
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+
+      - name: Upload x64 DMG
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./out/make/FileCataloger-x64.dmg
+          asset_name: FileCataloger-${{ needs.create-release.outputs.version }}-x64.dmg
+          asset_content_type: application/x-apple-diskimage
+
+  build-windows-x64:
+    needs: create-release
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Run typecheck
+        run: yarn typecheck
+
+      - name: Build Windows x64
+        run: yarn dist:win:x64
+
+      - name: Upload Windows x64 Installer
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./out/make/squirrel.windows/x64/FileCataloger-Setup.exe
+          asset_name: FileCataloger-${{ needs.create-release.outputs.version }}-win-x64.exe
+          asset_content_type: application/x-msdownload
+
+      - name: Upload Windows x64 NUPKG
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./out/make/squirrel.windows/x64/FileCataloger-${{ needs.create-release.outputs.version }}-full.nupkg
+          asset_name: FileCataloger-${{ needs.create-release.outputs.version }}-win-x64.nupkg
+          asset_content_type: application/octet-stream
+
+  build-windows-ia32:
+    needs: create-release
+    runs-on: windows-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build Windows ia32
+        run: yarn dist:win:ia32
+
+      - name: Upload Windows ia32 Installer
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./out/make/squirrel.windows/ia32/FileCataloger-Setup.exe
+          asset_name: FileCataloger-${{ needs.create-release.outputs.version }}-win-ia32.exe
+          asset_content_type: application/x-msdownload
+
+      - name: Upload Windows ia32 NUPKG
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./out/make/squirrel.windows/ia32/FileCataloger-${{ needs.create-release.outputs.version }}-full.nupkg
+          asset_name: FileCataloger-${{ needs.create-release.outputs.version }}-win-ia32.nupkg
+          asset_content_type: application/octet-stream
