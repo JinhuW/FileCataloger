@@ -99,9 +99,10 @@ class NativeModuleInstaller {
 
     const nativeDir = path.join(this.projectRoot, 'src', 'native');
 
-    // Build mouse-tracker
-    const mouseTrackerDir = path.join(nativeDir, 'mouse-tracker', 'darwin');
+    // Build mouse-tracker (from root directory, not darwin subdirectory)
+    const mouseTrackerDir = path.join(nativeDir, 'mouse-tracker');
     if (fs.existsSync(mouseTrackerDir)) {
+      console.log('  📦 Building mouse-tracker...');
       process.chdir(mouseTrackerDir);
       await this.runCommand('node-gyp', ['rebuild']);
     }
@@ -109,6 +110,7 @@ class NativeModuleInstaller {
     // Build drag-monitor
     const dragMonitorDir = path.join(nativeDir, 'drag-monitor');
     if (fs.existsSync(dragMonitorDir)) {
+      console.log('  📦 Building drag-monitor...');
       process.chdir(dragMonitorDir);
       await this.runCommand('node-gyp', ['rebuild']);
     }
@@ -126,12 +128,17 @@ class NativeModuleInstaller {
       return;
     }
 
-    // Check source modules first
-    const mouseTrackerPath = path.join(this.projectRoot, 'src/native/mouse-tracker/darwin/build/Release/mouse_tracker_darwin.node');
+    // Check source modules - try both possible locations for mouse-tracker
+    const mouseTrackerPaths = [
+      path.join(this.projectRoot, 'src/native/mouse-tracker/build/Release/mouse_tracker_darwin.node'),
+      path.join(this.projectRoot, 'src/native/mouse-tracker/darwin/build/Release/mouse_tracker_darwin.node')
+    ];
+
+    const mouseTrackerPath = mouseTrackerPaths.find(p => fs.existsSync(p));
     const dragMonitorPath = path.join(this.projectRoot, 'src/native/drag-monitor/build/Release/drag_monitor_darwin.node');
 
-    if (!fs.existsSync(mouseTrackerPath)) {
-      throw new Error('Mouse tracker module not built');
+    if (!mouseTrackerPath) {
+      throw new Error('Mouse tracker module not built (checked multiple locations)');
     }
     if (!fs.existsSync(dragMonitorPath)) {
       throw new Error('Drag monitor module not built');
