@@ -96,21 +96,12 @@ jobs:
   #         name: codecov-umbrella
 
   build:
-    name: Build Application
+    name: Build macOS DMG
     needs: [quality-check] # Removed test dependency
-    runs-on: ${{ matrix.os }}
+    runs-on: macos-latest
     strategy:
       matrix:
-        include:
-          - os: macos-latest
-            platform: darwin
-            arch: x64
-          - os: macos-latest
-            platform: darwin
-            arch: arm64
-          - os: ubuntu-latest
-            platform: linux
-            arch: x64
+        arch: [x64, arm64]
 
     steps:
       - name: Checkout code
@@ -146,22 +137,28 @@ jobs:
           fi
 
       - name: Build native modules
-        if: runner.os == 'macOS'
         run: yarn build:native
 
       - name: Build application
         run: yarn build
 
-      - name: Package application
-        run: yarn package
+      - name: Package application for macOS DMG
+        if: runner.os == 'macOS'
+        run: |
+          # Create DMG for macOS
+          if [ "${{ matrix.arch }}" == "arm64" ]; then
+            yarn make --arch=arm64
+          elif [ "${{ matrix.arch }}" == "x64" ]; then
+            yarn make --arch=x64
+          fi
         env:
-          ELECTRON_FORGE_ARCH: ${{ matrix.arch }}
+          CSC_IDENTITY_AUTO_DISCOVERY: false
 
-      - name: Upload build artifacts
+      - name: Upload DMG artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: build-${{ matrix.platform }}-${{ matrix.arch }}
-          path: out/
+          name: dmg-macos-${{ matrix.arch }}
+          path: out/make/*.dmg
           retention-days: 7
 
   create-release:
@@ -215,67 +212,60 @@ jobs:
           draft: false
           prerelease: true
 
-  # Asset publishing is temporarily disabled until packaging is configured
-  # publish-assets:
-  #   name: Publish Release Assets
-  #   needs: [create-release]
-  #   runs-on: ubuntu-latest
-  #   strategy:
-  #     matrix:
-  #       include:
-  #         - platform: darwin
-  #           arch: x64
-  #           ext: dmg
-  #         - platform: darwin
-  #           arch: arm64
-  #           ext: dmg
-  #         - platform: linux
-  #           arch: x64
-  #           ext: deb
-  #
-  #   steps:
-  #     - name: Download artifacts
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: build-${{ matrix.platform }}-${{ matrix.arch }}
-  #         path: ./artifacts
-  #
-  #     - name: Find asset
-  #       id: find_asset
-  #       run: |
-  #         ASSET_PATH=$(find ./artifacts -name "*.${{ matrix.ext }}" | head -1)
-  #         if [ -z "$ASSET_PATH" ]; then
-  #           echo "No asset found with extension .${{ matrix.ext }}"
-  #           exit 1
-  #         fi
-  #         ASSET_NAME="FileCataloger-${{ needs.create-release.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}.${{ matrix.ext }}"
-  #         echo "asset_path=${ASSET_PATH}" >> $GITHUB_OUTPUT
-  #         echo "asset_name=${ASSET_NAME}" >> $GITHUB_OUTPUT
-  #         echo "Found asset: ${ASSET_PATH}"
-  #
-  #     - name: Upload Release Asset
-  #       uses: actions/upload-release-asset@v1
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  #       with:
-  #         upload_url: ${{ needs.create-release.outputs.upload_url }}
-  #         asset_path: ${{ steps.find_asset.outputs.asset_path }}
-  #         asset_name: ${{ steps.find_asset.outputs.asset_name }}
-  #         asset_content_type: application/octet-stream
+  publish-assets:
+    name: Publish DMG Files
+    needs: [create-release]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [x64, arm64]
+
+    steps:
+      - name: Download DMG artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dmg-macos-${{ matrix.arch }}
+          path: ./artifacts
+
+      - name: Find and upload DMG
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Find the DMG file
+          DMG_PATH=$(find ./artifacts -name "*.dmg" | head -1)
+          if [ -z "$DMG_PATH" ]; then
+            echo "No DMG file found"
+            exit 1
+          fi
+
+          # Rename to include version and architecture
+          DMG_NAME="FileCataloger-${{ needs.create-release.outputs.version }}-macOS-${{ matrix.arch }}.dmg"
+          mv "$DMG_PATH" "./artifacts/$DMG_NAME"
+
+          echo "Found DMG: $DMG_PATH"
+          echo "Renamed to: $DMG_NAME"
+          echo "Uploading to release..."
+
+          # Upload to release using gh CLI with the renamed file
+          gh release upload v${{ needs.create-release.outputs.version }} \
+            "./artifacts/$DMG_NAME" \
+            --repo ${{ github.repository }} \
+            --clobber
 
   notify:
     name: Notify Build Status
-    needs: [create-release]
+    needs: [publish-assets]
     runs-on: ubuntu-latest
     if: always()
 
     steps:
       - name: Send notification
         run: |
-          if [ "${{ needs.create-release.result }}" == "success" ]; then
+          if [ "${{ needs.publish-assets.result }}" == "success" ]; then
             echo "✅ Build and release successful for develop branch!"
             echo "Version: ${{ needs.create-release.outputs.version }}"
             echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ needs.create-release.outputs.version }}"
+            echo "DMG files have been uploaded to the release"
           else
             echo "❌ Build or release failed for develop branch"
           fi
