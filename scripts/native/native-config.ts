@@ -46,10 +46,11 @@ export interface PlatformConfig {
  * Add new native modules here for automatic build management
  */
 export const NATIVE_MODULES: NativeModuleConfig[] = [
+  // macOS modules
   {
-    name: 'mouse-tracker',
-    displayName: 'Mouse Tracker',
-    platforms: ['darwin'], // TODO: Add 'win32', 'linux' when implemented
+    name: 'mouse-tracker-darwin',
+    displayName: 'Mouse Tracker (macOS)',
+    platforms: ['darwin'],
     buildPath: path.join(NATIVE_ROOT, 'mouse-tracker', 'darwin'),
     binding: 'binding.gyp',
     targetName: 'mouse_tracker_darwin',
@@ -60,9 +61,9 @@ export const NATIVE_MODULES: NativeModuleConfig[] = [
     ]
   },
   {
-    name: 'drag-monitor',
-    displayName: 'Drag Monitor',
-    platforms: ['darwin'], // TODO: Add 'win32', 'linux' when implemented
+    name: 'drag-monitor-darwin',
+    displayName: 'Drag Monitor (macOS)',
+    platforms: ['darwin'],
     buildPath: path.join(NATIVE_ROOT, 'drag-monitor', 'darwin'),
     binding: 'binding.gyp',
     targetName: 'drag_monitor_darwin',
@@ -70,6 +71,33 @@ export const NATIVE_MODULES: NativeModuleConfig[] = [
     postBuild: [
       // Copy built module to expected location for webpack
       'cp build/Release/*.node ../../'
+    ]
+  },
+  // Windows modules
+  {
+    name: 'mouse-tracker-win32',
+    displayName: 'Mouse Tracker (Windows)',
+    platforms: ['win32'],
+    buildPath: path.join(NATIVE_ROOT, 'mouse-tracker', 'win32'),
+    binding: 'binding.gyp',
+    targetName: 'mouse_tracker_win32',
+    buildArgs: ['--release', '--verbose'],
+    postBuild: [
+      // Copy built module to expected location for webpack
+      'copy build\\Release\\*.node ..\\..\\'
+    ]
+  },
+  {
+    name: 'drag-monitor-win32',
+    displayName: 'Drag Monitor (Windows)',
+    platforms: ['win32'],
+    buildPath: path.join(NATIVE_ROOT, 'drag-monitor', 'win32'),
+    binding: 'binding.gyp',
+    targetName: 'drag_monitor_win32',
+    buildArgs: ['--release', '--verbose'],
+    postBuild: [
+      // Copy built module to expected location for webpack
+      'copy build\\Release\\*.node ..\\..\\'
     ]
   }
 ];
@@ -120,9 +148,49 @@ export const PLATFORM_CONFIGS: Record<string, PlatformConfig> = {
         '-framework Carbon'
       ]
     }
+  },
+  // Windows configurations
+  'win32-x64': {
+    platform: 'win32',
+    arch: 'x64',
+    nodeVersion: '20.0.0',
+    electronVersion: '28.0.0',
+    buildTools: {
+      compiler: 'cl.exe',
+      flags: [
+        '/O2',
+        '/EHsc',
+        '/std:c++17'
+      ],
+      linkFlags: [
+        'user32.lib',
+        'ole32.lib',
+        'shell32.lib',
+        'uuid.lib'
+      ]
+    }
+  },
+  'win32-ia32': {
+    platform: 'win32',
+    arch: 'ia32',
+    nodeVersion: '20.0.0',
+    electronVersion: '28.0.0',
+    buildTools: {
+      compiler: 'cl.exe',
+      flags: [
+        '/O2',
+        '/EHsc',
+        '/std:c++17'
+      ],
+      linkFlags: [
+        'user32.lib',
+        'ole32.lib',
+        'shell32.lib',
+        'uuid.lib'
+      ]
+    }
   }
-  // TODO: Add Windows and Linux configurations
-  // 'win32-x64': { ... },
+  // TODO: Add Linux configurations
   // 'linux-x64': { ... }
 };
 

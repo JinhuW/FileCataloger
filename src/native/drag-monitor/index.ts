@@ -24,15 +24,18 @@
  * @module drag-monitor
  */
 
-import { MacDragMonitor, isNativeModuleAvailable } from './dragMonitor';
+import { MacDragMonitor, isNativeModuleAvailable as isMacNativeAvailable } from './dragMonitor';
 import { createLogger } from '@main/modules/utils/logger';
 
 const logger = createLogger('DragMonitorFactory');
 
+// Type for cross-platform drag monitor
+type DragMonitor = MacDragMonitor | import('./windowsDragMonitor').WindowsDragMonitor;
+
 /**
  * Factory function to create appropriate drag monitor for the current platform
  */
-export function createDragMonitor(): MacDragMonitor | null {
+export function createDragMonitor(): DragMonitor | null {
   const platform = process.platform;
 
   switch (platform) {
@@ -49,10 +52,19 @@ export function createDragMonitor(): MacDragMonitor | null {
       }
     }
 
-    case 'win32':
-      // Native Windows drag monitor not yet implemented
-      logger.warn('Windows drag monitor not yet implemented');
-      return null;
+    case 'win32': {
+      try {
+        // Use native Windows drag monitor with OLE/clipboard monitoring
+        const { WindowsDragMonitor } = require('./windowsDragMonitor');
+        const monitor = new WindowsDragMonitor();
+        logger.info('Successfully initialized Windows drag monitor');
+        return monitor;
+      } catch (error) {
+        logger.error('Failed to initialize Windows drag monitor:', error);
+        // Return null instead of throwing to allow graceful degradation
+        return null;
+      }
+    }
 
     case 'linux':
       // Native Linux drag monitor not yet implemented
@@ -65,6 +77,27 @@ export function createDragMonitor(): MacDragMonitor | null {
   }
 }
 
+/**
+ * Check if native module is available for current platform
+ */
+export function isNativeModuleAvailable(): boolean {
+  const platform = process.platform;
+
+  if (platform === 'darwin') {
+    return isMacNativeAvailable();
+  } else if (platform === 'win32') {
+    try {
+      const { isNativeModuleAvailable: isWinAvailable } = require('./windowsDragMonitor');
+      return isWinAvailable();
+    } catch {
+      return false;
+    }
+  }
+
+  return false;
+}
+
 // Export types and classes for direct use if needed
-export { MacDragMonitor, isNativeModuleAvailable };
+export { MacDragMonitor };
+export { WindowsDragMonitor } from './windowsDragMonitor';
 export type { DraggedItem, DragEvent } from './dragMonitor';

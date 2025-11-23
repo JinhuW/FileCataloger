@@ -39,9 +39,12 @@ module.exports = merge(common, {
   target: 'electron-main',
 
   externals: {
-    // Native modules should be externalized
+    // Native modules should be externalized - macOS
     './mouse_tracker_darwin.node': 'commonjs ./mouse_tracker_darwin.node',
     './drag_monitor_darwin.node': 'commonjs ./drag_monitor_darwin.node',
+    // Native modules should be externalized - Windows
+    './mouse_tracker_win32.node': 'commonjs ./mouse_tracker_win32.node',
+    './drag_monitor_win32.node': 'commonjs ./drag_monitor_win32.node',
     'node-gyp-build': 'commonjs node-gyp-build',
     'better-sqlite3': 'commonjs better-sqlite3'
   },
@@ -72,7 +75,7 @@ module.exports = merge(common, {
           to: path.join(projectRoot, 'dist/main/assets/[name][ext]'),
           noErrorOnMissing: true
         },
-        // Copy all native modules built by centralized build system
+        // Copy all native modules built by centralized build system - macOS
         {
           from: path.join(projectRoot, 'src/native/mouse-tracker/darwin/build/Release/mouse_tracker_darwin.node'),
           to: path.join(projectRoot, 'dist/main/mouse_tracker_darwin.node'),
@@ -81,6 +84,17 @@ module.exports = merge(common, {
         {
           from: path.join(projectRoot, 'src/native/drag-monitor/darwin/build/Release/drag_monitor_darwin.node'),
           to: path.join(projectRoot, 'dist/main/drag_monitor_darwin.node'),
+          noErrorOnMissing: true
+        },
+        // Copy all native modules built by centralized build system - Windows
+        {
+          from: path.join(projectRoot, 'src/native/mouse-tracker/win32/build/Release/mouse_tracker_win32.node'),
+          to: path.join(projectRoot, 'dist/main/mouse_tracker_win32.node'),
+          noErrorOnMissing: true
+        },
+        {
+          from: path.join(projectRoot, 'src/native/drag-monitor/win32/build/Release/drag_monitor_win32.node'),
+          to: path.join(projectRoot, 'dist/main/drag_monitor_win32.node'),
           noErrorOnMissing: true
         },
         // Generate package.json in dist/main for native module resolution
