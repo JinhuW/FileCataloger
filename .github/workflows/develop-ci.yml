@@ -26,7 +26,16 @@ jobs:
           cache: 'yarn'
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: |
+          # Skip native modules on non-macOS platforms
+          if [ "${{ runner.os }}" != "macOS" ]; then
+            export SKIP_NATIVE_MODULES=true
+          fi
+          yarn install --frozen-lockfile --ignore-scripts
+          # Run postinstall only on macOS
+          if [ "${{ runner.os }}" == "macOS" ]; then
+            yarn postinstall || true
+          fi
 
       - name: Run TypeScript check
         run: yarn typecheck
@@ -59,7 +68,16 @@ jobs:
           cache: 'yarn'
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: |
+          # Skip native modules on non-macOS platforms
+          if [ "${{ runner.os }}" != "macOS" ]; then
+            export SKIP_NATIVE_MODULES=true
+          fi
+          yarn install --frozen-lockfile --ignore-scripts
+          # Run postinstall only on macOS
+          if [ "${{ runner.os }}" == "macOS" ]; then
+            yarn postinstall || true
+          fi
 
       - name: Run unit tests
         run: yarn test
@@ -111,7 +129,16 @@ jobs:
           sudo apt-get install -y build-essential libx11-dev libxkbfile-dev
 
       - name: Install dependencies
-        run: yarn install --frozen-lockfile
+        run: |
+          # Skip native modules on non-macOS platforms
+          if [ "${{ runner.os }}" != "macOS" ]; then
+            export SKIP_NATIVE_MODULES=true
+          fi
+          yarn install --frozen-lockfile --ignore-scripts
+          # Run postinstall only on macOS
+          if [ "${{ runner.os }}" == "macOS" ]; then
+            yarn postinstall || true
+          fi
 
       - name: Build native modules
         if: runner.os == 'macOS'
