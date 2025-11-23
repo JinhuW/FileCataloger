@@ -32,6 +32,13 @@ class NativeModuleInstaller {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log(`📋 Target: Electron ${this.electronVersion}, Node ${this.nodeVersion}, ${this.platform}-${this.arch}`);
 
+    // Skip native module build for non-macOS platforms
+    if (this.platform !== 'darwin' || process.env.SKIP_NATIVE_MODULES === 'true') {
+      console.log('\\nℹ️  Skipping native module installation (not macOS or explicitly skipped)');
+      console.log('   Native modules are only required for macOS builds');
+      return true;
+    }
+
     const strategies = [
       { name: 'Prebuild Install', method: this.tryPrebuildInstall.bind(this) },
       { name: 'Electron Rebuild', method: this.tryElectronRebuild.bind(this) },
@@ -113,11 +120,11 @@ class NativeModuleInstaller {
   async validateInstallation() {
     console.log('\\n🔍 Validating installation...');
 
-    const distMain = path.join(this.projectRoot, 'dist', 'main');
-    const expectedModules = [
-      'mouse_tracker_darwin.node',
-      'drag_monitor_darwin.node'
-    ];
+    // Only validate on macOS - native modules are macOS-only
+    if (this.platform !== 'darwin') {
+      console.log('  ℹ️  Skipping native module validation (not macOS)');
+      return;
+    }
 
     // Check source modules first
     const mouseTrackerPath = path.join(this.projectRoot, 'src/native/mouse-tracker/darwin/build/Release/mouse_tracker_darwin.node');

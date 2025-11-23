@@ -136,7 +136,9 @@ jobs:
       - name: Setup Windows build tools
         if: matrix.platform == 'win32'
         run: |
-          npm install --global windows-build-tools
+          # Windows build tools are now included in Node.js
+          # Verify Visual Studio Build Tools are available
+          npm config set msvs_version 2022
         shell: powershell
 
       - name: Setup Linux build dependencies
