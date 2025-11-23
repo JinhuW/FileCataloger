@@ -9,6 +9,8 @@ on:
     branches:
       - main
       - develop
+      - 'claude/**'  # Enable CI on claude branches for testing
+  workflow_dispatch:  # Allow manual trigger for testing
 
 jobs:
   test-macos:
