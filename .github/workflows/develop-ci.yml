@@ -149,7 +149,7 @@ jobs:
       - name: Setup Windows build tools
         if: matrix.platform == 'win32'
         run: |
-          npm config set msvs_version 2022
+          echo "Windows build tools are pre-installed on GitHub Actions runners"
         shell: powershell
 
       - name: Setup Linux build dependencies

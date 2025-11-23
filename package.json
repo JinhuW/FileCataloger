@@ -2,6 +2,7 @@
   "name": "filecataloger",
   "productName": "FileCataloger",
   "version": "1.0.0",
+  "description": "A macOS application for organizing files with floating shelf windows",
   "main": "dist/main/index.js",
   "license": "MIT",
   "scripts": {

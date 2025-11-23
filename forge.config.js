@@ -35,7 +35,12 @@ module.exports = {
     },
     {
       name: '@electron-forge/maker-deb',
-      config: {}
+      config: {
+        options: {
+          maintainer: 'FileCataloger Team',
+          homepage: 'https://github.com/JinhuW/FileCataloger'
+        }
+      }
     },
     {
       name: '@electron-forge/maker-dmg',

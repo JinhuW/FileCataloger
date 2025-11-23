@@ -110,13 +110,6 @@ jobs:
             build_cmd: yarn make
             artifact_ext: deb
 
-          - os: ubuntu-latest
-            name: Linux-x64-AppImage
-            platform: linux
-            arch: x64
-            build_cmd: yarn make --targets=@electron-forge/maker-appimage
-            artifact_ext: AppImage
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -137,9 +130,7 @@ jobs:
         if: matrix.platform == 'win32'
         run: |
           # Windows build tools are already included in GitHub Actions windows-latest runner
-          # Configure npm for native module builds
-          npm config set msvs_version 2022 --global
-          echo "Windows build tools configured"
+          echo "Windows build tools are pre-installed on GitHub Actions runners"
         shell: bash
 
       - name: Setup Linux build dependencies
