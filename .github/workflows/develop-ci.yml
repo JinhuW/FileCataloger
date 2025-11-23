@@ -142,6 +142,14 @@ jobs:
       - name: Build application
         run: yarn build
 
+      - name: Rebuild native modules for DMG creation
+        if: runner.os == 'macOS'
+        run: |
+          # Rebuild native modules in appdmg dependencies
+          cd node_modules/macos-alias
+          npm rebuild
+          cd ../..
+
       - name: Package application for macOS DMG
         if: runner.os == 'macOS'
         run: |
