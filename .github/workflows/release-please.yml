@@ -1,0 +1,87 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+
+    steps:
+      - uses: google-github-actions/release-please-action@v4
+        id: release
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          release-type: node
+          package-name: filecataloger
+          changelog-types: |
+            [
+              {"type": "feat", "section": "Features", "hidden": false},
+              {"type": "fix", "section": "Bug Fixes", "hidden": false},
+              {"type": "perf", "section": "Performance Improvements", "hidden": false},
+              {"type": "deps", "section": "Dependencies", "hidden": false},
+              {"type": "docs", "section": "Documentation", "hidden": false},
+              {"type": "style", "section": "Styles", "hidden": false},
+              {"type": "refactor", "section": "Code Refactoring", "hidden": false},
+              {"type": "test", "section": "Tests", "hidden": false},
+              {"type": "build", "section": "Build System", "hidden": false},
+              {"type": "ci", "section": "Continuous Integration", "hidden": false},
+              {"type": "chore", "section": "Miscellaneous", "hidden": false}
+            ]
+
+  build-release:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin
+            arch: universal
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build application
+        run: yarn build
+
+      - name: Make distributables
+        run: |
+          if [ "${{ runner.os }}" == "macOS" ]; then
+            yarn make:dmg
+          else
+            yarn make
+          fi
+
+      - name: Upload to GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ needs.release-please.outputs.tag_name }} \
+            out/make/**/*.{dmg,deb,zip} \
+            --clobber

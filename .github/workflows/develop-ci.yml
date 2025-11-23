@@ -1,0 +1,248 @@
+name: Develop Branch CI/CD
+
+on:
+  push:
+    branches: [develop]
+  pull_request:
+    branches: [develop]
+
+env:
+  NODE_VERSION: '20'
+  ELECTRON_VERSION: '37.4.0'
+
+jobs:
+  quality-check:
+    name: Code Quality Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Run TypeScript check
+        run: yarn typecheck
+
+      - name: Run ESLint
+        run: yarn lint
+
+      - name: Check code formatting
+        run: yarn format:check
+
+      - name: Security audit
+        run: yarn audit --level moderate || true
+        continue-on-error: true
+
+  test:
+    name: Run Tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Run unit tests
+        run: yarn test
+
+      - name: Upload coverage reports
+        if: matrix.os == 'ubuntu-latest'
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+
+  build:
+    name: Build Application
+    needs: [quality-check, test]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin
+            arch: x64
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+
+      - name: Setup Python (for node-gyp)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libx11-dev libxkbfile-dev
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build native modules
+        if: runner.os == 'macOS'
+        run: yarn build:native
+
+      - name: Build application
+        run: yarn build
+
+      - name: Package application
+        run: yarn package
+        env:
+          ELECTRON_FORGE_ARCH: ${{ matrix.arch }}
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.platform }}-${{ matrix.arch }}
+          path: out/
+          retention-days: 7
+
+  create-release:
+    name: Create Pre-release
+    needs: [build]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      release_id: ${{ steps.create_release.outputs.id }}
+      version: ${{ steps.get_version.outputs.version }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get version
+        id: get_version
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          BUILD_NUMBER="${{ github.run_number }}"
+          FULL_VERSION="${VERSION}-dev.${BUILD_NUMBER}"
+          echo "version=${FULL_VERSION}" >> $GITHUB_OUTPUT
+          echo "Creating release for version: ${FULL_VERSION}"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          cat << EOF > CHANGELOG.md
+          ## Development Build ${FULL_VERSION}
+
+          ### Changes in this build:
+          $(git log -10 --pretty=format:"- %s (%h)" --no-merges)
+
+          ### Build Information:
+          - Branch: develop
+          - Commit: ${{ github.sha }}
+          - Build Number: ${{ github.run_number }}
+          - Date: $(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          EOF
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          release_name: FileCataloger v${{ steps.get_version.outputs.version }}
+          body_path: CHANGELOG.md
+          draft: false
+          prerelease: true
+
+  publish-assets:
+    name: Publish Release Assets
+    needs: [create-release]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - platform: darwin
+            arch: x64
+            ext: dmg
+          - platform: darwin
+            arch: arm64
+            ext: dmg
+          - platform: linux
+            arch: x64
+            ext: deb
+
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-${{ matrix.platform }}-${{ matrix.arch }}
+          path: ./artifacts
+
+      - name: Find asset
+        id: find_asset
+        run: |
+          ASSET_PATH=$(find ./artifacts -name "*.${{ matrix.ext }}" | head -1)
+          if [ -z "$ASSET_PATH" ]; then
+            echo "No asset found with extension .${{ matrix.ext }}"
+            exit 1
+          fi
+          ASSET_NAME="FileCataloger-${{ needs.create-release.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}.${{ matrix.ext }}"
+          echo "asset_path=${ASSET_PATH}" >> $GITHUB_OUTPUT
+          echo "asset_name=${ASSET_NAME}" >> $GITHUB_OUTPUT
+          echo "Found asset: ${ASSET_PATH}"
+
+      - name: Upload Release Asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ${{ steps.find_asset.outputs.asset_path }}
+          asset_name: ${{ steps.find_asset.outputs.asset_name }}
+          asset_content_type: application/octet-stream
+
+  notify:
+    name: Notify Build Status
+    needs: [publish-assets]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Send notification
+        run: |
+          if [ "${{ needs.publish-assets.result }}" == "success" ]; then
+            echo "✅ Build and release successful for develop branch!"
+            echo "Version: ${{ needs.create-release.outputs.version }}"
+            echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ needs.create-release.outputs.version }}"
+          else
+            echo "❌ Build or release failed for develop branch"
+          fi
