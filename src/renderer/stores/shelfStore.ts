@@ -4,6 +4,7 @@ import { immer } from 'zustand/middleware/immer';
 import { enableMapSet } from 'immer';
 import { ShelfConfig, ShelfItem, ShelfMode, DockPosition } from '@shared/types';
 import { logger } from '@shared/logger';
+import { devLogger } from '@renderer/utils/devLogger';
 
 // Enable MapSet plugin for Immer to work with Map and Set
 enableMapSet();
@@ -60,6 +61,7 @@ export const useShelfStore = create<ShelfStore>()(
           state => {
             state.shelves.set(config.id, config);
             logger.debug('Added shelf:', config.id);
+            devLogger.state('shelfStore', 'addShelf', { id: config.id });
           },
           false,
           'addShelf'
@@ -72,6 +74,7 @@ export const useShelfStore = create<ShelfStore>()(
             if (shelf) {
               state.shelves.set(id, { ...shelf, ...updates });
               logger.debug('Updated shelf:', id, updates);
+              devLogger.state('shelfStore', 'updateShelf', { id, updates });
             } else {
               logger.warn('Shelf not found for update:', id);
             }

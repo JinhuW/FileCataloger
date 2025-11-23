@@ -19,6 +19,7 @@ import { Logger, LogLevel } from './modules/utils/logger';
 import { LogEntry } from '@shared/logger';
 import { securityConfig } from './modules/config';
 import { ShelfConfig, ShelfItem } from '@shared/types';
+import { SHELF_CONSTANTS } from '@shared/constants';
 import { getGlobalTimerManager, destroyGlobalTimerManager } from './modules/utils';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -180,18 +181,15 @@ class FileCatalogerApp {
       this.applicationController = new ApplicationController();
       this.logger.info('✅ ApplicationController created successfully');
 
+      this.logger.info('🚀 Initializing ApplicationController...');
+      await this.applicationController.initialize();
+      this.logger.info('✅ ApplicationController initialized successfully');
+
       this.logger.info('🚀 Starting ApplicationController...');
       this.logger.info('📍 About to call applicationController.start()');
       await this.applicationController.start();
       this.logger.info('✅ ApplicationController.start() completed successfully');
 
-      // Scan for external plugins after startup
-      this.logger.info('🔌 Scanning for external plugins...');
-      import('./modules/plugins/pluginManager').then(({ pluginManager }) => {
-        pluginManager.scanPluginsDirectory().catch(error => {
-          this.logger.error('Failed to scan plugins directory:', error);
-        });
-      });
       // Start keyboard manager
       keyboardManager.start();
 
@@ -394,7 +392,7 @@ class FileCatalogerApp {
 
   private setupIpcHandlers(): void {
     // Register pattern handlers
-    import('./ipc/patternHandlers')
+    import('./ipc/pattern_handlers')
       .then(({ registerPatternHandlers }) => {
         registerPatternHandlers();
       })
@@ -402,13 +400,22 @@ class FileCatalogerApp {
         this.logger.error('Failed to register pattern handlers:', error);
       });
 
-    // Register plugin handlers
-    import('./ipc/pluginHandlers')
-      .then(({ registerPluginHandlers }) => {
-        registerPluginHandlers();
+    // Register component library handlers
+    import('./ipc/component_handlers')
+      .then(({ registerComponentHandlers }) => {
+        registerComponentHandlers();
       })
       .catch(error => {
-        this.logger.error('Failed to register plugin handlers:', error);
+        this.logger.error('Failed to register component handlers:', error);
+      });
+
+    // Register file metadata handlers
+    import('./ipc/file_metadata_handlers')
+      .then(({ registerFileMetadataHandlers }) => {
+        registerFileMetadataHandlers();
+      })
+      .catch(error => {
+        this.logger.error('Failed to register file metadata handlers:', error);
       });
 
     // Get application status
@@ -571,6 +578,52 @@ class FileCatalogerApp {
       return await this.applicationController.destroyShelf(shelfId);
     });
 
+    // Window resize handlers
+    ipcMain.handle('window:resize', async (event, width: number, height: number) => {
+      try {
+        const window = BrowserWindow.fromWebContents(event.sender);
+        if (!window) {
+          this.logger.warn('window:resize - Could not find window from sender');
+          return { success: false, error: 'Window not found' };
+        }
+
+        // Validate dimensions against constraints
+        const validWidth = Math.max(
+          SHELF_CONSTANTS.MIN_WIDTH,
+          Math.min(SHELF_CONSTANTS.MAX_WIDTH, Math.round(width))
+        );
+        const validHeight = Math.max(
+          SHELF_CONSTANTS.MIN_HEIGHT,
+          Math.min(SHELF_CONSTANTS.MAX_HEIGHT, Math.round(height))
+        );
+
+        // Apply resize with animation
+        window.setSize(validWidth, validHeight, true); // true = animate
+
+        this.logger.debug('Window resized via IPC', { width: validWidth, height: validHeight });
+
+        return { success: true, width: validWidth, height: validHeight };
+      } catch (error) {
+        this.logger.error('Failed to resize window via IPC:', error);
+        return { success: false, error: error instanceof Error ? error.message : String(error) };
+      }
+    });
+
+    ipcMain.handle('window:get-bounds', async event => {
+      try {
+        const window = BrowserWindow.fromWebContents(event.sender);
+        if (!window) {
+          return null;
+        }
+
+        const bounds = window.getBounds();
+        return bounds;
+      } catch (error) {
+        this.logger.error('Failed to get window bounds:', error);
+        return null;
+      }
+    });
+
     // Debug handler for renderer messages
     ipcMain.on('shelf:debug', (_event, _data) => {
       // Debug logging removed for production
@@ -608,12 +661,22 @@ class FileCatalogerApp {
 
     // Handle folder selection dialog
     ipcMain.handle('dialog:select-folder', async (event, defaultPath?: string) => {
-      const result = await dialog.showOpenDialog({
+      const senderWindow = BrowserWindow.fromWebContents(event.sender);
+
+      if (!senderWindow) {
+        this.logger.warn('Failed to find parent window for folder dialog, using global dialog');
+      }
+
+      const dialogOptions = {
         defaultPath: defaultPath || app.getPath('downloads'),
-        properties: ['openDirectory', 'createDirectory'],
+        properties: ['openDirectory' as const, 'createDirectory' as const],
         title: 'Select Destination Folder',
         buttonLabel: 'Select Folder',
-      });
+      };
+
+      const result = senderWindow
+        ? await dialog.showOpenDialog(senderWindow, dialogOptions)
+        : await dialog.showOpenDialog(dialogOptions);
 
       if (!result.canceled && result.filePaths.length > 0) {
         return result.filePaths[0];
@@ -628,13 +691,68 @@ class FileCatalogerApp {
 
     // Check if path is a directory
     ipcMain.handle('fs:check-path-type', async (event, paths: string[]) => {
+      // Input validation for security
+      if (!Array.isArray(paths)) {
+        this.logger.error('fs:check-path-type: Invalid input - paths must be an array');
+        throw new Error('Invalid paths parameter: must be an array');
+      }
+
+      if (paths.length === 0) {
+        this.logger.debug('fs:check-path-type: Empty paths array');
+        return {};
+      }
+
+      if (paths.length > 100) {
+        this.logger.warn('fs:check-path-type: Too many paths requested', { count: paths.length });
+        throw new Error('Too many paths (maximum 100 allowed)');
+      }
+
       const results: Record<string, 'file' | 'folder' | 'unknown'> = {};
+      const userHome = app.getPath('home');
 
       for (const filePath of paths) {
+        // Validate input type
+        if (typeof filePath !== 'string' || filePath.length === 0) {
+          this.logger.warn('fs:check-path-type: Invalid path type', { filePath });
+          results[filePath] = 'unknown';
+          continue;
+        }
+
         try {
-          const stats = await fs.promises.stat(filePath);
+          // Normalize and validate path
+          const normalizedPath = path.normalize(filePath);
+
+          // Security: Prevent path traversal attacks
+          if (normalizedPath.includes('..')) {
+            this.logger.warn('fs:check-path-type: Rejected path with traversal', {
+              original: filePath,
+              normalized: normalizedPath,
+            });
+            results[filePath] = 'unknown';
+            continue;
+          }
+
+          // Security: Only allow paths in user directories or common application paths
+          const isInUserHome = normalizedPath.startsWith(userHome);
+          const isInApplications = normalizedPath.startsWith('/Applications');
+          const isInVolumes = normalizedPath.startsWith('/Volumes');
+
+          if (!isInUserHome && !isInApplications && !isInVolumes) {
+            this.logger.warn('fs:check-path-type: Rejected path outside allowed directories', {
+              path: normalizedPath,
+            });
+            results[filePath] = 'unknown';
+            continue;
+          }
+
+          // Check file type
+          const stats = await fs.promises.stat(normalizedPath);
           results[filePath] = stats.isDirectory() ? 'folder' : 'file';
         } catch (error) {
+          this.logger.debug('fs:check-path-type: Failed to stat path', {
+            path: filePath,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
           results[filePath] = 'unknown';
         }
       }
@@ -644,17 +762,26 @@ class FileCatalogerApp {
 
     // Native drag file resolution
     ipcMain.handle('drag:get-native-files', async () => {
+      const requestTime = Date.now();
       if (!this.applicationController) {
         this.logger.debug('📁 No applicationController, returning empty array');
         return [];
       }
       const nativeFiles = this.applicationController.getNativeDraggedFiles();
-      this.logger.debug('📁 Returning native dragged files:', {
+      this.logger.info('📁 IPC: drag:get-native-files requested', {
+        timestamp: new Date(requestTime).toISOString(),
         count: nativeFiles.length,
-        files: nativeFiles,
+        files: nativeFiles.map(f => ({ name: f.name, hasPath: !!f.path })),
         type: typeof nativeFiles,
         isArray: Array.isArray(nativeFiles),
       });
+
+      if (nativeFiles.length === 0) {
+        this.logger.warn('⚠️ IPC returned empty file list - possible race condition!');
+      } else {
+        this.logger.info(`✅ Successfully retrieved ${nativeFiles.length} file path(s) from cache`);
+      }
+
       return nativeFiles;
     });
 

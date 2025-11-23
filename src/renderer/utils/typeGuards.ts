@@ -84,7 +84,10 @@ export function isShelfConfig(obj: unknown): obj is ShelfConfig {
     typeof config.opacity === 'number' &&
     config.opacity >= 0 &&
     config.opacity <= 1 &&
-    (config.mode === undefined || config.mode === 'default' || config.mode === 'rename')
+    (config.mode === undefined ||
+      config.mode === 'default' ||
+      config.mode === 'rename' ||
+      config.mode === 'compact')
   );
 }
 

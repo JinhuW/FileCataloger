@@ -6,6 +6,11 @@ const projectRoot = path.resolve(__dirname, '../..');
 module.exports = {
   mode: process.env.NODE_ENV === 'production' ? 'production' : 'development',
 
+  // Disable caching in development to ensure fresh builds
+  cache: process.env.NODE_ENV === 'production' ? {
+    type: 'filesystem'
+  } : false,
+
   resolve: {
     extensions: ['.tsx', '.ts', '.js', '.jsx', '.json', '.node'],
     alias: {

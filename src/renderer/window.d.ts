@@ -38,23 +38,10 @@ declare global {
 
     // Also exposed for compatibility
     electronAPI: IElectronAPI & {
-      plugin: {
-        search: (params: any) => Promise<any>;
-        install: (params: any) => Promise<any>;
-        uninstall: (pluginId: string) => Promise<any>;
-        list: () => Promise<any>;
-        listInstalled: () => Promise<any>;
-        toggle: (pluginId: string, active: boolean) => Promise<any>;
-        getConfig: (pluginId: string) => Promise<any>;
-        setConfig: (params: any) => Promise<any>;
-        execute: (params: any) => Promise<any>;
-        executeBatch: (pluginId: string, contexts: any[]) => Promise<any>;
-        getDetails: (pluginId: string) => Promise<any>;
-      };
-      on: (channel: string, callback: (...args: any[]) => void) => void;
-      off: (channel: string, callback: (...args: any[]) => void) => void;
+      on: (channel: string, callback: (...args: unknown[]) => void) => void;
+      off: (channel: string, callback: (...args: unknown[]) => void) => void;
       dialog: {
-        showMessageBox: (options: any) => Promise<any>;
+        showMessageBox: (options: Record<string, unknown>) => Promise<unknown>;
       };
     };
   }

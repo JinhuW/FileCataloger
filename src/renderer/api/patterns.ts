@@ -1,4 +1,5 @@
 import { SavedPattern } from '@shared/types';
+import { generatePrefixedId } from '@renderer/utils/idGenerator';
 
 // Type for IPC response wrapper
 interface IPCResponse<T = any> {
@@ -13,7 +14,6 @@ interface ListOptions {
   offset?: number;
   sortBy?: 'name' | 'createdAt' | 'updatedAt' | 'usageCount';
   sortOrder?: 'asc' | 'desc';
-  includeBuiltIn?: boolean;
   favorite?: boolean;
   tags?: string[];
 }
@@ -31,54 +31,54 @@ export const patternAPI = {
   // Basic CRUD operations
   save: async (pattern: SavedPattern): Promise<void> => {
     const response = await window.api.invoke('pattern:save', pattern);
-    return handleIPCResponse(response);
+    return handleIPCResponse(response as IPCResponse<void>);
   },
 
   load: async (id: string): Promise<SavedPattern | null> => {
     const response = await window.api.invoke('pattern:load', id);
-    return handleIPCResponse(response);
+    return handleIPCResponse(response as IPCResponse<SavedPattern | null>);
   },
 
   update: async (id: string, updates: Partial<SavedPattern>): Promise<void> => {
     const response = await window.api.invoke('pattern:update', id, updates);
-    return handleIPCResponse(response);
+    return handleIPCResponse(response as IPCResponse<void>);
   },
 
   delete: async (id: string): Promise<boolean> => {
     const response = await window.api.invoke('pattern:delete', id);
-    return handleIPCResponse(response);
+    return handleIPCResponse(response as IPCResponse<boolean>);
   },
 
   list: async (options?: ListOptions): Promise<SavedPattern[]> => {
     const response = await window.api.invoke('pattern:list', options);
-    return handleIPCResponse(response);
+    return handleIPCResponse(response as IPCResponse<SavedPattern[]>);
   },
 
   // Search and filtering
   search: async (query: string): Promise<SavedPattern[]> => {
     const response = await window.api.invoke('pattern:search', query);
-    return handleIPCResponse(response);
+    return handleIPCResponse(response as IPCResponse<SavedPattern[]>);
   },
 
   getByTag: async (tag: string): Promise<SavedPattern[]> => {
     const response = await window.api.invoke('pattern:get-by-tag', tag);
-    return handleIPCResponse(response);
+    return handleIPCResponse(response as IPCResponse<SavedPattern[]>);
   },
 
   getRecent: async (limit?: number): Promise<SavedPattern[]> => {
     const response = await window.api.invoke('pattern:get-recent', limit);
-    return handleIPCResponse(response);
+    return handleIPCResponse(response as IPCResponse<SavedPattern[]>);
   },
 
   getFavorites: async (): Promise<SavedPattern[]> => {
     const response = await window.api.invoke('pattern:get-favorites');
-    return handleIPCResponse(response);
+    return handleIPCResponse(response as IPCResponse<SavedPattern[]>);
   },
 
   // Usage tracking
   incrementUsage: async (id: string): Promise<void> => {
     const response = await window.api.invoke('pattern:increment-usage', id);
-    return handleIPCResponse(response);
+    return handleIPCResponse(response as IPCResponse<void>);
   },
 
   getStats: async (): Promise<any> => {
@@ -210,12 +210,10 @@ export async function duplicatePattern(
 
   const duplicatedPattern: SavedPattern = {
     ...pattern,
-    id: `pattern-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    id: generatePrefixedId('pattern'),
     name,
     createdAt: Date.now(),
     updatedAt: Date.now(),
-    isBuiltIn: false,
-    isDefault: false,
     metadata: {
       ...pattern.metadata,
       usageCount: 0,

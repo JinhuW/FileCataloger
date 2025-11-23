@@ -1,9 +1,16 @@
 // Shared type definitions for the application
 
 import { DockPosition, ShelfItemType, ShelfMode } from './enums';
+import type {
+  ComponentDefinition,
+  ComponentInstance,
+  LegacyRenameComponent,
+} from './types/componentDefinition';
 
 // Re-export for convenience
 export { DockPosition, ShelfItemType, ShelfMode };
+export type { ComponentDefinition, ComponentInstance, LegacyRenameComponent };
+// Note: ComponentType and ComponentScope are exported from enums.ts
 
 export interface Vector2D {
   x: number;
@@ -88,11 +95,19 @@ export interface ShelfItem {
   size?: number;
   createdAt: number;
   thumbnail?: string;
+  // Extended file metadata
+  metadata?: {
+    extension?: string; // File extension (e.g., 'jpg', 'pdf')
+    birthtime?: number; // File creation timestamp (Unix timestamp)
+    mtime?: number; // Last modified timestamp (Unix timestamp)
+    atime?: number; // Last accessed timestamp (Unix timestamp)
+  };
 }
 
 export interface ShelfConfig {
   id: string;
   position: Vector2D;
+  size?: { width: number; height: number }; // Optional size for dynamic resizing
   dockPosition: DockPosition | null;
   isPinned: boolean;
   items: ShelfItem[];
@@ -111,28 +126,27 @@ export interface PerformanceMetrics {
 }
 
 // File Rename Types
+
+// Legacy type for backward compatibility (will be migrated to ComponentInstance)
 export interface RenameComponent {
   id: string;
-  type: 'date' | 'fileName' | 'counter' | 'text' | 'project' | string; // Allow plugin types
+  type: 'date' | 'fileName' | 'counter' | 'text' | 'project';
   value?: string;
   format?: string; // For date components
   placeholder?: string;
-  pluginId?: string; // For plugin components
-  config?: Record<string, any>; // Plugin-specific configuration
 }
 
 export interface RenamePattern {
-  components: RenameComponent[];
+  components: RenameComponent[] | ComponentInstance[]; // Support both during migration
 }
 
 export interface SavedPattern {
   id: string;
   name: string;
-  components: RenameComponent[];
+  components: RenameComponent[] | ComponentInstance[]; // Support both during migration
+  componentDefinitions?: ComponentDefinition[]; // Component definitions used by instances
   createdAt: number;
   updatedAt: number;
-  isBuiltIn: boolean;
-  isDefault: boolean;
   metadata?: {
     description?: string;
     usageCount?: number;

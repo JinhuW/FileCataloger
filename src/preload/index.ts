@@ -85,22 +85,6 @@ const validChannels = [
   'fs:rename-files',
   'fs:test-rename',
   'drag:get-native-files',
-  // Plugin channels
-  'plugin:search',
-  'plugin:install',
-  'plugin:uninstall',
-  'plugin:list',
-  'plugin:list-installed',
-  'plugin:toggle',
-  'plugin:get-config',
-  'plugin:set-config',
-  'plugin:execute',
-  'plugin:execute-batch',
-  'plugin:security-scan',
-  'plugin:get-details',
-  'plugin:get-usage-stats',
-  'plugin:get-errors',
-  'plugin:install-progress',
   // Pattern channels
   'pattern:save',
   'pattern:load',
@@ -127,7 +111,22 @@ const validChannels = [
   'pattern:restore',
   'pattern:backup-to-file',
   'pattern:restore-from-file',
-  'pattern:get-plugins',
+  // Component Library channels
+  'component:save-library',
+  'component:load-library',
+  'component:export',
+  'component:export-multiple',
+  'component:import',
+  'component:get-stats',
+  'component:backup',
+  'component:clear-all',
+  // Window resize channels
+  'window:resize',
+  'window:resized',
+  'window:get-bounds',
+  // File metadata channels
+  'file:get-metadata',
+  'file:get-metadata-batch',
 ] as const;
 
 // Export the type for use in other files

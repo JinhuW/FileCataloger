@@ -1,129 +1,169 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with native modules in this repository.
 
-## Native Module Architecture
+## Current State
 
-This directory contains **optimized native C++ modules** for FileCataloger with a monorepo architecture providing high-performance system integration for macOS.
+### Standardized Module Structure
 
-### Core Modules
+All native modules follow this pattern for consistency:
+
+```
+module-name/
+├── src/
+│   ├── platform/           # Platform-specific implementations
+│   │   └── mac/           # macOS (.mm files)
+│   └── module_name.h      # Public interface (if exists)
+├── ts/                    # TypeScript wrappers
+│   ├── index.ts
+│   └── moduleWrapper.ts
+└── binding.gyp           # Build configuration at module root
+```
+
+### Active Modules
 
 #### Mouse Tracker (`mouse-tracker/`)
 
-- **Purpose**: High-performance system-wide mouse tracking using CGEventTap
-- **Optimizations**: Event batching (60fps), memory pooling, compiler optimizations (-O3, LTO)
-- **Performance**: 60-80% reduction in JS callbacks, 50-70% fewer allocations
-- **Implementation**: Single `mouseTracker.ts` (simplified from previous base/darwin split)
-- **Factory**: `createMouseTracker()` returns platform-appropriate implementation
+- **Implementation**: `src/platform/mac/mouse_tracker_mac.mm` (26KB)
+- **Performance**: 60fps batching, 50-70% fewer allocations, <1ms latency
+- **Requirements**: macOS Accessibility permissions
+- **Binary**: `build/Release/mouse_tracker_darwin.node` (~79KB)
 
 #### Drag Monitor (`drag-monitor/`)
 
-- **Purpose**: System-wide drag operation detection via NSPasteboard monitoring
-- **API Updates**: Modern `kUTTypeFileURL` replaces deprecated `NSFilenamesPboardType`
-- **No Permissions**: Works without accessibility permissions (unlike mouse tracking)
-- **Events**: `drag-start`, `drag-end` with file metadata extraction
+- **Implementation**: `src/platform/mac/drag_monitor_mac.mm` (36KB)
+- **Performance**: Adaptive polling (10ms active, 100ms idle), lock-free updates
+- **Requirements**: No special permissions (uses NSPasteboard)
+- **Binary**: `build/Release/drag_monitor_darwin.node` (~96KB)
 
-### Build System
+### Shared Components (`common/`)
 
-#### Development Commands
+- `error_codes.h` - Standardized error codes (3.6KB)
+- `health_monitor.h` - Health monitoring system (8.8KB)
+- `napi_smart_ptr.h` - Smart pointer utilities (2.3KB)
+- `thread_sync.h` - ARM64-optimized synchronization (5.1KB)
 
-```bash
-# Build all native modules (0 warnings, 0 errors)
-yarn build:native                  # Standard build
-yarn build:native:clean            # Clean rebuild
-yarn build:native:verbose          # Verbose logging
-
-# Individual module builds
-yarn build:mouse-tracker           # Mouse tracking only
-yarn build:drag-monitor            # Drag detection only
-
-# Validation and testing
-yarn test:native:validate          # Validate built modules
-npm run build                      # Full application build (includes native)
-```
-
-#### Monorepo Structure
-
-- **Centralized dependencies**: Single `package.json` in `src/native/`
-- **No individual packages**: Removed per-module package.json files
-- **Unified versioning**: All modules use same Electron/Node versions
-- **Build scripts**: Available in `scripts/native/` (advanced build system)
-
-### Critical Build Requirements
-
-#### macOS Prerequisites
-
-- **Xcode Command Line Tools**: `xcode-select --install`
-- **Python 3.x**: Required for node-gyp
-- **Accessibility permissions**: Required for mouse tracking (prompted on first use)
-- **Modern compiler**: C++17 support with optimizations enabled
-
-#### Build Validation
-
-Always verify after changes:
+## Build Commands
 
 ```bash
-yarn build:native:clean            # Must complete with 0 warnings
-yarn test:native:validate          # Must show both modules loaded
-npm run build                      # Complete pipeline must succeed
+# From src/native directory
+npm run build                  # Build all modules
+npm run build:clean            # Clean rebuild
+npm run build:verbose          # Verbose output
+npm run build:mouse-tracker    # Build specific module
+npm run build:drag-monitor     # Build specific module
+npm run test:validate          # Validate modules load correctly
+npm run clean:all              # Remove all build artifacts
 ```
 
-### Architecture Decisions
+## Development Guidelines
 
-#### Performance Optimizations
+### When Making Changes
 
-- **Event Batching**: Mouse events queued and sent at 60fps max to prevent JS thread flooding
-- **Memory Pooling**: `ObjectPool<T>` template reuses MouseData/ButtonData objects
-- **Intelligent Filtering**: Button state only sent when changed, intermediate positions discarded
-- **Atomic Operations**: Thread-safe state management with relaxed memory ordering
+1. **Before modifying**: Read existing implementation first
+2. **Naming conventions**:
+   - C++ files: `snake_case.mm/cc`
+   - TypeScript: `camelCase.ts`
+   - Directories: `kebab-case`
+3. **After changes**:
+   - Run `npm run build:clean` from `src/native`
+   - Run `npm run test:validate` to verify modules load
 
-#### Code Simplification
+### Adding Features
 
-- **Unified Implementation**: Merged `baseTracker.ts` + `darwinNativeTracker.ts` → `mouseTracker.ts`
-- **No Fallbacks**: Removed `nodeTracker.ts` polling since only macOS supported
-- **Direct Factory**: Simplified `index.ts` creates `MacOSMouseTracker` directly
+1. **Performance first**: Profile before adding features
+2. **Thread safety**: Use atomic operations and lock-free algorithms
+3. **Memory management**: Use RAII and smart pointers
+4. **Error handling**: Use standardized error codes from `common/error_codes.h`
 
-### Integration Points
+### Platform Support
 
-#### Webpack Configuration
+Currently **macOS only**. When adding platform support:
 
-Native modules automatically copied to `dist/main/`:
+1. Create `src/platform/win/` or `src/platform/linux/`
+2. Update `binding.gyp` conditions
+3. Keep platform-specific code isolated
+4. Use same public interface
 
-- `mouse_tracker_darwin.node` (79KB)
-- `drag_monitor_darwin.node` (96KB)
+## Key Optimizations in Place
 
-#### Error Handling
+### Mouse Tracker
 
-- **Build failures**: Check native module availability before app startup
-- **Runtime errors**: Graceful fallbacks when native modules unavailable
-- **Performance monitoring**: Built-in metrics for batching efficiency
+- **Event batching**: Max 60fps to reduce JS callbacks
+- **Memory pooling**: ObjectPool<T> for zero-allocation hot path
+- **Button filtering**: Only sends changes, not every event
+- **Double buffering**: Lock-free producer-consumer pattern
 
-### Troubleshooting
+### Drag Monitor
 
-#### Common Issues
+- **Adaptive polling**: 90% CPU reduction when idle
+- **Lock-free queue**: Zero contention between threads
+- **Pasteboard caching**: Avoids repeated system calls
+- **Trajectory analysis**: Efficient shake detection algorithm
 
-1. **Module not found**: Run `yarn build:native:clean`
-2. **Compilation warnings**: Check `DEBUG_NOTES.md` for solutions
-3. **Permission errors**: Grant Accessibility permissions in System Preferences
-4. **Build failures**: Verify Xcode Command Line Tools installed
+### Build Flags
 
-#### Performance Monitoring
+- `-O3` - Maximum optimization
+- `-ffast-math` - Fast floating point
+- `-march=native` - CPU-specific optimizations
+- LTO enabled - Link-time optimization
 
-```typescript
-// Get real-time performance metrics
-const tracker = createMouseTracker();
+## Common Issues & Solutions
+
+| Issue             | Solution                                               |
+| ----------------- | ------------------------------------------------------ |
+| Module not found  | `npm run build:clean` from `src/native`                |
+| Permission denied | Grant Accessibility in System Preferences              |
+| High CPU usage    | Check metrics: `tracker.getNativePerformanceMetrics()` |
+| Build fails       | Verify: `xcode-select --install`                       |
+
+## Testing
+
+```bash
+# Quick validation
+npm run test:validate
+
+# Manual test
+node -e "require('./mouse-tracker/build/Release/mouse_tracker_darwin.node')"
+
+# Performance check (in app)
 const metrics = tracker.getNativePerformanceMetrics();
-// Expected: >95% batching efficiency, ~60fps event rate
+console.log(metrics); // Should show >95% batching efficiency
 ```
 
-### Future Expansion
+## Important Notes
 
-#### Platform Support
+- **Single version policy**: No duplicate implementations
+- **Clean structure**: No build artifacts in git
+- **Performance critical**: Every allocation matters
+- **Thread safety**: ARM64 requires proper memory ordering
+- **Error handling**: Never crash, always fallback gracefully
 
-- **Windows**: Planned Win32 API implementation
-- **Linux**: Planned X11/Wayland implementation
-- **Configuration**: `scripts/native/native-config.ts` registry for new modules
+## File Sizes (Expected)
 
-#### Module Registry
+After build, verify sizes are reasonable:
 
-Add new native modules to `NATIVE_MODULES` array in `scripts/native/native-config.ts` for automatic build management and integration.
+- `mouse_tracker_darwin.node`: ~79KB
+- `drag_monitor_darwin.node`: ~96KB
+- Total native code: ~62KB source
+- Common headers: ~20KB
+
+If sizes differ significantly, investigate for issues.
+
+## Do NOT
+
+- Create unit tests without request
+- Create benchmark files without request
+- Add new dependencies without discussion
+- Modify build flags without testing
+- Remove optimizations without profiling
+- Use relaxed memory ordering on ARM64
+
+## References for Implementation
+
+- [CGEventTap Docs](https://developer.apple.com/documentation/coregraphics/1454426-cgeventtapcreate)
+- [NSPasteboard Docs](https://developer.apple.com/documentation/appkit/nspasteboard)
+- [Node-API Reference](https://nodejs.org/api/n-api.html)
+- [ARM64 Memory Model](https://developer.arm.com/documentation/102336/0100)
+
+Remember: This is production code for a performance-critical path. Every microsecond counts.

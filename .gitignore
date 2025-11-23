@@ -98,4 +98,5 @@ src/**/*.js.map
 # OS files
 *.swp
 *.swo
-**/build/**
+**/build/**src/native/drag-monitor/build/
+src/native/mouse-tracker/build/

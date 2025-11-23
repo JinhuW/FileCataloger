@@ -33,6 +33,8 @@ import { ShelfItem, ShelfItemType } from '@shared/types';
 import { useShelfItemAccessibility } from '@renderer/hooks/useAccessibility';
 import { getFileIcon, getTypeIcon } from '@renderer/utils/fileTypeIcons';
 import { logger } from '@shared/logger';
+import { CustomTooltip } from '@renderer/components/primitives';
+import { buildFileMetadataTooltip, buildActionTooltip } from '@renderer/utils/tooltipUtils';
 
 export interface ShelfItemComponentProps {
   item: ShelfItem;
@@ -82,7 +84,7 @@ export const ShelfItemComponent = React.memo<ShelfItemComponentProps>(
         typeOfType: typeof item.type,
         isFolder: item.type === ShelfItemType.FOLDER,
         isFolderString: item.type === 'folder',
-        path: item.path
+        path: item.path,
       });
 
       // Handle different item types properly using enum values
@@ -94,7 +96,9 @@ export const ShelfItemComponent = React.memo<ShelfItemComponentProps>(
         return folderIcon;
       }
       if (item.type === ShelfItemType.FILE && item.path) {
-        logger.debug('FILE type detected with path, using file extension icon', { path: item.path });
+        logger.debug('FILE type detected with path, using file extension icon', {
+          path: item.path,
+        });
         return getFileIcon(item.path);
       }
       logger.debug('Using generic type icon', { type: item.type });
@@ -221,21 +225,22 @@ export const ShelfItemComponent = React.memo<ShelfItemComponentProps>(
             minWidth: 0,
           }}
         >
-          {/* Item Name */}
-          <div
-            style={{
-              color: 'white',
-              fontSize: isCompact ? '12px' : '14px',
-              fontWeight: '500',
-              marginBottom: isCompact ? '0' : '2px',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-            title={item.name}
-          >
-            {item.name}
-          </div>
+          {/* Item Name with Tooltip */}
+          <CustomTooltip content={buildFileMetadataTooltip(item)} position="top" showDelay={700}>
+            <div
+              style={{
+                color: 'white',
+                fontSize: isCompact ? '12px' : '14px',
+                fontWeight: '500',
+                marginBottom: isCompact ? '0' : '2px',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              }}
+            >
+              {item.name}
+            </div>
+          </CustomTooltip>
 
           {/* Item Details (only in non-compact mode) */}
           {!isCompact && (
@@ -269,42 +274,44 @@ export const ShelfItemComponent = React.memo<ShelfItemComponentProps>(
               }}
             >
               {/* Copy Button */}
-              <motion.button
-                onClick={e => handleAction('copy', e)}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                style={{
-                  background: 'rgba(59, 130, 246, 0.2)',
-                  border: 'none',
-                  borderRadius: '4px',
-                  color: 'rgba(59, 130, 246, 0.8)',
-                  cursor: 'pointer',
-                  padding: '2px 4px',
-                  fontSize: '10px',
-                }}
-                title="Copy"
-              >
-                📋
-              </motion.button>
+              <CustomTooltip content={buildActionTooltip('Copy to clipboard', '⌘C')} position="top">
+                <motion.button
+                  onClick={e => handleAction('copy', e)}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  style={{
+                    background: 'rgba(59, 130, 246, 0.2)',
+                    border: 'none',
+                    borderRadius: '4px',
+                    color: 'rgba(59, 130, 246, 0.8)',
+                    cursor: 'pointer',
+                    padding: '2px 4px',
+                    fontSize: '10px',
+                  }}
+                >
+                  📋
+                </motion.button>
+              </CustomTooltip>
 
               {/* Remove Button */}
-              <motion.button
-                onClick={e => handleAction('remove', e)}
-                whileHover={{ scale: 1.1 }}
-                whileTap={{ scale: 0.9 }}
-                style={{
-                  background: 'rgba(239, 68, 68, 0.2)',
-                  border: 'none',
-                  borderRadius: '4px',
-                  color: 'rgba(239, 68, 68, 0.8)',
-                  cursor: 'pointer',
-                  padding: '2px 4px',
-                  fontSize: '10px',
-                }}
-                title="Remove"
-              >
-                🗑️
-              </motion.button>
+              <CustomTooltip content={buildActionTooltip('Remove from shelf', '⌫')} position="top">
+                <motion.button
+                  onClick={e => handleAction('remove', e)}
+                  whileHover={{ scale: 1.1 }}
+                  whileTap={{ scale: 0.9 }}
+                  style={{
+                    background: 'rgba(239, 68, 68, 0.2)',
+                    border: 'none',
+                    borderRadius: '4px',
+                    color: 'rgba(239, 68, 68, 0.8)',
+                    cursor: 'pointer',
+                    padding: '2px 4px',
+                    fontSize: '10px',
+                  }}
+                >
+                  🗑️
+                </motion.button>
+              </CustomTooltip>
             </motion.div>
           )}
         </AnimatePresence>

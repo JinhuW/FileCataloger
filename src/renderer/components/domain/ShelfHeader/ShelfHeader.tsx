@@ -30,23 +30,23 @@
  */
 
 import React from 'react';
-import { motion } from 'framer-motion';
 import { ShelfConfig } from '@shared/types';
 
 export interface ShelfHeaderProps {
   config: ShelfConfig;
-  itemCount: number;
-  onClose: () => void;
+  itemCount: number; // Keep for backwards compatibility but not displayed
+  onClose: () => void; // Keep for backwards compatibility but not used
   title?: string;
 }
 
 export const ShelfHeader = React.memo<ShelfHeaderProps>(
-  ({ config, itemCount, onClose, title = 'Shelf' }) => {
+  ({ config: _config, itemCount: _itemCount, onClose: _onClose, title = 'Shelf' }) => {
     return (
       <div
         className="shelf-header"
         style={{
           padding: '12px 16px',
+          paddingTop: '40px', // Extra padding for traffic lights
           borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
           display: 'flex',
           alignItems: 'center',
@@ -62,8 +62,8 @@ export const ShelfHeader = React.memo<ShelfHeaderProps>(
             {
               position: 'absolute',
               top: 0,
-              left: 0,
-              right: 100, // Leave space for buttons
+              left: 72, // Start after traffic lights (20px + 52px button width)
+              right: 0,
               bottom: 0,
               cursor: 'move',
               WebkitAppRegion: 'drag',
@@ -72,8 +72,21 @@ export const ShelfHeader = React.memo<ShelfHeaderProps>(
           }
         />
 
-        {/* Left Side - Title and Count */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', zIndex: 2 }}>
+        {/* Center - Title Only - Absolutely centered */}
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 0, // Behind drag handle so it doesn't interfere
+            pointerEvents: 'none', // Don't interfere with dragging
+          }}
+        >
           <span
             style={{
               color: 'white',
@@ -84,55 +97,6 @@ export const ShelfHeader = React.memo<ShelfHeaderProps>(
           >
             {title}
           </span>
-          <span
-            style={{
-              color: 'rgba(255, 255, 255, 0.6)',
-              fontSize: '12px',
-              background: 'rgba(255, 255, 255, 0.1)',
-              padding: '2px 6px',
-              borderRadius: '8px',
-              minWidth: '20px',
-              textAlign: 'center',
-            }}
-          >
-            {itemCount}
-          </span>
-        </div>
-
-        {/* Spacer to push actions to the right */}
-        <div style={{ flex: 1 }} />
-
-        {/* Right Side - Actions */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            zIndex: 2,
-            position: 'relative',
-          }}
-        >
-          {/* Close Button */}
-          <motion.button
-            onClick={onClose}
-            whileHover={{ scale: 1.1, background: 'rgba(239, 68, 68, 0.2)' }}
-            whileTap={{ scale: 0.95 }}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'rgba(255, 255, 255, 0.6)',
-              cursor: 'pointer',
-              padding: '4px',
-              borderRadius: '4px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              fontSize: '14px',
-            }}
-            title="Close shelf"
-          >
-            ✕
-          </motion.button>
         </div>
       </div>
     );

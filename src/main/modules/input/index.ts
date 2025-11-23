@@ -1,2 +1,2 @@
-export { DragShakeDetector } from './dragShakeDetector';
-export { KeyboardManager, keyboardManager } from './keyboardManager';
+export { DragShakeDetector } from './drag_shake_detector';
+export { KeyboardManager, keyboardManager } from './keyboard_manager';

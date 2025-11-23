@@ -103,7 +103,8 @@ export function validateFileRenames(
   }
 
   return {
-    isValid: pathIssues.length === 0 && filenameIssues.length === 0 && missingPathIssues.length === 0,
+    isValid:
+      pathIssues.length === 0 && filenameIssues.length === 0 && missingPathIssues.length === 0,
     totalFiles: files.length,
     pathIssues,
     filenameIssues,
@@ -141,14 +142,21 @@ export function formatValidationWarning(summary: ValidationSummary): {
     );
   }
 
-  const message = summary.missingPathIssues.length > 0
-    ? issues.join(' and ') + '. Files without paths cannot be renamed.'
-    : issues.join(' and ') + '. These files may not be renamed successfully on some file systems.';
+  const message =
+    summary.missingPathIssues.length > 0
+      ? issues.join(' and ') + '. Files without paths cannot be renamed.'
+      : issues.join(' and ') +
+        '. These files may not be renamed successfully on some file systems.';
 
   const details = (
     <div>
       {summary.missingPathIssues.length > 0 && (
-        <div style={{ marginBottom: (summary.pathIssues.length > 0 || summary.filenameIssues.length > 0) ? '16px' : 0 }}>
+        <div
+          style={{
+            marginBottom:
+              summary.pathIssues.length > 0 || summary.filenameIssues.length > 0 ? '16px' : 0,
+          }}
+        >
           <h4
             style={{
               margin: '0 0 8px',

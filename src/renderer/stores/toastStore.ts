@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { devtools } from 'zustand/middleware';
+import { generatePrefixedId } from '@renderer/utils/idGenerator';
 
 export interface Toast {
   id: string;
@@ -22,7 +23,7 @@ export const useToastStore = create<ToastState>()(
       toasts: [],
 
       showToast: toast => {
-        const id = `toast-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const id = generatePrefixedId('toast');
         set(state => ({
           toasts: [...state.toasts, { ...toast, id }],
         }));

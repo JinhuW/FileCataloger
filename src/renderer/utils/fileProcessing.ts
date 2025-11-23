@@ -23,6 +23,28 @@ import { SHELF_CONSTANTS, isImageTypeSupported, isTextFileExtension } from '../c
 import { logger } from '@shared/logger';
 
 /**
+ * Type guard for native file response from IPC
+ */
+interface NativeFile {
+  path: string;
+  name: string;
+}
+
+function isNativeFileArray(value: unknown): value is NativeFile[] {
+  if (!Array.isArray(value)) return false;
+
+  return value.every(
+    item =>
+      typeof item === 'object' &&
+      item !== null &&
+      'path' in item &&
+      'name' in item &&
+      typeof item.path === 'string' &&
+      typeof item.name === 'string'
+  );
+}
+
+/**
  * Generate a unique ID for a shelf item
  */
 const generateItemId = (type: string | ShelfItemType, index: number): string => {
@@ -217,4 +239,324 @@ export function formatFileSize(bytes: number): string {
 export function getFileExtension(filename: string): string {
   const lastDot = filename.lastIndexOf('.');
   return lastDot > 0 ? filename.substring(lastDot + 1).toLowerCase() : '';
+}
+
+/**
+ * Result of processing dropped/selected files with duplicate detection
+ */
+export interface ProcessFilesResult {
+  /**
+   * Successfully processed items
+   */
+  items: ShelfItem[];
+  /**
+   * Number of duplicate files that were skipped
+   */
+  duplicateCount: number;
+  /**
+   * Whether the filesystem type check failed (using heuristic fallback)
+   */
+  pathTypeCheckFailed?: boolean;
+}
+
+/**
+ * Options for processing file lists
+ */
+export interface ProcessFileListOptions {
+  /**
+   * Set of existing file paths to check for duplicates
+   */
+  existingPaths?: Set<string>;
+  /**
+   * Source of the files (for logging)
+   */
+  source?: 'drag' | 'input';
+  /**
+   * Pre-captured native file paths (bypasses IPC call to prevent race conditions)
+   * Map of filename → full path from native drag monitor
+   * If provided, this will be used instead of making an IPC call to drag:get-native-files
+   */
+  nativePathMap?: Map<string, string>;
+}
+
+/**
+ * Retrieves file paths from the native drag monitor module.
+ * The native module captures paths from NSPasteboard during drag operations.
+ * Returns a map of filename → full path for matching with File objects.
+ *
+ * @returns Map of filename to full path, or empty map if native paths unavailable
+ */
+async function getNativeFilePaths(): Promise<Map<string, string>> {
+  const pathMap = new Map<string, string>();
+
+  try {
+    const response = await window.api.invoke('drag:get-native-files');
+
+    // Validate IPC response instead of using type assertion
+    if (!isNativeFileArray(response)) {
+      logger.warn('Invalid native files response from IPC:', response);
+      return pathMap;
+    }
+
+    if (response.length > 0) {
+      logger.info(`📋 Retrieved ${response.length} file paths from native drag monitor`);
+
+      for (const nativeFile of response) {
+        if (nativeFile.path && nativeFile.name) {
+          // Extract filename from path as fallback if name is not provided
+          const filename = nativeFile.name || nativeFile.path.split('/').pop() || '';
+          if (filename) {
+            pathMap.set(filename, nativeFile.path);
+            logger.debug(`  ✓ ${filename} → ${nativeFile.path}`);
+          }
+        }
+      }
+    } else {
+      logger.debug('📋 No native file paths available (empty or invalid response)');
+    }
+  } catch (error) {
+    logger.warn('Failed to retrieve native file paths:', error);
+    logger.debug('Will fall back to Electron File.path property');
+  }
+
+  return pathMap;
+}
+
+/**
+ * Processes a FileList and converts it to ShelfItems with type detection.
+ * Handles duplicate detection and file type classification via IPC.
+ * This function is optimized for batch processing with a single IPC call.
+ *
+ * ENHANCED: Now retrieves file paths from native drag monitor for complete path information.
+ *
+ * @param files - The FileList to process
+ * @param options - Processing options including duplicate detection
+ * @returns ProcessFilesResult containing items and duplicate count
+ */
+export async function processFileList(
+  files: FileList,
+  options: ProcessFileListOptions = {}
+): Promise<ProcessFilesResult> {
+  const {
+    existingPaths = new Set<string>(),
+    source = 'drag',
+    nativePathMap: providedPathMap,
+  } = options;
+
+  const items: ShelfItem[] = [];
+  const duplicatePaths = new Set<string>();
+  let duplicateCount = 0;
+
+  logger.info(`📦 processFileList: Processing ${files.length} files from ${source}`);
+
+  // Step 1: Get native file paths from drag monitor (for drag operations)
+  // Use provided map to avoid race conditions, otherwise fetch via IPC
+  const nativePathMap =
+    providedPathMap ?? (source === 'drag' ? await getNativeFilePaths() : new Map<string, string>());
+
+  if (providedPathMap) {
+    logger.debug(`Using pre-captured native paths (${providedPathMap.size} files)`);
+  }
+
+  // Step 2: Collect paths for batch type checking
+  const pathsToCheck: string[] = [];
+  const fileMap: Map<string, { file: File; index: number }> = new Map();
+
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+
+    // Try to get path from multiple sources (priority order):
+    // 1. Native drag monitor (most reliable for drag operations)
+    // 2. Electron File.path property (fallback)
+    const filePath = nativePathMap.get(file.name) || getElectronFilePath(file);
+
+    if (filePath) {
+      pathsToCheck.push(filePath);
+      fileMap.set(filePath, { file, index: i });
+    } else {
+      logger.warn(`⚠️ No path available for file: ${file.name}`);
+    }
+  }
+
+  logger.debug(`Resolved ${pathsToCheck.length} file paths out of ${files.length} files`);
+
+  // Step 3: Batch check path types via IPC
+  let pathTypes: Record<string, 'file' | 'folder' | 'unknown'> = {};
+  let pathTypeCheckFailed = false;
+
+  if (pathsToCheck.length > 0) {
+    try {
+      logger.debug(`Checking ${pathsToCheck.length} path types`);
+      pathTypes = (await window.api.invoke('fs:check-path-type', pathsToCheck)) as Record<
+        string,
+        'file' | 'folder' | 'unknown'
+      >;
+      logger.debug('Path types received', pathTypes);
+    } catch (error) {
+      pathTypeCheckFailed = true;
+      logger.error('Failed to check path types via IPC:', error);
+      logger.warn(
+        '⚠️ Falling back to heuristic file type detection. Folder detection may be inaccurate.'
+      );
+      // Continue processing with empty pathTypes - will use heuristic fallback
+    }
+  }
+
+  // Step 4: Process each file
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i];
+
+    // Get path using same priority order as Step 2
+    const filePath = nativePathMap.get(file.name) || getElectronFilePath(file);
+
+    // Skip duplicates (both from existing paths and within current batch)
+    if (filePath) {
+      if (existingPaths.has(filePath) || duplicatePaths.has(filePath)) {
+        logger.debug(`Skipping duplicate file: ${file.name} (${filePath})`);
+        duplicateCount++;
+        continue;
+      }
+      duplicatePaths.add(filePath);
+    }
+
+    // Determine file type with filesystem check
+    const type = determineFileTypeWithPath(file, filePath, pathTypes);
+
+    logger.debug(`Processed file ${i}:`, {
+      name: file.name,
+      path: filePath,
+      pathSource: nativePathMap.has(file.name) ? 'native' : 'electron',
+      type,
+      size: file.size,
+    });
+
+    const item: ShelfItem = {
+      id: generateItemId(type, i),
+      type,
+      name: file.name,
+      path: filePath || undefined,
+      size: file.size,
+      createdAt: Date.now(),
+    };
+    items.push(item);
+  }
+
+  // Step 5: Fetch metadata for items with paths (batch request for efficiency)
+  const itemsWithPaths = items.filter((item): item is ShelfItem & { path: string } => !!item.path);
+  if (itemsWithPaths.length > 0) {
+    try {
+      const paths = itemsWithPaths.map(item => item.path);
+      logger.debug(`Fetching metadata for ${paths.length} files`);
+
+      const metadataResponse = (await window.api.invoke('file:get-metadata-batch', paths)) as {
+        success: boolean;
+        data?: Record<
+          string,
+          {
+            extension?: string;
+            birthtime?: number;
+            mtime?: number;
+            atime?: number;
+          }
+        >;
+        error?: string;
+      };
+
+      if (metadataResponse.success && metadataResponse.data) {
+        // Apply metadata to items
+        for (const item of itemsWithPaths) {
+          const metadata = metadataResponse.data[item.path];
+          if (metadata && Object.keys(metadata).length > 0) {
+            item.metadata = metadata;
+            logger.debug(`Applied metadata to ${item.name}:`, metadata);
+          }
+        }
+        logger.info(`✅ Successfully fetched metadata for ${itemsWithPaths.length} files`);
+      } else {
+        logger.warn('Failed to fetch file metadata:', metadataResponse.error);
+      }
+    } catch (error) {
+      logger.error('Error fetching file metadata:', error);
+      // Continue without metadata - not critical for basic functionality
+    }
+  }
+
+  logger.info(
+    `📦 processFileList: Processed ${items.length} items, skipped ${duplicateCount} duplicates`
+  );
+
+  return { items, duplicateCount, pathTypeCheckFailed };
+}
+
+/**
+ * Gets the Electron file path from a File object.
+ * Electron exposes the native path on the File object.
+ *
+ * @param file - The File object
+ * @returns The file path or undefined
+ */
+export function getElectronFilePath(file: File): string | undefined {
+  return (file as unknown as { path?: string }).path;
+}
+
+/**
+ * Determines the ShelfItemType for a file based on filesystem checks and heuristics.
+ * This function uses IPC results to accurately determine if a path is a folder.
+ *
+ * @param file - The File object
+ * @param filePath - The file path (if available)
+ * @param pathTypes - Map of paths to their filesystem types
+ * @returns The determined ShelfItemType
+ */
+export function determineFileTypeWithPath(
+  file: File,
+  filePath: string | undefined,
+  pathTypes: Record<string, 'file' | 'folder' | 'unknown'>
+): ShelfItemType {
+  // Primary: Use filesystem type if available
+  if (filePath && pathTypes[filePath]) {
+    if (pathTypes[filePath] === 'folder') {
+      return ShelfItemType.FOLDER;
+    }
+    // For files, check if it's an image
+    if (file.type.startsWith('image/')) {
+      return ShelfItemType.IMAGE;
+    }
+    return ShelfItemType.FILE;
+  }
+
+  // Fallback: Heuristic detection
+  const hasExtension = file.name.includes('.') && !file.name.endsWith('.app');
+  const isFolder = (!hasExtension && file.size === 0) || (!file.type && !hasExtension);
+
+  if (isFolder) {
+    return ShelfItemType.FOLDER;
+  }
+  if (file.type.startsWith('image/')) {
+    return ShelfItemType.IMAGE;
+  }
+  return ShelfItemType.FILE;
+}
+
+/**
+ * Checks if an array of files contains duplicates based on their paths.
+ *
+ * @param items - Array of ShelfItems to check
+ * @returns Set of duplicate paths found
+ */
+export function findDuplicatePaths(items: ShelfItem[]): Set<string> {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+
+  for (const item of items) {
+    if (item.path) {
+      if (seen.has(item.path)) {
+        duplicates.add(item.path);
+      } else {
+        seen.add(item.path);
+      }
+    }
+  }
+
+  return duplicates;
 }

@@ -10,10 +10,11 @@ export interface EmptyStateProps {
     onClick: () => void;
   };
   style?: React.CSSProperties;
+  compact?: boolean; // Reduces spacing and icon size for tight layouts
 }
 
 export const EmptyState = React.memo<EmptyStateProps>(
-  ({ icon, title, description, action, style }) => {
+  ({ icon, title, description, action, style, compact = false }) => {
     return (
       <motion.div
         initial={{ opacity: 0, y: 10 }}
@@ -24,7 +25,7 @@ export const EmptyState = React.memo<EmptyStateProps>(
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: '32px',
+          padding: compact ? '8px 12px' : '32px',
           textAlign: 'center',
           ...style,
         }}
@@ -35,8 +36,8 @@ export const EmptyState = React.memo<EmptyStateProps>(
             animate={{ scale: 1 }}
             transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
             style={{
-              fontSize: '48px',
-              marginBottom: '16px',
+              fontSize: compact ? '24px' : '48px',
+              marginBottom: compact ? '4px' : '16px',
               opacity: 0.8,
             }}
           >
@@ -47,9 +48,9 @@ export const EmptyState = React.memo<EmptyStateProps>(
         <h3
           style={{
             color: 'rgba(255, 255, 255, 0.9)',
-            fontSize: '16px',
+            fontSize: compact ? '12px' : '16px',
             fontWeight: 600,
-            margin: '0 0 8px',
+            margin: compact ? '0 0 2px' : '0 0 8px',
           }}
         >
           {title}
@@ -59,10 +60,10 @@ export const EmptyState = React.memo<EmptyStateProps>(
           <p
             style={{
               color: 'rgba(255, 255, 255, 0.6)',
-              fontSize: '14px',
-              margin: '0 0 24px',
+              fontSize: compact ? '10px' : '14px',
+              margin: compact ? '0' : '0 0 24px',
               maxWidth: '300px',
-              lineHeight: '1.5',
+              lineHeight: compact ? '1.3' : '1.5',
             }}
           >
             {description}

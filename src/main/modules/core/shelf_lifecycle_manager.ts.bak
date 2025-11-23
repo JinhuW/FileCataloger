@@ -1,0 +1,398 @@
+import { EventEmitter } from 'events';
+import { Logger, createLogger } from '../utils/logger';
+import { ShelfManager } from '../window/shelf_manager';
+import { TimerManager } from '../utils/timer_manager';
+import { PreferencesManager } from '../config/preferences_manager';
+import { DragShelfStateMachine, DragShelfEvent } from '../state/drag_shelf_state_machine';
+import { ShelfConfig, ShelfMode } from '@shared/types';
+import { SHELF_CONSTANTS } from '@shared/constants';
+
+/**
+ * Manages the lifecycle of shelf windows including creation, destruction, and auto-hide
+ * Extracted from ApplicationController to follow Single Responsibility Principle
+ */
+export class ShelfLifecycleManager extends EventEmitter {
+  private readonly logger: Logger;
+  private readonly timerManager: TimerManager;
+  private readonly activeShelves = new Set<string>();
+  private readonly activeDropOperations = new Set<string>();
+  private readonly shelvesCreatedDuringDrag = new Set<string>();
+
+  constructor(
+    private readonly shelfManager: ShelfManager,
+    private readonly preferencesManager: PreferencesManager,
+    private readonly stateMachine: DragShelfStateMachine
+  ) {
+    super();
+    this.logger = createLogger('ShelfLifecycleManager');
+    this.timerManager = new TimerManager('ShelfLifecycleManager');
+
+    this.setupEventListeners();
+  }
+
+  /**
+   * Setup internal event listeners
+   */
+  private setupEventListeners(): void {
+    // Listen for shelf events from ShelfManager
+    this.shelfManager.on('shelf-created', (shelfId: string) => {
+      this.activeShelves.add(shelfId);
+      this.stateMachine.send(DragShelfEvent.SHELF_CREATED, { shelfId });
+      this.emit('shelf-created', shelfId);
+    });
+
+    this.shelfManager.on('shelf-destroyed', (shelfId: string) => {
+      this.activeShelves.delete(shelfId);
+      this.activeDropOperations.delete(shelfId);
+      this.cancelShelfAutoHide(shelfId);
+      this.emit('shelf-destroyed', shelfId);
+    });
+
+    this.shelfManager.on('shelf-item-added', (shelfId: string, item: any) => {
+      // Cancel auto-hide timer when items are added
+      this.cancelShelfAutoHide(shelfId);
+      this.logger.info(`📦 Item added to shelf ${shelfId}, auto-hide cancelled`);
+
+      // Update state machine
+      this.stateMachine.send(DragShelfEvent.ITEMS_ADDED);
+
+      // Remove from active drop operations
+      if (this.activeDropOperations.has(shelfId)) {
+        this.logger.info(`🎯 Removing ${shelfId} from active drop operations`);
+        this.activeDropOperations.delete(shelfId);
+      }
+
+      this.emit('shelf-item-added', shelfId, item);
+    });
+
+    this.shelfManager.on('shelf-item-removed', (shelfId: string, itemId: string) => {
+      // Check if shelf is now empty and schedule auto-hide
+      const config = this.shelfManager.getShelfConfig(shelfId);
+      if (config && config.items.length === 0 && !config.isPinned) {
+        this.logger.info(`🗑️ Shelf ${shelfId} is now empty, scheduling auto-hide`);
+
+        // Update state machine
+        this.stateMachine.send(DragShelfEvent.ITEMS_REMOVED);
+
+        // Schedule auto-hide with shorter delay for manual removal
+        this.scheduleEmptyShelfAutoHide(shelfId, 3000);
+      }
+      this.emit('shelf-item-removed', shelfId, itemId);
+    });
+  }
+
+  /**
+   * Create a new shelf at the specified position
+   */
+  public async createShelf(config: Partial<ShelfConfig>): Promise<string | null> {
+    try {
+      const preferences = this.preferencesManager.getPreferences();
+
+      const fullConfig: Partial<ShelfConfig> = {
+        isPinned: false,
+        isVisible: true,
+        opacity: preferences.shelf.opacity,
+        mode: ShelfMode.RENAME,
+        items: [],
+        ...config
+      };
+
+      const shelfId = await this.shelfManager.createShelf(fullConfig);
+
+      if (shelfId) {
+        this.logger.info(`✅ Shelf created: ${shelfId}`);
+
+        // Mark shelf as created during drag if drag is active
+        const context = this.stateMachine.getContext();
+        if (context.isDragging) {
+          this.shelvesCreatedDuringDrag.add(shelfId);
+          this.logger.info(`🎯 Shelf ${shelfId} marked as created during drag`);
+        }
+
+        // Schedule auto-hide for empty shelf if enabled (but NOT during drag)
+        // Shelves created during drag will have auto-hide scheduled when drag ends
+        if (fullConfig.items?.length === 0 && preferences.shelf.autoHideEmpty && !context.isDragging) {
+          this.logger.info(`📅 Scheduling auto-hide for empty shelf ${shelfId}`);
+          this.scheduleEmptyShelfAutoHide(shelfId, SHELF_CONSTANTS.EMPTY_TIMEOUT);
+        } else if (context.isDragging) {
+          this.logger.info(`🚫 Skipping auto-hide for shelf ${shelfId} - created during active drag`);
+        }
+      }
+
+      return shelfId;
+    } catch (error) {
+      this.logger.error('Failed to create shelf:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Destroy a specific shelf
+   */
+  public async destroyShelf(shelfId: string): Promise<boolean> {
+    try {
+      this.cancelShelfAutoHide(shelfId);
+      this.activeShelves.delete(shelfId);
+      this.activeDropOperations.delete(shelfId);
+
+      const success = await this.shelfManager.destroyShelf(shelfId);
+      if (success) {
+        this.logger.info(`✅ Shelf destroyed: ${shelfId}`);
+      }
+      return success;
+    } catch (error) {
+      this.logger.error(`Failed to destroy shelf ${shelfId}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Schedule auto-hide for an empty shelf
+   */
+  public scheduleEmptyShelfAutoHide(shelfId: string, customTimeout?: number): void {
+    // Check if auto-hide is enabled in preferences
+    const preferences = this.preferencesManager.getPreferences();
+    if (!preferences.shelf.autoHideEmpty) {
+      this.logger.info(`🚫 Auto-hide disabled - skipping for shelf: ${shelfId}`);
+      return;
+    }
+
+    // Cancel any existing timer for this shelf
+    this.cancelShelfAutoHide(shelfId);
+
+    // Use custom timeout or default
+    const timeout = customTimeout || SHELF_CONSTANTS.EMPTY_TIMEOUT;
+
+    // Schedule new timer
+    this.timerManager.setTimeout(
+      `shelf-autohide-${shelfId}`,
+      () => {
+        // Don't auto-hide during active drag operations
+        const context = this.stateMachine.getContext();
+        if (context.isDragging) {
+          this.logger.info(`🖱️ Shelf ${shelfId} auto-hide blocked - drag in progress`);
+          // Reschedule with longer timeout during drag
+          this.scheduleEmptyShelfAutoHide(shelfId, timeout * 2);
+          return;
+        }
+
+        // Don't auto-hide shelves created during current drag
+        if (this.shelvesCreatedDuringDrag.has(shelfId)) {
+          this.logger.info(`🚫 Shelf ${shelfId} created during drag - deferring auto-hide`);
+          // Will be handled when drag ends
+          return;
+        }
+
+        // Don't auto-hide shelves receiving drops
+        if (this.activeDropOperations.has(shelfId)) {
+          this.logger.info(`⏸️ Shelf ${shelfId} is receiving drops - rescheduling`);
+          this.scheduleEmptyShelfAutoHide(shelfId); // Reschedule
+          return;
+        }
+
+        const shelfConfig = this.shelfManager.getShelfConfig(shelfId);
+
+        // Only hide if shelf exists, is empty, and not pinned
+        if (shelfConfig && shelfConfig.items.length === 0 && !shelfConfig.isPinned) {
+          this.logger.info(`🕐 Auto-hiding empty shelf: ${shelfId}`);
+          this.destroyShelf(shelfId);
+        } else if (shelfConfig && shelfConfig.items.length > 0) {
+          this.logger.info(`📦 Shelf ${shelfId} has items - cancelling auto-hide`);
+        }
+      },
+      timeout,
+      `Auto-hide empty shelf ${shelfId}`
+    );
+
+    this.logger.info(`⏰ Scheduled auto-hide for shelf ${shelfId} in ${timeout}ms`);
+  }
+
+  /**
+   * Cancel auto-hide timer for a shelf
+   */
+  public cancelShelfAutoHide(shelfId: string): void {
+    const timerId = `shelf-autohide-${shelfId}`;
+    if (this.timerManager.hasTimer(timerId)) {
+      this.timerManager.clearTimeout(timerId);
+      this.logger.info(`❌ Cancelled auto-hide for shelf: ${shelfId}`);
+    }
+  }
+
+  /**
+   * Clear all empty shelves immediately
+   */
+  public async clearEmptyShelves(): Promise<void> {
+    const emptyShelfIds: string[] = [];
+
+    for (const shelfId of this.activeShelves) {
+      const config = this.shelfManager.getShelfConfig(shelfId);
+
+      // Check if shelf is empty, not pinned, and not receiving drops
+      if (
+        config &&
+        config.items.length === 0 &&
+        !config.isPinned &&
+        !this.activeDropOperations.has(shelfId)
+      ) {
+        emptyShelfIds.push(shelfId);
+      }
+    }
+
+    if (emptyShelfIds.length > 0) {
+      this.logger.info(`🧹 Clearing ${emptyShelfIds.length} empty shelves`);
+
+      for (const shelfId of emptyShelfIds) {
+        await this.destroyShelf(shelfId);
+      }
+
+      // Send cleanup complete event to state machine
+      if (this.stateMachine.getState() === 'cleanup_in_progress') {
+        this.stateMachine.send(DragShelfEvent.CLEANUP_COMPLETE);
+      }
+    } else {
+      this.logger.info('✨ No empty shelves to clear');
+    }
+  }
+
+  /**
+   * Re-evaluate all empty shelves for auto-hide scheduling
+   */
+  public reevaluateEmptyShelvesForAutoHide(): void {
+    const preferences = this.preferencesManager.getPreferences();
+    if (!preferences.shelf.autoHideEmpty) {
+      this.logger.info('🚫 Auto-hide disabled - skipping re-evaluation');
+      return;
+    }
+
+    this.logger.info('🔄 Re-evaluating empty shelves for auto-hide');
+
+    for (const shelfId of this.activeShelves) {
+      const config = this.shelfManager.getShelfConfig(shelfId);
+
+      if (config && config.items.length === 0 && !config.isPinned) {
+        this.logger.info(`📋 Scheduling auto-hide for empty shelf: ${shelfId}`);
+        this.scheduleEmptyShelfAutoHide(shelfId);
+      }
+    }
+  }
+
+  /**
+   * Mark shelf as receiving a drop operation
+   */
+  public markShelfReceivingDrop(shelfId: string): void {
+    this.activeDropOperations.add(shelfId);
+    this.cancelShelfAutoHide(shelfId);
+    this.stateMachine.send(DragShelfEvent.DROP_STARTED);
+    this.logger.info(`🎯 Shelf ${shelfId} marked as receiving drop`);
+  }
+
+  /**
+   * Mark shelf drop operation as complete
+   */
+  public markDropComplete(shelfId: string): void {
+    this.activeDropOperations.delete(shelfId);
+    this.stateMachine.send(DragShelfEvent.DROP_ENDED);
+    this.logger.info(`✅ Drop operation complete for shelf ${shelfId}`);
+
+    // Check if shelf is still empty after drop
+    const config = this.shelfManager.getShelfConfig(shelfId);
+    if (config && config.items.length === 0 && !config.isPinned) {
+      this.scheduleEmptyShelfAutoHide(shelfId);
+    }
+  }
+
+  /**
+   * Get active shelf IDs
+   */
+  public getActiveShelves(): Set<string> {
+    return new Set(this.activeShelves);
+  }
+
+  /**
+   * Check if a shelf exists and is active
+   */
+  public isShelfActive(shelfId: string): boolean {
+    return this.activeShelves.has(shelfId);
+  }
+
+  /**
+   * Check if we can create a new shelf
+   */
+  public canCreateShelf(): boolean {
+    const maxShelves = 5; // Max simultaneous shelves
+    return this.activeShelves.size < maxShelves;
+  }
+
+  /**
+   * Get shelf configuration
+   */
+  public getShelfConfig(shelfId: string): ShelfConfig | null {
+    return this.shelfManager.getShelfConfig(shelfId) || null;
+  }
+
+  /**
+   * Show or hide a shelf
+   */
+  public showShelf(shelfId: string): void {
+    this.shelfManager.showShelf(shelfId);
+  }
+
+  /**
+   * Clear all drop operations
+   */
+  public clearAllDropOperations(): void {
+    const count = this.activeDropOperations.size;
+    if (count > 0) {
+      this.logger.info(`🧹 Clearing ${count} active drop operations`);
+      this.activeDropOperations.clear();
+    }
+  }
+
+  /**
+   * Handle drag end - cleanup shelves created during drag
+   */
+  public handleDragEnd(): void {
+    this.logger.info(`🏁 Processing drag end for ${this.shelvesCreatedDuringDrag.size} shelves`);
+
+    // Check each shelf created during drag
+    for (const shelfId of this.shelvesCreatedDuringDrag) {
+      const config = this.shelfManager.getShelfConfig(shelfId);
+      if (config && config.items.length === 0 && !config.isPinned) {
+        this.logger.info(`📦 Shelf ${shelfId} is empty after drag - scheduling auto-hide`);
+        // Use shorter timeout for post-drag cleanup
+        this.scheduleEmptyShelfAutoHide(shelfId, 2000);
+      }
+    }
+
+    // Clear the tracking set
+    this.shelvesCreatedDuringDrag.clear();
+  }
+
+  /**
+   * Destroy all active shelves
+   */
+  public async destroyAllShelves(): Promise<void> {
+    const shelfIds = Array.from(this.activeShelves);
+    this.logger.info(`🧹 Destroying ${shelfIds.length} active shelves`);
+
+    for (const shelfId of shelfIds) {
+      await this.destroyShelf(shelfId);
+    }
+  }
+
+  /**
+   * Clean up and destroy
+   */
+  public destroy(): void {
+    // Cancel all timers
+    this.timerManager.destroy();
+
+    // Clear all shelves
+    this.destroyAllShelves();
+
+    // Remove all listeners
+    this.removeAllListeners();
+
+    this.logger.info('ShelfLifecycleManager destroyed');
+  }
+}

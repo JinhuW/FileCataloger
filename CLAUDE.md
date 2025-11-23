@@ -113,25 +113,20 @@ All IPC channels are strictly validated in preload script:
 
 ```typescript
 // Application control
-'app:get-status'      // Request app state
-'app:create-shelf'    // Manual shelf creation
-'app:update-config'   // Update configuration
+'app:get-status'; // Request app state
+'app:create-shelf'; // Manual shelf creation
+'app:update-config'; // Update configuration
 
 // Shelf operations
-'shelf:create'        // Create new shelf
-'shelf:files-dropped' // Handle file drops
-'shelf:remove-item'   // Remove single item
-'shelf:close'         // Close shelf window
+'shelf:create'; // Create new shelf
+'shelf:files-dropped'; // Handle file drops
+'shelf:remove-item'; // Remove single item
+'shelf:close'; // Close shelf window
 
 // Pattern operations (file rename)
-'pattern:save'        // Save rename pattern
-'pattern:list'        // List saved patterns
-'pattern:execute'     // Execute rename
-
-// Plugin system
-'plugin:install'      // Install plugin
-'plugin:execute'      // Run plugin command
-'plugin:get-config'   // Get plugin settings
+'pattern:save'; // Save rename pattern
+'pattern:list'; // List saved patterns
+'pattern:execute'; // Execute rename
 ```
 
 ### State Management
@@ -140,11 +135,11 @@ All IPC channels are strictly validated in preload script:
 - **Renderer**: Zustand stores with Immer middleware
   - `shelfStore`: Map-based storage for performance
   - `patternStore`: Rename pattern management
-  - `pluginStore`: Plugin state and configuration
 
 ### TypeScript Configuration
 
 Separate configs for security and type safety:
+
 - `config/tsconfig.main.json` - Node.js environment
 - `config/tsconfig.renderer.json` - Browser environment
 - Path aliases: `@main/*`, `@renderer/*`, `@native/*`, `@shared/*`
@@ -176,6 +171,7 @@ Separate configs for security and type safety:
 ### File Rename System
 
 Located in `src/renderer/features/fileRename/`:
+
 - Pattern builder with live preview
 - Batch operations with undo support
 - Saved pattern management
@@ -197,22 +193,17 @@ Located in `src/renderer/features/fileRename/`:
 3. Create renderer components in `src/renderer/pages/shelf/`
 4. Update shelf store if needed
 
-### Adding a Plugin Hook
-
-1. Define hook in `src/shared/types/plugins.ts`
-2. Add execution point in relevant module
-3. Update plugin manager to call hook
-4. Document in plugin SDK
-
 ## Debugging
 
 ### Development Mode Features
+
 - Shelf windows visible immediately (no hide)
 - Verbose logging to console
 - React DevTools enabled
 - Source maps for all processes
 
 ### Log Locations
+
 - **Main**: `~/Library/Application Support/FileCataloger/logs/`
 - **Renderer**: Browser console
 - **Native**: System console (view with Console.app)
@@ -247,29 +238,34 @@ Located in `src/renderer/features/fileRename/`:
 ## Project-Specific Patterns
 
 ### Error Handling
+
 ```typescript
 // Use ErrorHandler with severity levels
 ErrorHandler.handle(error, {
   severity: 'HIGH',
   category: 'NATIVE',
-  context: { module: 'mouseTracker' }
+  context: { module: 'mouseTracker' },
 });
 ```
 
 ### Logging
+
 ```typescript
 // Use Logger module, not console.log
 Logger.info('Shelf created', {
   shelfId,
   position,
-  mode
+  mode,
 });
 ```
 
 ### Performance Monitoring
+
 ```typescript
 // Automatic cleanup on high memory
 PerformanceMonitor.on('high-memory', () => {
   // Cleanup logic
 });
 ```
+
+- Please restart the appliation and let me test it

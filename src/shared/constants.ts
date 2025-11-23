@@ -7,15 +7,18 @@
  * Shelf-related constants
  */
 export const SHELF_CONSTANTS = {
-  DEFAULT_WIDTH: 300,
-  DEFAULT_HEIGHT: 400,
-  MIN_HEIGHT: 200,
-  MAX_HEIGHT: 600,
+  DEFAULT_WIDTH: 900, // Updated to match current UI
+  DEFAULT_HEIGHT: 800, // Increased to show all UI content
+  MIN_WIDTH: 600, // Minimum width for usability
+  MAX_WIDTH: 1600, // Maximum width for reasonable UI
+  MIN_HEIGHT: 500,
+  MAX_HEIGHT: 1200, // Reduced for better UX
   AUTO_HIDE_DELAY: 3000, // milliseconds
   EMPTY_TIMEOUT: 5000, // milliseconds
   DOCK_MARGIN: 10,
   MAX_POOL_SIZE: 3,
   OPACITY: 0.9,
+  RESIZABLE: true, // Allow users to resize shelf windows
   WINDOW_ANIMATION_DURATION: 200, // milliseconds
   // Item display thresholds
   COMPACT_MODE_THRESHOLD: 20, // Show compact view when more than 20 items
@@ -101,6 +104,9 @@ export const IPC_CHANNELS = {
   WINDOW_DROP_START: 'window:drop-start',
   WINDOW_DROP_END: 'window:drop-end',
   WINDOW_FILES_DROPPED: 'window:files-dropped',
+  WINDOW_RESIZE: 'window:resize',
+  WINDOW_RESIZED: 'window:resized',
+  WINDOW_GET_BOUNDS: 'window:get-bounds',
 
   // Application events
   APP_ERROR: 'app:error',

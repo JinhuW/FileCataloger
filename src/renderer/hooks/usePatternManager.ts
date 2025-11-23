@@ -83,8 +83,6 @@ export function usePatternManager() {
         components: [],
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        isBuiltIn: false,
-        isDefault: false,
       };
 
       addPattern(newPattern);
@@ -101,7 +99,7 @@ export function usePatternManager() {
       updatePattern(id, updates);
 
       const pattern = patterns.get(id);
-      if (pattern && !pattern.isBuiltIn) {
+      if (pattern) {
         await savePatternToPreferences({ ...pattern, ...updates, updatedAt: Date.now() });
       }
     },
@@ -111,7 +109,7 @@ export function usePatternManager() {
   const deletePatternWithSave = useCallback(
     async (id: string) => {
       const pattern = patterns.get(id);
-      if (pattern && !pattern.isBuiltIn) {
+      if (pattern) {
         deletePattern(id);
         await removePatternFromPreferences(id);
       }
