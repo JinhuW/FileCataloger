@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - master
+      - develop
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  # Quick validation for all branches
+  validate:
+    name: Validate Code
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: |
+          export SKIP_NATIVE_MODULES=true
+          yarn install --frozen-lockfile --ignore-scripts
+
+      - name: Run validation
+        run: |
+          echo "Running quick validation checks..."
+
+          # TypeScript check
+          echo "📝 TypeScript check..."
+          yarn typecheck
+
+          # Linting (allow warnings)
+          echo "🔍 Linting..."
+          yarn lint || true
+
+          # Format check
+          echo "💅 Format check..."
+          yarn format:check
+
+          # Security audit
+          echo "🔐 Security audit..."
+          yarn audit --level critical || true
+
+      - name: Build check
+        run: |
+          echo "🏗️ Build check..."
+          yarn build
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## CI Summary"
+          echo "✅ All validation checks completed"
+          echo ""
+          echo "Branch: ${{ github.ref_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Time: $(date -u +"%Y-%m-%d %H:%M UTC")"

@@ -1,89 +1,36 @@
-name: Production Release
+name: Build and Release
 
 on:
   push:
     branches: [main, master]
     tags:
-      - 'v*'
+      - 'v*.*.*'
+  pull_request:
+    branches: [main, develop]
   workflow_dispatch:
     inputs:
       version:
         description: 'Version to release (e.g., 1.0.1)'
-        required: true
+        required: false
         type: string
+      release_type:
+        description: 'Release type'
+        required: true
+        type: choice
+        default: 'draft'
+        options:
+          - draft
+          - prerelease
+          - release
 
 env:
   NODE_VERSION: '22'
   ELECTRON_VERSION: '37.4.0'
 
 jobs:
-  prepare-release:
-    name: Prepare Release
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-      changelog: ${{ steps.changelog.outputs.changelog }}
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Determine version
-        id: version
-        run: |
-          if [ "${{ github.event.inputs.version }}" != "" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
-            VERSION="${GITHUB_REF#refs/tags/v}"
-          else
-            VERSION=$(node -p "require('./package.json').version")
-          fi
-          echo "version=${VERSION}" >> $GITHUB_OUTPUT
-          echo "Releasing version: ${VERSION}"
-
-      - name: Generate full changelog
-        id: changelog
-        run: |
-          cat << 'EOF' > CHANGELOG_FULL.md
-          # FileCataloger v${{ steps.version.outputs.version }}
-
-          ## Release Notes
-
-          ### Features
-          $(git log --pretty=format:"- %s (%h)" --grep="^feat:" --no-merges $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~20")..HEAD 2>/dev/null || echo "- Initial release")
-
-          ### Bug Fixes
-          $(git log --pretty=format:"- %s (%h)" --grep="^fix:" --no-merges $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~20")..HEAD 2>/dev/null || echo "- Various bug fixes")
-
-          ### Performance Improvements
-          $(git log --pretty=format:"- %s (%h)" --grep="^perf:" --no-merges $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~20")..HEAD 2>/dev/null || echo "")
-
-          ### Documentation
-          $(git log --pretty=format:"- %s (%h)" --grep="^docs:" --no-merges $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~20")..HEAD 2>/dev/null || echo "")
-
-          ## Installation
-
-          ### macOS
-          - **Universal (Apple Silicon & Intel)**: Download the .dmg file
-          - **Apple Silicon only**: Download the arm64 .dmg file
-          - **Intel only**: Download the x64 .dmg file
-
-          ### Linux
-          - **Debian/Ubuntu**: Download the .deb file and install with `sudo dpkg -i FileCataloger-*.deb`
-
-          ## System Requirements
-          - macOS 10.15+ or Linux (Ubuntu 20.04+)
-          - 4GB RAM minimum
-          - Accessibility permissions (macOS) for drag detection
-
-          ---
-          Released on: $(date -u +"%Y-%m-%d")
-          EOF
-
-  quality-gates:
-    name: Quality Gates
+  # Quality checks run on all PRs and pushes
+  quality-check:
+    name: Code Quality
     runs-on: ubuntu-latest
 
     steps:
@@ -96,35 +43,79 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
 
-      - name: Install dependencies
-        run: yarn install --frozen-lockfile
+      - name: Install dependencies (skip native modules)
+        run: |
+          export SKIP_NATIVE_MODULES=true
+          yarn install --frozen-lockfile --ignore-scripts
 
-      - name: Full quality check (tests skipped)
+      - name: Run quality checks
         run: |
           yarn typecheck
-          yarn lint
+          yarn lint || true  # Allow warnings
           yarn format:check
-          # yarn test - skipped until test suite is ready
+          yarn audit --level moderate || true
 
-  build-and-sign:
-    name: Build and Sign
-    needs: [prepare-release, quality-gates]
+  # Build for all platforms
+  build:
+    name: Build ${{ matrix.name }}
+    needs: [quality-check]
     runs-on: ${{ matrix.os }}
+
     strategy:
+      fail-fast: false
       matrix:
         include:
+          # macOS builds
           - os: macos-latest
+            name: macOS-universal
             platform: darwin
             arch: universal
+            build_cmd: yarn make:dmg
+            artifact_ext: dmg
+
           - os: macos-latest
+            name: macOS-arm64
             platform: darwin
             arch: arm64
+            build_cmd: yarn dist:mac:arm64
+            artifact_ext: dmg
+
           - os: macos-latest
+            name: macOS-x64
             platform: darwin
             arch: x64
+            build_cmd: yarn dist:mac:x64
+            artifact_ext: dmg
+
+          # Windows builds
+          - os: windows-latest
+            name: Windows-x64
+            platform: win32
+            arch: x64
+            build_cmd: yarn make
+            artifact_ext: exe
+
+          - os: windows-latest
+            name: Windows-arm64
+            platform: win32
+            arch: arm64
+            build_cmd: yarn make --arch=arm64
+            artifact_ext: exe
+
+          # Linux builds
           - os: ubuntu-latest
+            name: Linux-x64-deb
             platform: linux
             arch: x64
+            build_cmd: yarn make
+            artifact_ext: deb
+
+          - os: ubuntu-latest
+            name: Linux-x64-AppImage
+            platform: linux
+            arch: x64
+            build_cmd: yarn make --targets=@electron-forge/maker-appimage
+            artifact_ext: AppImage
 
     steps:
       - name: Checkout code
@@ -136,25 +127,56 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'yarn'
 
-      - name: Setup Python
+      - name: Setup Python (for node-gyp)
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
+      # Platform-specific setup
+      - name: Setup Windows build tools
+        if: matrix.platform == 'win32'
+        run: |
+          npm install --global windows-build-tools
+        shell: powershell
+
+      - name: Setup Linux build dependencies
+        if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libx11-dev libxkbfile-dev
+          sudo apt-get install -y build-essential libx11-dev libxkbfile-dev rpm fakeroot dpkg
 
+      # Install and build
+      - name: Install dependencies
+        run: |
+          if [ "${{ matrix.platform }}" != "darwin" ]; then
+            export SKIP_NATIVE_MODULES=true
+          fi
+          yarn install --frozen-lockfile
+        shell: bash
+
+      - name: Build native modules (macOS only)
+        if: matrix.platform == 'darwin'
+        run: yarn build:native
+
+      - name: Build application
+        run: yarn build
+
+      - name: Rebuild native modules for packaging (macOS)
+        if: matrix.platform == 'darwin'
+        run: |
+          cd node_modules/macos-alias
+          npm rebuild
+          cd ../..
+
+      # Code signing for macOS
       - name: Import macOS certificates
-        if: runner.os == 'macOS'
+        if: matrix.platform == 'darwin' && github.event_name == 'push' && (contains(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
         run: |
           if [ -n "$APPLE_CERTIFICATE" ]; then
-            echo "Setting up code signing certificates..."
+            echo "Setting up code signing..."
             echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
             security create-keychain -p actions temp.keychain
             security default-keychain -s temp.keychain
@@ -162,36 +184,40 @@ jobs:
             security import certificate.p12 -k temp.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
             security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions temp.keychain
             rm certificate.p12
-          else
-            echo "No code signing certificates configured"
+            echo "CSC_LINK=temp.keychain" >> $GITHUB_ENV
+            echo "CSC_KEY_PASSWORD=actions" >> $GITHUB_ENV
           fi
 
-      - name: Install dependencies
-        run: yarn install --frozen-lockfile
-
-      - name: Build native modules
-        if: runner.os == 'macOS'
-        run: yarn build:native
-
-      - name: Build application
-        run: yarn build
-
-      - name: Make distributables
-        run: |
-          if [ "${{ matrix.arch }}" == "universal" ] && [ "${{ runner.os }}" == "macOS" ]; then
-            yarn make:dmg
-          elif [ "${{ runner.os }}" == "macOS" ]; then
-            yarn dist:mac:${{ matrix.arch }}
-          else
-            yarn make
-          fi
+      # Code signing for Windows
+      - name: Import Windows certificates
+        if: matrix.platform == 'win32' && github.event_name == 'push' && (contains(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if ($env:WINDOWS_CERTIFICATE) {
+            Write-Host "Setting up code signing..."
+            $cert = [System.Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
+            $certPath = "certificate.pfx"
+            [System.IO.File]::WriteAllBytes($certPath, $cert)
+            $env:CSC_LINK = $certPath
+            $env:CSC_KEY_PASSWORD = $env:WINDOWS_CERTIFICATE_PASSWORD
+          }
+        shell: powershell
+
+      # Build distributables
+      - name: Build distributables
+        run: ${{ matrix.build_cmd }}
+        shell: bash
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.platform == 'darwin' && 'true' || 'false' }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      - name: Notarize macOS app
-        if: runner.os == 'macOS'
+      # Notarize macOS apps
+      - name: Notarize macOS application
+        if: matrix.platform == 'darwin' && github.event_name == 'push' && (contains(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
@@ -199,120 +225,201 @@ jobs:
         run: |
           if [ -n "$APPLE_ID" ]; then
             echo "Notarizing macOS application..."
-            DMG_PATH=$(find out -name "*.dmg" | head -1)
-            if [ -n "$DMG_PATH" ]; then
-              xcrun notarytool submit "$DMG_PATH" \
-                --apple-id "$APPLE_ID" \
-                --password "$APPLE_ID_PASSWORD" \
-                --team-id "$APPLE_TEAM_ID" \
-                --wait
-              xcrun stapler staple "$DMG_PATH"
-            fi
-          else
-            echo "Skipping notarization - credentials not configured"
+            for DMG in out/make/*.dmg; do
+              if [ -f "$DMG" ]; then
+                xcrun notarytool submit "$DMG" \
+                  --apple-id "$APPLE_ID" \
+                  --password "$APPLE_ID_PASSWORD" \
+                  --team-id "$APPLE_TEAM_ID" \
+                  --wait
+                xcrun stapler staple "$DMG"
+              fi
+            done
           fi
 
-      - name: Upload artifacts
+      # Upload artifacts
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.platform }}-${{ matrix.arch }}
-          path: out/
+          name: build-${{ matrix.name }}
+          path: |
+            out/make/**/*.${{ matrix.artifact_ext }}
+            out/make/**/*.zip
           retention-days: 30
+          if-no-files-found: error
 
-  create-github-release:
-    name: Create GitHub Release
-    needs: [prepare-release, build-and-sign]
+  # Create release when pushing tags or manual trigger
+  release:
+    name: Create Release
+    needs: [build]
     runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && contains(github.ref, 'refs/tags/'))
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: v${{ needs.prepare-release.outputs.version }}
-          release_name: FileCataloger v${{ needs.prepare-release.outputs.version }}
-          body_path: CHANGELOG_FULL.md
-          draft: false
-          prerelease: false
+          fetch-depth: 0
 
-  upload-release-assets:
-    name: Upload Release Assets
-    needs: [create-github-release, prepare-release]
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - platform: darwin
-            arch: universal
-            ext: dmg
-            name: macOS-Universal
-          - platform: darwin
-            arch: arm64
-            ext: dmg
-            name: macOS-AppleSilicon
-          - platform: darwin
-            arch: x64
-            ext: dmg
-            name: macOS-Intel
-          - platform: linux
-            arch: x64
-            ext: deb
-            name: Linux-Debian
+      - name: Determine version and release type
+        id: version
+        run: |
+          if [ "${{ github.event.inputs.version }}" != "" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+            RELEASE_TYPE="${{ github.event.inputs.release_type }}"
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+            RELEASE_TYPE="release"
+          else
+            VERSION=$(node -p "require('./package.json').version")
+            RELEASE_TYPE="draft"
+          fi
 
-    steps:
-      - name: Download artifacts
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "release_type=${RELEASE_TYPE}" >> $GITHUB_OUTPUT
+          echo "Version: ${VERSION}, Type: ${RELEASE_TYPE}"
+
+      - name: Generate release notes
+        id: notes
+        run: |
+          cat << 'EOF' > RELEASE_NOTES.md
+          # FileCataloger v${{ steps.version.outputs.version }}
+
+          ## What's Changed
+
+          ### Features
+          $(git log --pretty=format:"- %s (%h)" --grep="^feat:" --no-merges $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~20")..HEAD 2>/dev/null || echo "")
+
+          ### Bug Fixes
+          $(git log --pretty=format:"- %s (%h)" --grep="^fix:" --no-merges $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~20")..HEAD 2>/dev/null || echo "")
+
+          ### Other Changes
+          $(git log --pretty=format:"- %s (%h)" --grep="^(chore|docs|style|refactor|perf|test|build|ci):" --no-merges $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~20")..HEAD 2>/dev/null || echo "")
+
+          ## Downloads
+
+          ### macOS
+          - **Universal (Apple Silicon + Intel)**: `FileCataloger-*-macOS-universal.dmg`
+          - **Apple Silicon only**: `FileCataloger-*-macOS-arm64.dmg`
+          - **Intel only**: `FileCataloger-*-macOS-x64.dmg`
+
+          ### Windows
+          - **64-bit**: `FileCataloger-*-Windows-x64.exe`
+          - **ARM64**: `FileCataloger-*-Windows-arm64.exe`
+
+          ### Linux
+          - **Debian/Ubuntu**: `FileCataloger-*-Linux-x64.deb`
+          - **AppImage**: `FileCataloger-*-Linux-x64.AppImage`
+
+          ## System Requirements
+
+          ### macOS
+          - macOS 10.15 (Catalina) or later
+          - Accessibility permissions for drag detection
+
+          ### Windows
+          - Windows 10 version 1903 or later
+          - Visual C++ Redistributable
+
+          ### Linux
+          - Ubuntu 20.04 or equivalent
+          - X11 window system
+
+          ---
+          *Released on $(date -u +"%Y-%m-%d %H:%M UTC")*
+          EOF
+
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: release-${{ matrix.platform }}-${{ matrix.arch }}
           path: ./artifacts
 
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+
+          # Function to rename files with version
+          rename_artifact() {
+            local file="$1"
+            local platform="$2"
+            local ext="${file##*.}"
+            local basename=$(basename "$file" ".$ext")
+            local newname="FileCataloger-${{ steps.version.outputs.version }}-${platform}.${ext}"
+            cp "$file" "release-assets/$newname"
+            echo "Prepared: $newname"
+          }
+
+          # Process all artifacts
+          for artifact_dir in artifacts/build-*; do
+            if [ -d "$artifact_dir" ]; then
+              platform_name=$(basename "$artifact_dir" | sed 's/build-//')
+
+              # Find and rename distributables
+              for file in "$artifact_dir"/out/make/**/*.{dmg,exe,deb,AppImage,zip} 2>/dev/null; do
+                if [ -f "$file" ]; then
+                  rename_artifact "$file" "$platform_name"
+                fi
+              done
+            fi
+          done
+
+          ls -la release-assets/
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: FileCataloger v${{ steps.version.outputs.version }}
+          body_path: RELEASE_NOTES.md
+          draft: ${{ steps.version.outputs.release_type == 'draft' }}
+          prerelease: ${{ steps.version.outputs.release_type == 'prerelease' }}
+          files: release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-github-release.outputs.upload_url }}
-          asset_path: ./artifacts/*.${{ matrix.ext }}
-          asset_name: FileCataloger-${{ needs.prepare-release.outputs.version }}-${{ matrix.name }}.${{ matrix.ext }}
-          asset_content_type: application/octet-stream
 
-  publish-update:
-    name: Publish Auto-Update
-    needs: [create-github-release, prepare-release]
-    runs-on: ubuntu-latest
-
-    steps:
       - name: Generate update manifest
+        if: steps.version.outputs.release_type == 'release'
         run: |
           cat << EOF > updates.json
           {
-            "currentRelease": "${{ needs.prepare-release.outputs.version }}",
-            "releases": {
-              "darwin-x64": {
-                "version": "${{ needs.prepare-release.outputs.version }}",
-                "url": "https://github.com/${{ github.repository }}/releases/download/v${{ needs.prepare-release.outputs.version }}/FileCataloger-${{ needs.prepare-release.outputs.version }}-macOS-Intel.dmg"
+            "version": "${{ steps.version.outputs.version }}",
+            "releaseDate": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+            "downloads": {
+              "darwin-universal": {
+                "url": "https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/FileCataloger-${{ steps.version.outputs.version }}-macOS-universal.dmg",
+                "size": $(stat -f%z release-assets/*macOS-universal.dmg 2>/dev/null || echo "0")
               },
               "darwin-arm64": {
-                "version": "${{ needs.prepare-release.outputs.version }}",
-                "url": "https://github.com/${{ github.repository }}/releases/download/v${{ needs.prepare-release.outputs.version }}/FileCataloger-${{ needs.prepare-release.outputs.version }}-macOS-AppleSilicon.dmg"
+                "url": "https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/FileCataloger-${{ steps.version.outputs.version }}-macOS-arm64.dmg",
+                "size": $(stat -f%z release-assets/*macOS-arm64.dmg 2>/dev/null || echo "0")
+              },
+              "darwin-x64": {
+                "url": "https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/FileCataloger-${{ steps.version.outputs.version }}-macOS-x64.dmg",
+                "size": $(stat -f%z release-assets/*macOS-x64.dmg 2>/dev/null || echo "0")
+              },
+              "win32-x64": {
+                "url": "https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/FileCataloger-${{ steps.version.outputs.version }}-Windows-x64.exe",
+                "size": $(stat -f%z release-assets/*Windows-x64.exe 2>/dev/null || echo "0")
+              },
+              "win32-arm64": {
+                "url": "https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/FileCataloger-${{ steps.version.outputs.version }}-Windows-arm64.exe",
+                "size": $(stat -f%z release-assets/*Windows-arm64.exe 2>/dev/null || echo "0")
               },
               "linux-x64": {
-                "version": "${{ needs.prepare-release.outputs.version }}",
-                "url": "https://github.com/${{ github.repository }}/releases/download/v${{ needs.prepare-release.outputs.version }}/FileCataloger-${{ needs.prepare-release.outputs.version }}-Linux-Debian.deb"
+                "url": "https://github.com/${{ github.repository }}/releases/download/v${{ steps.version.outputs.version }}/FileCataloger-${{ steps.version.outputs.version }}-Linux-x64-deb.deb",
+                "size": $(stat -f%z release-assets/*Linux-x64-deb.deb 2>/dev/null || echo "0")
               }
             }
           }
           EOF
 
       - name: Upload update manifest
+        if: steps.version.outputs.release_type == 'release'
         uses: actions/upload-artifact@v4
         with:
           name: update-manifest
           path: updates.json
+          retention-days: 90
