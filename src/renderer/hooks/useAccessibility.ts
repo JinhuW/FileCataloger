@@ -150,7 +150,7 @@ export function useKeyboardNavigation<T extends HTMLElement>(
           break;
       }
     },
-    [selectedIndex, items.length, focusItem, onItemSelect, onItemRemove, onClose]
+    [selectedIndex, items, focusItem, onItemSelect, onItemRemove, onClose]
   );
 
   return {
