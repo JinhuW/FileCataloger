@@ -4,7 +4,7 @@ module.exports = {
     appBundleId: 'com.example.filecataloger',
     appCopyright: 'Copyright © 2024',
     name: 'FileCataloger',
-    executableName: 'FileCataloger',
+    executableName: process.platform === 'linux' ? 'filecataloger' : 'FileCataloger',
     // Ad-hoc signing for distribution without Developer ID
     osxSign: {
       identity: '-', // Ad-hoc signing
@@ -26,7 +26,10 @@ module.exports = {
     {
       name: '@electron-forge/maker-squirrel',
       config: {
-        name: 'filecataloger'
+        name: 'filecataloger',
+        authors: 'FileCataloger Team',
+        exe: 'FileCataloger.exe',
+        description: 'A macOS application for organizing files with floating shelf windows'
       }
     },
     {
