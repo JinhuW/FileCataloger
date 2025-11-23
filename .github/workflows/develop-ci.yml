@@ -215,63 +215,64 @@ jobs:
           draft: false
           prerelease: true
 
-  publish-assets:
-    name: Publish Release Assets
-    needs: [create-release]
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        include:
-          - platform: darwin
-            arch: x64
-            ext: dmg
-          - platform: darwin
-            arch: arm64
-            ext: dmg
-          - platform: linux
-            arch: x64
-            ext: deb
-
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: build-${{ matrix.platform }}-${{ matrix.arch }}
-          path: ./artifacts
-
-      - name: Find asset
-        id: find_asset
-        run: |
-          ASSET_PATH=$(find ./artifacts -name "*.${{ matrix.ext }}" | head -1)
-          if [ -z "$ASSET_PATH" ]; then
-            echo "No asset found with extension .${{ matrix.ext }}"
-            exit 1
-          fi
-          ASSET_NAME="FileCataloger-${{ needs.create-release.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}.${{ matrix.ext }}"
-          echo "asset_path=${ASSET_PATH}" >> $GITHUB_OUTPUT
-          echo "asset_name=${ASSET_NAME}" >> $GITHUB_OUTPUT
-          echo "Found asset: ${ASSET_PATH}"
-
-      - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.find_asset.outputs.asset_path }}
-          asset_name: ${{ steps.find_asset.outputs.asset_name }}
-          asset_content_type: application/octet-stream
+  # Asset publishing is temporarily disabled until packaging is configured
+  # publish-assets:
+  #   name: Publish Release Assets
+  #   needs: [create-release]
+  #   runs-on: ubuntu-latest
+  #   strategy:
+  #     matrix:
+  #       include:
+  #         - platform: darwin
+  #           arch: x64
+  #           ext: dmg
+  #         - platform: darwin
+  #           arch: arm64
+  #           ext: dmg
+  #         - platform: linux
+  #           arch: x64
+  #           ext: deb
+  #
+  #   steps:
+  #     - name: Download artifacts
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: build-${{ matrix.platform }}-${{ matrix.arch }}
+  #         path: ./artifacts
+  #
+  #     - name: Find asset
+  #       id: find_asset
+  #       run: |
+  #         ASSET_PATH=$(find ./artifacts -name "*.${{ matrix.ext }}" | head -1)
+  #         if [ -z "$ASSET_PATH" ]; then
+  #           echo "No asset found with extension .${{ matrix.ext }}"
+  #           exit 1
+  #         fi
+  #         ASSET_NAME="FileCataloger-${{ needs.create-release.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}.${{ matrix.ext }}"
+  #         echo "asset_path=${ASSET_PATH}" >> $GITHUB_OUTPUT
+  #         echo "asset_name=${ASSET_NAME}" >> $GITHUB_OUTPUT
+  #         echo "Found asset: ${ASSET_PATH}"
+  #
+  #     - name: Upload Release Asset
+  #       uses: actions/upload-release-asset@v1
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  #       with:
+  #         upload_url: ${{ needs.create-release.outputs.upload_url }}
+  #         asset_path: ${{ steps.find_asset.outputs.asset_path }}
+  #         asset_name: ${{ steps.find_asset.outputs.asset_name }}
+  #         asset_content_type: application/octet-stream
 
   notify:
     name: Notify Build Status
-    needs: [publish-assets]
+    needs: [create-release]
     runs-on: ubuntu-latest
     if: always()
 
     steps:
       - name: Send notification
         run: |
-          if [ "${{ needs.publish-assets.result }}" == "success" ]; then
+          if [ "${{ needs.create-release.result }}" == "success" ]; then
             echo "✅ Build and release successful for develop branch!"
             echo "Version: ${{ needs.create-release.outputs.version }}"
             echo "Release URL: https://github.com/${{ github.repository }}/releases/tag/v${{ needs.create-release.outputs.version }}"
