@@ -351,10 +351,13 @@ jobs:
               platform_name=$(basename "$artifact_dir" | sed 's/build-//')
 
               # Find and rename distributables
-              for file in "$artifact_dir"/out/make/**/*.{dmg,exe,deb,AppImage,zip} 2>/dev/null; do
-                if [ -f "$file" ]; then
-                  rename_artifact "$file" "$platform_name"
-                fi
+              shopt -s nullglob globstar
+              for ext in dmg exe deb AppImage zip; do
+                for file in "$artifact_dir"/out/make/**/*."$ext"; do
+                  if [ -f "$file" ]; then
+                    rename_artifact "$file" "$platform_name"
+                  fi
+                done
               done
             fi
           done
