@@ -37,6 +37,7 @@
 #include <chrono>
 #include <deque>
 #include <condition_variable>
+#include <string>
 
 // Error codes for better error reporting
 namespace FileCataloger {
@@ -339,10 +340,10 @@ private:
         );
 
         if (!mouse_hook_) {
-            DWORD error = GetLastError();
-            std::cerr << "Failed to install mouse hook, error: " << error << std::endl;
+            DWORD win_error = ::GetLastError();
+            std::cerr << "Failed to install mouse hook, error: " << win_error << std::endl;
             SetError(FileCataloger::ErrorCode::HOOK_INSTALL_FAILED,
-                    "Failed to install low-level mouse hook, error code: " + std::to_string(error));
+                    "Failed to install low-level mouse hook, error code: " + std::to_string(win_error));
             running_ = false;
             return;
         }
