@@ -2,7 +2,11 @@ import { EventEmitter } from 'events';
 import { AdvancedShakeDetector } from './shake_detector';
 import { createLogger, Logger } from '../utils/logger';
 import { MousePosition } from '@shared/types';
-import { MacDragMonitor, createDragMonitor } from '@native/drag-monitor';
+import {
+  DragMonitor,
+  createDragMonitor,
+  DraggedItem as NativeDraggedItem,
+} from '@native/drag-monitor';
 import { MouseEventBatcher } from './mouse_event_batcher';
 
 export interface DraggedItem {
@@ -33,12 +37,12 @@ export interface BatchedEvent {
 }
 
 /**
- * Native drag and shake detection for macOS
- * ONLY works with proper native module - no fallbacks
+ * Cross-platform drag and shake detection
+ * Supports macOS (CGEventTap + NSPasteboard) and Windows (SetWindowsHookEx + OLE)
  *
  * Detection sequence:
- * 1. CGEventTap monitors mouse events globally
- * 2. When drag detected, checks NSPasteboard for files
+ * 1. Low-level mouse hook monitors mouse events globally
+ * 2. When drag detected, checks clipboard/pasteboard for files
  * 3. During active file drag, monitors for shake gesture
  * 4. Shows shelf when both conditions met
  * 5. Hides shelf immediately on mouse release
@@ -46,7 +50,7 @@ export interface BatchedEvent {
 export class DragShakeDetector extends EventEmitter {
   private logger: Logger;
   private shakeDetector: AdvancedShakeDetector;
-  private dragMonitor: MacDragMonitor | null = null;
+  private dragMonitor: DragMonitor | null = null;
   private mouseBatcher: MouseEventBatcher;
 
   private isDragging: boolean = false;
@@ -76,31 +80,35 @@ export class DragShakeDetector extends EventEmitter {
   }
 
   private initializeNativeDragMonitor(): void {
-    if (process.platform !== 'darwin') {
-      this.logger.error('❌ This application only works on macOS');
-      throw new Error('macOS required for drag detection');
+    const platform = process.platform;
+
+    // Check for supported platforms
+    if (platform !== 'darwin' && platform !== 'win32') {
+      this.logger.error(`Unsupported platform: ${platform}`);
+      throw new Error(
+        `Platform ${platform} is not supported. Only macOS and Windows are supported.`
+      );
     }
 
     try {
       this.dragMonitor = createDragMonitor();
-      this.logger.debug(
-        `🔧 DEBUG: createDragMonitor() returned: ${this.dragMonitor ? 'instance' : 'null'}`
-      );
+      this.logger.debug(`createDragMonitor() returned: ${this.dragMonitor ? 'instance' : 'null'}`);
       if (this.dragMonitor) {
-        this.logger.debug(`🔧 DEBUG: dragMonitor type: ${this.dragMonitor.constructor.name}`);
-        this.logger.debug(
-          `🔧 DEBUG: dragMonitor methods: ${Object.getOwnPropertyNames(Object.getPrototypeOf(this.dragMonitor)).join(', ')}`
-        );
-        this.logger.debug(`🔧 DEBUG: start method type: ${typeof this.dragMonitor.start}`);
+        this.logger.debug(`dragMonitor type: ${this.dragMonitor.constructor.name}`);
+        this.logger.debug(`start method type: ${typeof this.dragMonitor.start}`);
       }
-      this.logger.info('✅ Native drag monitor initialized');
+      this.logger.info(
+        `Native drag monitor initialized for ${platform === 'darwin' ? 'macOS' : 'Windows'}`
+      );
     } catch (error: unknown) {
-      this.logger.error('❌ FATAL: Native drag monitor could not be initialized');
+      this.logger.error('FATAL: Native drag monitor could not be initialized');
       this.logger.error('Error:', error instanceof Error ? error.message : String(error));
       this.logger.error('');
       this.logger.error('To fix:');
       this.logger.error('1. Rebuild native modules: npm run rebuild:native');
-      this.logger.error('2. Grant accessibility permissions in System Settings');
+      if (platform === 'darwin') {
+        this.logger.error('2. Grant accessibility permissions in System Settings');
+      }
       this.logger.error('3. Restart the application');
       throw error;
     }
@@ -153,15 +161,15 @@ export class DragShakeDetector extends EventEmitter {
     if (this.dragMonitor) {
       this.logger.debug('Setting up drag monitor event handlers');
 
-      this.dragMonitor.on('dragStart', (items: DraggedItem[]) => {
+      this.dragMonitor.on('dragStart', (items: NativeDraggedItem[]) => {
         this.logger.debug('Received dragStart event with', items.length, 'items');
-        this.handleDragStart(items);
+        this.handleDragStart(this.convertNativeItems(items));
       });
 
       // Listen for actual drag events from native monitor
 
-      this.dragMonitor.on('dragging', (items: DraggedItem[]) => {
-        this.updateDraggedItems(items);
+      this.dragMonitor.on('dragging', (items: NativeDraggedItem[]) => {
+        this.updateDraggedItems(this.convertNativeItems(items));
       });
 
       this.dragMonitor.on('dragEnd', () => {
@@ -360,6 +368,17 @@ export class DragShakeDetector extends EventEmitter {
   }
 
   private positionLogCount = 0;
+
+  /**
+   * Convert native drag items to local DraggedItem format
+   */
+  private convertNativeItems(nativeItems: NativeDraggedItem[]): DraggedItem[] {
+    return nativeItems.map(item => ({
+      name: item.name,
+      path: item.path,
+      type: item.type === 'folder' || item.isDirectory ? 'folder' : 'file',
+    }));
+  }
 
   public destroy(): void {
     this.stop();

@@ -39,9 +39,12 @@ module.exports = merge(common, {
   target: 'electron-main',
 
   externals: {
-    // Native modules should be externalized
+    // Native modules should be externalized (macOS)
     './mouse_tracker_darwin.node': 'commonjs ./mouse_tracker_darwin.node',
     './drag_monitor_darwin.node': 'commonjs ./drag_monitor_darwin.node',
+    // Native modules should be externalized (Windows)
+    './mouse_tracker_win.node': 'commonjs ./mouse_tracker_win.node',
+    './drag_monitor_win.node': 'commonjs ./drag_monitor_win.node',
     'node-gyp-build': 'commonjs node-gyp-build',
     'better-sqlite3': 'commonjs better-sqlite3'
   },
@@ -72,7 +75,7 @@ module.exports = merge(common, {
           to: path.join(projectRoot, 'dist/main/assets/[name][ext]'),
           noErrorOnMissing: true
         },
-        // Copy all native modules built by centralized build system
+        // Copy all native modules built by centralized build system (macOS)
         {
           from: path.join(projectRoot, 'src/native/mouse-tracker/build/Release/mouse_tracker_darwin.node'),
           to: path.join(projectRoot, 'dist/main/mouse_tracker_darwin.node'),
@@ -81,6 +84,17 @@ module.exports = merge(common, {
         {
           from: path.join(projectRoot, 'src/native/drag-monitor/build/Release/drag_monitor_darwin.node'),
           to: path.join(projectRoot, 'dist/main/drag_monitor_darwin.node'),
+          noErrorOnMissing: true
+        },
+        // Copy all native modules built by centralized build system (Windows)
+        {
+          from: path.join(projectRoot, 'src/native/mouse-tracker/build/Release/mouse_tracker_win.node'),
+          to: path.join(projectRoot, 'dist/main/mouse_tracker_win.node'),
+          noErrorOnMissing: true
+        },
+        {
+          from: path.join(projectRoot, 'src/native/drag-monitor/build/Release/drag_monitor_win.node'),
+          to: path.join(projectRoot, 'dist/main/drag_monitor_win.node'),
           noErrorOnMissing: true
         },
         // Generate package.json in dist/main for native module resolution

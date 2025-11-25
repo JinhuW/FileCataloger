@@ -7,4 +7,5 @@
  * @module mouse-tracker
  */
 
-export { createMouseTracker, MacOSMouseTracker } from './src/index';
+export { createMouseTracker } from './src/index';
+export { MacOSMouseTracker } from './src/mouseTracker';

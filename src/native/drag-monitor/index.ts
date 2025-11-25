@@ -8,4 +8,4 @@
  */
 
 export { createDragMonitor, MacDragMonitor, isNativeModuleAvailable } from './src/index';
-export type { DraggedItem, DragEvent } from './src/dragMonitor';
+export type { DragMonitor, DraggedItem, DragEvent } from './src/index';

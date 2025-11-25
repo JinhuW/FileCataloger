@@ -4,6 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with na
 
 ## Current State
 
+### Supported Platforms
+
+- **macOS** (darwin): CGEventTap + NSPasteboard
+- **Windows** (win32): SetWindowsHookEx + OLE/COM APIs
+
 ### Standardized Module Structure
 
 All native modules follow this pattern for consistency:
@@ -11,30 +16,62 @@ All native modules follow this pattern for consistency:
 ```
 module-name/
 ├── src/
-│   ├── platform/           # Platform-specific implementations
-│   │   └── mac/           # macOS (.mm files)
-│   └── module_name.h      # Public interface (if exists)
-├── ts/                    # TypeScript wrappers
-│   ├── index.ts
-│   └── moduleWrapper.ts
-└── binding.gyp           # Build configuration at module root
+│   ├── native/
+│   │   ├── mac/           # macOS (.mm files)
+│   │   └── win/           # Windows (.cc files)
+│   ├── index.ts           # Cross-platform factory
+│   ├── moduleNameMac.ts   # macOS TypeScript wrapper
+│   └── moduleNameWin.ts   # Windows TypeScript wrapper
+└── binding.gyp           # Build configuration (cross-platform)
 ```
 
 ### Active Modules
 
 #### Mouse Tracker (`mouse-tracker/`)
 
-- **Implementation**: `src/platform/mac/mouse_tracker_mac.mm` (26KB)
-- **Performance**: 60fps batching, 50-70% fewer allocations, <1ms latency
-- **Requirements**: macOS Accessibility permissions
+**macOS Implementation:**
+
+- **File**: `src/native/mac/mouse_tracker_mac.mm`
+- **API**: CGEventTap for system-wide mouse tracking
+- **Requirements**: Accessibility permissions
 - **Binary**: `build/Release/mouse_tracker_darwin.node` (~79KB)
+
+**Windows Implementation:**
+
+- **File**: `src/native/win/mouse_tracker_win.cc`
+- **API**: SetWindowsHookEx (WH_MOUSE_LL) for low-level mouse hooks
+- **Requirements**: None
+- **Binary**: `build/Release/mouse_tracker_win.node`
+
+**Features (both platforms):**
+
+- 60fps event batching
+- Memory pooling for zero-allocation hot path
+- Button state tracking with immediate updates
+- Performance metrics
 
 #### Drag Monitor (`drag-monitor/`)
 
-- **Implementation**: `src/platform/mac/drag_monitor_mac.mm` (36KB)
-- **Performance**: Adaptive polling (10ms active, 100ms idle), lock-free updates
-- **Requirements**: No special permissions (uses NSPasteboard)
+**macOS Implementation:**
+
+- **File**: `src/native/mac/drag_monitor_mac.mm`
+- **API**: NSPasteboard polling + CGEventTap
+- **Requirements**: Accessibility permissions
 - **Binary**: `build/Release/drag_monitor_darwin.node` (~96KB)
+
+**Windows Implementation:**
+
+- **File**: `src/native/win/drag_monitor_win.cc`
+- **API**: OleGetClipboard + SetWindowsHookEx
+- **Requirements**: None
+- **Binary**: `build/Release/drag_monitor_win.node`
+
+**Features (both platforms):**
+
+- Adaptive polling (10ms active, 100ms idle)
+- Lock-free state updates
+- File metadata extraction
+- Trajectory analysis
 
 ### Shared Components (`common/`)
 
@@ -78,12 +115,12 @@ npm run clean:all              # Remove all build artifacts
 
 ### Platform Support
 
-Currently **macOS only**. When adding platform support:
+Currently supports **macOS and Windows**. When adding Linux support:
 
-1. Create `src/platform/win/` or `src/platform/linux/`
-2. Update `binding.gyp` conditions
+1. Create `src/native/linux/` in each module
+2. Update `binding.gyp` with Linux conditions
 3. Keep platform-specific code isolated
-4. Use same public interface
+4. Use same public interface (TypeScript wrappers handle abstraction)
 
 ## Key Optimizations in Place
 
@@ -110,12 +147,14 @@ Currently **macOS only**. When adding platform support:
 
 ## Common Issues & Solutions
 
-| Issue             | Solution                                               |
-| ----------------- | ------------------------------------------------------ |
-| Module not found  | `npm run build:clean` from `src/native`                |
-| Permission denied | Grant Accessibility in System Preferences              |
-| High CPU usage    | Check metrics: `tracker.getNativePerformanceMetrics()` |
-| Build fails       | Verify: `xcode-select --install`                       |
+| Issue             | Platform | Solution                                               |
+| ----------------- | -------- | ------------------------------------------------------ |
+| Module not found  | All      | `npm run build:clean` from `src/native`                |
+| Permission denied | macOS    | Grant Accessibility in System Preferences              |
+| High CPU usage    | All      | Check metrics: `tracker.getNativePerformanceMetrics()` |
+| Build fails       | macOS    | Verify: `xcode-select --install`                       |
+| Build fails       | Windows  | Install Visual Studio Build Tools 2019+                |
+| Hook not working  | Windows  | Run as administrator or check antivirus                |
 
 ## Testing
 
@@ -123,8 +162,11 @@ Currently **macOS only**. When adding platform support:
 # Quick validation
 npm run test:validate
 
-# Manual test
+# Manual test (macOS)
 node -e "require('./mouse-tracker/build/Release/mouse_tracker_darwin.node')"
+
+# Manual test (Windows)
+node -e "require('./mouse-tracker/build/Release/mouse_tracker_win.node')"
 
 # Performance check (in app)
 const metrics = tracker.getNativePerformanceMetrics();
@@ -143,10 +185,18 @@ console.log(metrics); // Should show >95% batching efficiency
 
 After build, verify sizes are reasonable:
 
+**macOS:**
+
 - `mouse_tracker_darwin.node`: ~79KB
 - `drag_monitor_darwin.node`: ~96KB
-- Total native code: ~62KB source
-- Common headers: ~20KB
+
+**Windows:**
+
+- `mouse_tracker_win.node`: ~80-100KB
+- `drag_monitor_win.node`: ~100-120KB
+
+Total native code: ~100KB source
+Common headers: ~20KB
 
 If sizes differ significantly, investigate for issues.
 
@@ -161,8 +211,18 @@ If sizes differ significantly, investigate for issues.
 
 ## References for Implementation
 
+**macOS:**
+
 - [CGEventTap Docs](https://developer.apple.com/documentation/coregraphics/1454426-cgeventtapcreate)
 - [NSPasteboard Docs](https://developer.apple.com/documentation/appkit/nspasteboard)
+
+**Windows:**
+
+- [SetWindowsHookEx Docs](https://docs.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-setwindowshookexw)
+- [OLE Clipboard Docs](https://docs.microsoft.com/en-us/windows/win32/dataxchg/clipboard)
+
+**General:**
+
 - [Node-API Reference](https://nodejs.org/api/n-api.html)
 - [ARM64 Memory Model](https://developer.arm.com/documentation/102336/0100)
 

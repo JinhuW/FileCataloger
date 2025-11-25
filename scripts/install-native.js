@@ -32,10 +32,16 @@ class NativeModuleInstaller {
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log(`📋 Target: Electron ${this.electronVersion}, Node ${this.nodeVersion}, ${this.platform}-${this.arch}`);
 
-    // Skip native module build for non-macOS platforms
-    if (this.platform !== 'darwin' || process.env.SKIP_NATIVE_MODULES === 'true') {
-      console.log('\\nℹ️  Skipping native module installation (not macOS or explicitly skipped)');
-      console.log('   Native modules are only required for macOS builds');
+    // Skip native module build if explicitly skipped or on unsupported platforms
+    if (process.env.SKIP_NATIVE_MODULES === 'true') {
+      console.log('\\nℹ️  Skipping native module installation (SKIP_NATIVE_MODULES=true)');
+      return true;
+    }
+
+    // Only build for macOS and Windows
+    if (this.platform !== 'darwin' && this.platform !== 'win32') {
+      console.log('\\nℹ️  Skipping native module installation (unsupported platform)');
+      console.log('   Native modules are only supported on macOS and Windows');
       return true;
     }
 
@@ -86,9 +92,13 @@ class NativeModuleInstaller {
   async tryElectronRebuild() {
     console.log('  🔨 Using electron-rebuild (recommended)...');
 
+    const moduleNames = this.platform === 'darwin'
+      ? 'mouse_tracker_darwin,drag_monitor_darwin'
+      : 'mouse_tracker_win,drag_monitor_win';
+
     await this.runCommand('electron-rebuild', [
       '-f',
-      '-w', 'mouse_tracker_darwin,drag_monitor_darwin',
+      '-w', moduleNames,
       '--electronVersion', this.electronVersion
     ]);
     return true;
@@ -122,20 +132,22 @@ class NativeModuleInstaller {
   async validateInstallation() {
     console.log('\\n🔍 Validating installation...');
 
-    // Only validate on macOS - native modules are macOS-only
-    if (this.platform !== 'darwin') {
-      console.log('  ℹ️  Skipping native module validation (not macOS)');
+    // Only validate on supported platforms
+    if (this.platform !== 'darwin' && this.platform !== 'win32') {
+      console.log('  ℹ️  Skipping native module validation (unsupported platform)');
       return;
     }
 
+    const moduleSuffix = this.platform === 'darwin' ? 'darwin' : 'win';
+
     // Check source modules - try both possible locations for mouse-tracker
     const mouseTrackerPaths = [
-      path.join(this.projectRoot, 'src/native/mouse-tracker/build/Release/mouse_tracker_darwin.node'),
-      path.join(this.projectRoot, 'src/native/mouse-tracker/darwin/build/Release/mouse_tracker_darwin.node')
+      path.join(this.projectRoot, `src/native/mouse-tracker/build/Release/mouse_tracker_${moduleSuffix}.node`),
+      path.join(this.projectRoot, `src/native/mouse-tracker/${moduleSuffix}/build/Release/mouse_tracker_${moduleSuffix}.node`)
     ];
 
     const mouseTrackerPath = mouseTrackerPaths.find(p => fs.existsSync(p));
-    const dragMonitorPath = path.join(this.projectRoot, 'src/native/drag-monitor/build/Release/drag_monitor_darwin.node');
+    const dragMonitorPath = path.join(this.projectRoot, `src/native/drag-monitor/build/Release/drag_monitor_${moduleSuffix}.node`);
 
     if (!mouseTrackerPath) {
       throw new Error('Mouse tracker module not built (checked multiple locations)');
@@ -196,7 +208,12 @@ class NativeModuleInstaller {
     console.log('\\n🆘 Troubleshooting Native Module Installation');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log('\\n1. **Install build tools:**');
-    console.log('   xcode-select --install                    # macOS');
+    if (this.platform === 'darwin') {
+      console.log('   xcode-select --install                    # macOS');
+    } else if (this.platform === 'win32') {
+      console.log('   npm install -g windows-build-tools        # Windows (run as Admin)');
+      console.log('   # OR install Visual Studio Build Tools 2019+');
+    }
     console.log('   npm install -g node-gyp                   # Global node-gyp');
     console.log('\\n2. **Check Python version:**');
     console.log('   python3 --version                         # Should be 3.x');
