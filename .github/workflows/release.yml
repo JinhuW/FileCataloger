@@ -353,7 +353,7 @@ jobs:
               # Find and rename distributables
               shopt -s nullglob globstar
               for ext in dmg exe deb AppImage zip; do
-                for file in "$artifact_dir"/out/make/**/*."$ext"; do
+                for file in "$artifact_dir"/**/*."$ext"; do
                   if [ -f "$file" ]; then
                     rename_artifact "$file" "$platform_name"
                   fi
@@ -362,6 +362,7 @@ jobs:
             fi
           done
 
+          echo "Release assets prepared:"
           ls -la release-assets/
 
       - name: Create GitHub Release
