@@ -7,6 +7,7 @@
 import React, { useState } from 'react';
 import { useComponentTemplates } from '@renderer/hooks/useComponentTemplates';
 import { COMPONENT_TYPE_METADATA } from '@renderer/constants/componentTypes';
+import { logger } from '@shared/logger';
 
 export interface TemplatePackSectionProps {
   onSelect: (componentId: string) => void;
@@ -24,12 +25,10 @@ export const TemplatePackSection: React.FC<TemplatePackSectionProps> = ({ onSele
         onSelect(result.componentId);
         onClose();
       } else {
-        // eslint-disable-next-line no-console
-        console.error('Failed to import template:', result.error || 'Unknown error');
+        logger.error('Failed to import template:', result.error || 'Unknown error');
       }
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.error('Failed to import template:', error);
+      logger.error('Failed to import template:', error);
     }
   };
 

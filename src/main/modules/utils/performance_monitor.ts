@@ -3,13 +3,13 @@ import * as os from 'os';
 import { errorHandler, ErrorSeverity, ErrorCategory } from './error_handler';
 import { logger } from './logger';
 
+/**
+ * Performance metrics collected by the monitor
+ */
 export interface PerformanceMetrics {
   cpu: {
     usage: number; // Percentage 0-100
     cores: number;
-    model: string;
-    speed: number; // MHz
-    temperature?: number; // Celsius (if available)
   };
   memory: {
     total: number; // Bytes
@@ -21,66 +21,47 @@ export interface PerformanceMetrics {
   process: {
     pid: number;
     uptime: number; // Seconds
-    handles: number;
-    threads: number;
-  };
-  system: {
-    uptime: number; // Seconds
-    loadAverage: number[]; // 1, 5, 15 minute averages
-    platform: string;
-    arch: string;
-    version: string;
   };
   timestamp: number;
 }
 
+/**
+ * Configurable thresholds for performance warnings
+ */
 export interface PerformanceThresholds {
-  cpuWarning: number; // Default 70%
-  cpuCritical: number; // Default 90%
-  memoryWarning: number; // Default 80%
-  memoryCritical: number; // Default 95%
-  appMemoryLimit: number; // MB, default 500
+  cpuWarning: number; // Default 80%
+  cpuCritical: number; // Default 95%
+  memoryWarning: number; // Default 95%
+  memoryCritical: number; // Default 99%
+  appMemoryLimit: number; // MB, default 200
 }
 
-export interface PredictiveTrend {
-  metric: 'cpu' | 'memory';
-  trend: 'increasing' | 'stable' | 'decreasing';
-  slope: number; // Rate of change per minute
-  confidence: number; // 0-1, how confident we are in this prediction
-  predictedIssueIn?: number; // milliseconds until threshold breach (if trending toward issue)
-  recommendation?: string;
-}
-
-export interface PredictiveAlert {
-  severity: 'warning' | 'critical';
-  metric: string;
-  currentValue: number;
-  predictedValue: number;
-  predictedTime: number; // when the issue is predicted to occur
-  trend: PredictiveTrend;
-  suggestion: string;
-}
-
+/**
+ * Simplified performance monitor for a small utility application.
+ * Provides basic CPU/memory monitoring with threshold alerts.
+ *
+ * Events:
+ * - 'metrics': Emitted with PerformanceMetrics on each collection
+ * - 'performance-warning': Emitted when thresholds are exceeded
+ * - 'performance-warning-cleared': Emitted when warning state clears
+ */
 export class PerformanceMonitor extends EventEmitter {
   private static instance: PerformanceMonitor;
   private isMonitoring: boolean = false;
   private monitorInterval: NodeJS.Timeout | null = null;
   private metricsHistory: PerformanceMetrics[] = [];
-  private maxHistorySize: number = 10; // Reduced from 100 to 10 to prevent memory accumulation
-  private updateInterval: number = 30000; // 30 seconds - further reduced to minimize overhead
-  private adaptiveInterval: boolean = true;
-  private minInterval: number = 5000; // 5 seconds minimum
-  private maxInterval: number = 30000; // 30 seconds maximum
+  private readonly maxHistorySize: number = 5;
+  private updateInterval: number = 30000; // 30 seconds
 
   private thresholds: PerformanceThresholds = {
     cpuWarning: 80,
     cpuCritical: 95,
     memoryWarning: 95, // macOS commonly uses 95%+ memory normally
     memoryCritical: 99, // Only alert at extreme levels
-    appMemoryLimit: 200, // Reduced from 500MB to 200MB for this app
+    appMemoryLimit: 200, // 200MB for this small app
   };
 
-  private lastCpuInfo: any = null;
+  private lastCpuInfo: { idle: number; total: number } | null = null;
   private warningStates = {
     cpu: false,
     memory: false,
@@ -100,11 +81,13 @@ export class PerformanceMonitor extends EventEmitter {
   }
 
   private initializeMonitoring(): void {
-    // Get initial CPU info for comparison
     this.lastCpuInfo = this.getCpuInfo();
   }
 
-  public start(interval: number = 1000): void {
+  /**
+   * Start monitoring with optional custom interval
+   */
+  public start(interval: number = 30000): void {
     if (this.isMonitoring) {
       logger.warn('PerformanceMonitor is already running');
       return;
@@ -113,7 +96,6 @@ export class PerformanceMonitor extends EventEmitter {
     this.updateInterval = interval;
     this.isMonitoring = true;
 
-    // Start monitoring
     this.monitorInterval = setInterval(() => {
       this.collectMetrics();
     }, this.updateInterval);
@@ -122,6 +104,9 @@ export class PerformanceMonitor extends EventEmitter {
     this.collectMetrics();
   }
 
+  /**
+   * Stop monitoring
+   */
   public stop(): void {
     if (!this.isMonitoring) {
       return;
@@ -138,21 +123,9 @@ export class PerformanceMonitor extends EventEmitter {
   private collectMetrics(): void {
     try {
       const metrics = this.getCurrentMetrics();
-
-      // Add to history
       this.addToHistory(metrics);
-
-      // Check thresholds
       this.checkThresholds(metrics);
-      this.checkPredictiveIssues();
-
-      // Emit metrics
       this.emit('metrics', metrics);
-
-      // Adaptive interval adjustment
-      if (this.adaptiveInterval) {
-        this.adjustInterval(metrics);
-      }
     } catch (error) {
       errorHandler.handleError(error as Error, {
         severity: ErrorSeverity.LOW,
@@ -162,63 +135,25 @@ export class PerformanceMonitor extends EventEmitter {
     }
   }
 
-  private adjustInterval(metrics: PerformanceMetrics): void {
-    // If CPU or memory usage is high, monitor more frequently
-    const isHighUsage = metrics.cpu.usage > 50 || metrics.memory.percentage > 70;
-    const isCritical =
-      metrics.cpu.usage > this.thresholds.cpuWarning ||
-      metrics.memory.percentage > this.thresholds.memoryWarning;
-
-    let newInterval = this.updateInterval;
-
-    if (isCritical) {
-      // Critical: Monitor every 5 seconds
-      newInterval = this.minInterval;
-    } else if (isHighUsage) {
-      // High usage: Monitor every 10 seconds
-      newInterval = 10000;
-    } else {
-      // Low usage: Monitor every 30 seconds
-      newInterval = this.maxInterval;
-    }
-
-    // Only restart if interval changed significantly
-    if (Math.abs(newInterval - this.updateInterval) > 1000) {
-      this.updateInterval = newInterval;
-
-      // Restart monitoring with new interval
-      if (this.monitorInterval) {
-        clearInterval(this.monitorInterval);
-        this.monitorInterval = setInterval(() => {
-          this.collectMetrics();
-        }, this.updateInterval);
-      }
-    }
-  }
-
   private getCurrentMetrics(): PerformanceMetrics {
     const cpuInfo = this.getCpuInfo();
     const cpuUsage = this.calculateCpuUsage(cpuInfo);
-    const memInfo = this.getMemoryInfo();
-    const processInfo = this.getProcessInfo();
-    const systemInfo = this.getSystemInfo();
 
     return {
       cpu: {
         usage: cpuUsage,
         cores: os.cpus().length,
-        model: os.cpus()[0].model,
-        speed: os.cpus()[0].speed,
-        temperature: this.getCpuTemperature(),
       },
-      memory: memInfo,
-      process: processInfo,
-      system: systemInfo,
+      memory: this.getMemoryInfo(),
+      process: {
+        pid: process.pid,
+        uptime: process.uptime(),
+      },
       timestamp: Date.now(),
     };
   }
 
-  private getCpuInfo(): any {
+  private getCpuInfo(): { idle: number; total: number } {
     const cpus = os.cpus();
     let idle = 0;
     let total = 0;
@@ -241,12 +176,11 @@ export class PerformanceMonitor extends EventEmitter {
 
     const idleDiff = currentInfo.idle - this.lastCpuInfo.idle;
     const totalDiff = currentInfo.total - this.lastCpuInfo.total;
-
     const usage = totalDiff === 0 ? 0 : 100 - (100 * idleDiff) / totalDiff;
 
     this.lastCpuInfo = currentInfo;
 
-    return Math.round(usage * 10) / 10; // Round to 1 decimal
+    return Math.round(usage * 10) / 10;
   }
 
   private getMemoryInfo(): PerformanceMetrics['memory'] {
@@ -267,35 +201,9 @@ export class PerformanceMonitor extends EventEmitter {
     };
   }
 
-  private getProcessInfo(): PerformanceMetrics['process'] {
-    return {
-      pid: process.pid,
-      uptime: process.uptime(),
-      handles: (process as any)._getActiveHandles?.()?.length || 0,
-      threads: (process as any)._getActiveRequests?.()?.length || 0,
-    };
-  }
-
-  private getSystemInfo(): PerformanceMetrics['system'] {
-    return {
-      uptime: os.uptime(),
-      loadAverage: os.loadavg(),
-      platform: os.platform(),
-      arch: os.arch(),
-      version: os.release(),
-    };
-  }
-
-  private getCpuTemperature(): number | undefined {
-    // This would require platform-specific implementation
-    // For now, return undefined
-    return undefined;
-  }
-
   private addToHistory(metrics: PerformanceMetrics): void {
     this.metricsHistory.push(metrics);
 
-    // Keep history size limited
     if (this.metricsHistory.length > this.maxHistorySize) {
       this.metricsHistory.shift();
     }
@@ -324,12 +232,6 @@ export class PerformanceMonitor extends EventEmitter {
     const appMemoryMB = metrics.memory.appUsage / (1024 * 1024);
     if (appMemoryMB > this.thresholds.appMemoryLimit) {
       this.emitWarning('app-memory-limit', appMemoryMB);
-
-      // DISABLED: Can cause V8 API locking issues
-      // Trigger garbage collection if available
-      // if (global.gc) {
-      //   global.gc();
-      // }
     } else {
       this.clearWarning('appMemory');
     }
@@ -353,7 +255,6 @@ export class PerformanceMonitor extends EventEmitter {
         timestamp: Date.now(),
       });
 
-      // Log to error handler
       errorHandler.handleError(`Performance warning: ${type} at ${value.toFixed(1)}%`, {
         severity: type.includes('critical') ? ErrorSeverity.HIGH : ErrorSeverity.MEDIUM,
         category: ErrorCategory.PERFORMANCE,
@@ -386,6 +287,9 @@ export class PerformanceMonitor extends EventEmitter {
     }
   }
 
+  /**
+   * Get the most recent metrics
+   */
   public getMetrics(): PerformanceMetrics | null {
     if (this.metricsHistory.length === 0) {
       return null;
@@ -393,54 +297,37 @@ export class PerformanceMonitor extends EventEmitter {
     return this.metricsHistory[this.metricsHistory.length - 1];
   }
 
-  public getAverageMetrics(duration: number = 60000): Partial<PerformanceMetrics> {
-    const now = Date.now();
-    const relevantMetrics = this.metricsHistory.filter(m => m.timestamp > now - duration);
-
-    if (relevantMetrics.length === 0) {
-      return {};
-    }
-
-    const avgCpu =
-      relevantMetrics.reduce((sum, m) => sum + m.cpu.usage, 0) / relevantMetrics.length;
-    const avgMemory =
-      relevantMetrics.reduce((sum, m) => sum + m.memory.percentage, 0) / relevantMetrics.length;
-    const avgAppMemory =
-      relevantMetrics.reduce((sum, m) => sum + m.memory.appUsage, 0) / relevantMetrics.length;
-
-    return {
-      cpu: {
-        usage: Math.round(avgCpu * 10) / 10,
-        cores: os.cpus().length,
-        model: os.cpus()[0].model,
-        speed: os.cpus()[0].speed,
-      },
-      memory: {
-        total: os.totalmem(),
-        used: os.totalmem() - os.freemem(),
-        free: os.freemem(),
-        percentage: Math.round(avgMemory * 10) / 10,
-        appUsage: Math.round(avgAppMemory),
-      },
-    };
-  }
-
+  /**
+   * Get metrics history
+   */
   public getMetricsHistory(): PerformanceMetrics[] {
     return [...this.metricsHistory];
   }
 
+  /**
+   * Clear metrics history
+   */
   public clearHistory(): void {
     this.metricsHistory = [];
   }
 
+  /**
+   * Update thresholds
+   */
   public setThresholds(thresholds: Partial<PerformanceThresholds>): void {
     this.thresholds = { ...this.thresholds, ...thresholds };
   }
 
+  /**
+   * Get current thresholds
+   */
   public getThresholds(): PerformanceThresholds {
     return { ...this.thresholds };
   }
 
+  /**
+   * Check if system is healthy (below all warning thresholds)
+   */
   public isHealthy(): boolean {
     const metrics = this.getMetrics();
     if (!metrics) return true;
@@ -452,10 +339,10 @@ export class PerformanceMonitor extends EventEmitter {
     );
   }
 
-  public getHealthStatus(): {
-    healthy: boolean;
-    issues: string[];
-  } {
+  /**
+   * Get health status with list of issues
+   */
+  public getHealthStatus(): { healthy: boolean; issues: string[] } {
     const metrics = this.getMetrics();
     if (!metrics) {
       return { healthy: true, issues: [] };
@@ -487,176 +374,8 @@ export class PerformanceMonitor extends EventEmitter {
   }
 
   /**
-   * Perform predictive trend analysis on performance metrics
+   * Clean up resources
    */
-  public analyzeTrends(lookbackMinutes: number = 5): PredictiveTrend[] {
-    const now = Date.now();
-    const lookbackMs = lookbackMinutes * 60 * 1000;
-    const relevantMetrics = this.metricsHistory.filter(m => m.timestamp > now - lookbackMs);
-
-    if (relevantMetrics.length < 3) {
-      return []; // Need at least 3 data points for trend analysis
-    }
-
-    const trends: PredictiveTrend[] = [];
-
-    // Analyze CPU trend
-    const cpuTrend = this.calculateTrend(
-      relevantMetrics,
-      m => m.cpu.usage,
-      'cpu',
-      this.thresholds.cpuWarning,
-      this.thresholds.cpuCritical
-    );
-    if (cpuTrend) trends.push(cpuTrend);
-
-    // Analyze memory trend
-    const memoryTrend = this.calculateTrend(
-      relevantMetrics,
-      m => m.memory.percentage,
-      'memory',
-      this.thresholds.memoryWarning,
-      this.thresholds.memoryCritical
-    );
-    if (memoryTrend) trends.push(memoryTrend);
-
-    return trends;
-  }
-
-  /**
-   * Calculate trend for a specific metric
-   */
-  private calculateTrend(
-    metrics: PerformanceMetrics[],
-    valueExtractor: (m: PerformanceMetrics) => number,
-    metricName: 'cpu' | 'memory',
-    warningThreshold: number,
-    criticalThreshold: number
-  ): PredictiveTrend | null {
-    if (metrics.length < 3) return null;
-
-    const values = metrics.map(valueExtractor);
-    const times = metrics.map(m => m.timestamp);
-
-    // Calculate linear regression slope (rate of change per minute)
-    const n = values.length;
-    const sumX = times.reduce((a, b) => a + b, 0);
-    const sumY = values.reduce((a, b) => a + b, 0);
-    const sumXY = times.reduce((sum, x, i) => sum + x * values[i], 0);
-    const sumXX = times.reduce((sum, x) => sum + x * x, 0);
-
-    const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-    const intercept = (sumY - slope * sumX) / n;
-
-    // Convert slope to per-minute rate
-    const slopePerMinute = slope * 60 * 1000; // Convert from per-ms to per-minute
-
-    // Determine trend direction
-    let trend: 'increasing' | 'stable' | 'decreasing';
-    if (Math.abs(slopePerMinute) < 1) {
-      trend = 'stable';
-    } else if (slopePerMinute > 0) {
-      trend = 'increasing';
-    } else {
-      trend = 'decreasing';
-    }
-
-    // Calculate confidence based on R-squared
-    const meanY = sumY / n;
-    const ssRes = values.reduce((sum, y, i) => {
-      const predicted = slope * times[i] + intercept;
-      return sum + Math.pow(y - predicted, 2);
-    }, 0);
-    const ssTot = values.reduce((sum, y) => sum + Math.pow(y - meanY, 2), 0);
-    const rSquared = ssTot === 0 ? 1 : 1 - ssRes / ssTot;
-    const confidence = Math.max(0, Math.min(1, rSquared));
-
-    // Predict when thresholds might be breached
-    let predictedIssueIn: number | undefined;
-    let recommendation: string | undefined;
-
-    if (trend === 'increasing' && slopePerMinute > 0.5) {
-      const currentValue = values[values.length - 1];
-      const timeToWarning =
-        currentValue < warningThreshold
-          ? ((warningThreshold - currentValue) / slopePerMinute) * 60 * 1000
-          : 0;
-      const timeToCritical =
-        currentValue < criticalThreshold
-          ? ((criticalThreshold - currentValue) / slopePerMinute) * 60 * 1000
-          : 0;
-
-      if (timeToCritical > 0 && timeToCritical < 300000) {
-        // Less than 5 minutes
-        predictedIssueIn = timeToCritical;
-        recommendation = `${metricName.toUpperCase()} trending toward critical level. Consider reducing system load.`;
-      } else if (timeToWarning > 0 && timeToWarning < 600000) {
-        // Less than 10 minutes
-        predictedIssueIn = timeToWarning;
-        recommendation = `${metricName.toUpperCase()} usage increasing. Monitor closely.`;
-      }
-    }
-
-    if (trend === 'decreasing' && values[values.length - 1] > warningThreshold) {
-      recommendation = `${metricName.toUpperCase()} usage decreasing. System recovering.`;
-    }
-
-    return {
-      metric: metricName,
-      trend,
-      slope: slopePerMinute,
-      confidence,
-      predictedIssueIn,
-      recommendation,
-    };
-  }
-
-  /**
-   * Generate predictive alerts based on trend analysis
-   */
-  public generatePredictiveAlerts(): PredictiveAlert[] {
-    const trends = this.analyzeTrends();
-    const alerts: PredictiveAlert[] = [];
-    const currentMetrics = this.getMetrics();
-
-    if (!currentMetrics) return alerts;
-
-    for (const trend of trends) {
-      if (trend.predictedIssueIn && trend.recommendation) {
-        const currentValue =
-          trend.metric === 'cpu' ? currentMetrics.cpu.usage : currentMetrics.memory.percentage;
-
-        const predictedValue = currentValue + trend.slope * (trend.predictedIssueIn / (60 * 1000));
-
-        const severity: 'warning' | 'critical' =
-          trend.predictedIssueIn < 180000 ? 'critical' : 'warning';
-
-        alerts.push({
-          severity,
-          metric: trend.metric,
-          currentValue,
-          predictedValue,
-          predictedTime: Date.now() + trend.predictedIssueIn,
-          trend,
-          suggestion: trend.recommendation,
-        });
-      }
-    }
-
-    return alerts;
-  }
-
-  /**
-   * Check for predictive issues and emit alerts
-   */
-  private checkPredictiveIssues(): void {
-    const alerts = this.generatePredictiveAlerts();
-
-    for (const alert of alerts) {
-      this.emit('predictive-alert', alert);
-    }
-  }
-
   public destroy(): void {
     this.stop();
     this.removeAllListeners();

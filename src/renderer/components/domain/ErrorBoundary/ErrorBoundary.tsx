@@ -60,8 +60,20 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       errorInfo,
     });
 
-    // Log to analytics or error reporting service
-    // TODO: Implement error reporting
+    // Report error to main process error handler via IPC
+    if (typeof window !== 'undefined' && window.api?.send) {
+      try {
+        window.api.send('error:report', {
+          message: error.message,
+          stack: error.stack,
+          componentStack: errorInfo.componentStack,
+          timestamp: Date.now(),
+        });
+      } catch (reportError) {
+        // Error reporting failed, already logged above
+        logger.warn('Failed to report error to main process:', reportError);
+      }
+    }
   }
 
   handleRetry = (): void => {

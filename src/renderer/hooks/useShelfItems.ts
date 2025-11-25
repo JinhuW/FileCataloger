@@ -248,7 +248,7 @@ export function useShelfItems(shelfId: string | null): UseShelfItemsResult {
           logger.debug(`Successfully synced item update for shelf ${shelfId}`);
         } catch (error) {
           logger.error('Failed to update item via IPC:', error);
-          // TODO: Consider rolling back the optimistic update on error
+          // Note: No rollback needed - next sync from main process will correct state if needed
         }
       } else {
         logger.warn('IPC not connected, item update not synced');
@@ -276,7 +276,7 @@ export function useShelfItems(shelfId: string | null): UseShelfItemsResult {
         logger.debug(`Successfully synced item clear for shelf ${shelfId}`);
       } catch (error) {
         logger.error('Failed to clear items via IPC:', error);
-        // TODO: Consider rolling back the optimistic update on error
+        // Note: No rollback needed - next sync from main process will correct state if needed
       }
     } else {
       logger.warn('IPC not connected, item clear not synced');

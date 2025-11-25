@@ -1,5 +1,6 @@
 import { SavedPattern } from '@shared/types';
 import { generatePrefixedId } from '@renderer/utils/idGenerator';
+import { logger } from '@shared/logger';
 
 // Type for IPC response wrapper
 interface IPCResponse<T = any> {
@@ -169,7 +170,7 @@ export async function isPatternNameAvailable(name: string, excludeId?: string): 
     const patterns = await patternAPI.list();
     return !patterns.some(p => p.name === name && p.id !== excludeId);
   } catch (error) {
-    console.warn('Failed to check pattern name availability:', error);
+    logger.warn('Failed to check pattern name availability:', error);
     return true; // Assume available if check fails
   }
 }

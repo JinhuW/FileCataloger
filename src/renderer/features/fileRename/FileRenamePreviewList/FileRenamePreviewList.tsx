@@ -32,6 +32,7 @@ import { getFileIcon, getTypeIcon } from '@renderer/utils/fileTypeIcons';
 import { ViewToggle, type ViewMode } from './ViewToggle';
 import { FileRenameTreeView } from '../FileRenameTreeView/FileRenameTreeView';
 import { ErrorBoundary } from '@renderer/components/domain/ErrorBoundary';
+import { logger } from '@shared/logger';
 
 export interface FileRenamePreviewListProps {
   previews: FileRenamePreview[];
@@ -52,8 +53,7 @@ export const FileRenamePreviewList: React.FC<FileRenamePreviewListProps> = ({
       const saved = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
       return saved === 'tree' || saved === 'list' ? saved : 'list';
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('Failed to load view mode preference:', error);
+      logger.warn('Failed to load view mode preference:', error);
       return 'list';
     }
   });
@@ -63,8 +63,7 @@ export const FileRenamePreviewList: React.FC<FileRenamePreviewListProps> = ({
     try {
       localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('Failed to save view mode preference:', error);
+      logger.warn('Failed to save view mode preference:', error);
     }
   }, [viewMode]);
   return (
