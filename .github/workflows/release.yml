@@ -494,44 +494,59 @@ jobs:
       - name: Generate release notes
         id: notes
         run: |
-          cat << 'EOF' > RELEASE_NOTES.md
-          # FileCataloger v${{ steps.version.outputs.version }}
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Get the previous tag for changelog
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          # Generate changelog sections
+          if [ -n "$PREV_TAG" ]; then
+            FEATURES=$(git log --pretty=format:"- %s (%h)" --grep="^feat" --no-merges ${PREV_TAG}..HEAD 2>/dev/null || echo "")
+            FIXES=$(git log --pretty=format:"- %s (%h)" --grep="^fix" --no-merges ${PREV_TAG}..HEAD 2>/dev/null || echo "")
+            OTHER=$(git log --pretty=format:"- %s (%h)" --grep="^chore\|^docs\|^style\|^refactor\|^perf\|^test\|^build\|^ci" --no-merges ${PREV_TAG}..HEAD 2>/dev/null || echo "")
+          else
+            FEATURES=$(git log --pretty=format:"- %s (%h)" --grep="^feat" --no-merges -20 2>/dev/null || echo "")
+            FIXES=$(git log --pretty=format:"- %s (%h)" --grep="^fix" --no-merges -20 2>/dev/null || echo "")
+            OTHER=$(git log --pretty=format:"- %s (%h)" --grep="^chore\|^docs\|^style\|^refactor\|^perf\|^test\|^build\|^ci" --no-merges -20 2>/dev/null || echo "")
+          fi
+
+          # Build release notes
+          cat > RELEASE_NOTES.md << NOTES_EOF
+          # FileCataloger v${VERSION}
 
           ## What's Changed
 
           ### Features
-          $(git log --pretty=format:"- %s (%h)" --grep="^feat:" --no-merges $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~20")..HEAD 2>/dev/null || echo "")
+          ${FEATURES:-_No new features in this release_}
 
           ### Bug Fixes
-          $(git log --pretty=format:"- %s (%h)" --grep="^fix:" --no-merges $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~20")..HEAD 2>/dev/null || echo "")
+          ${FIXES:-_No bug fixes in this release_}
 
           ### Other Changes
-          $(git log --pretty=format:"- %s (%h)" --grep="^(chore|docs|style|refactor|perf|test|build|ci):" --no-merges $(git describe --tags --abbrev=0 2>/dev/null || echo "HEAD~20")..HEAD 2>/dev/null || echo "")
+          ${OTHER:-_No other changes in this release_}
 
           ## Downloads
 
-          ### macOS
-          - **Universal (Apple Silicon + Intel)**: `FileCataloger-*-macOS-universal.dmg`
-          - **Apple Silicon only**: `FileCataloger-*-macOS-arm64.dmg`
-          - **Intel only**: `FileCataloger-*-macOS-x64.dmg`
+          ### macOS (Signed & Notarized)
+          - **Universal (Apple Silicon + Intel)**: \`FileCataloger-${VERSION}-macOS-universal.dmg\`
+          - **Apple Silicon only**: \`FileCataloger-${VERSION}-macOS-arm64.dmg\`
+          - **Intel only**: \`FileCataloger-${VERSION}-macOS-x64.dmg\`
 
           ### Windows
-          - **64-bit**: `FileCataloger-*-Windows-x64.exe`
-          - **ARM64**: `FileCataloger-*-Windows-arm64.exe`
+          - **64-bit**: \`FileCataloger-${VERSION}-Windows-x64.exe\`
+          - **ARM64**: \`FileCataloger-${VERSION}-Windows-arm64.exe\`
 
           ### Linux
-          - **Debian/Ubuntu**: `FileCataloger-*-Linux-x64.deb`
-          - **AppImage**: `FileCataloger-*-Linux-x64.AppImage`
+          - **Debian/Ubuntu**: \`FileCataloger-${VERSION}-Linux-x64-deb.deb\`
 
           ## System Requirements
 
           ### macOS
           - macOS 10.15 (Catalina) or later
-          - Accessibility permissions for drag detection
+          - Accessibility permissions required for drag detection
 
           ### Windows
           - Windows 10 version 1903 or later
-          - Visual C++ Redistributable
 
           ### Linux
           - Ubuntu 20.04 or equivalent
@@ -539,7 +554,10 @@ jobs:
 
           ---
           *Released on $(date -u +"%Y-%m-%d %H:%M UTC")*
-          EOF
+          NOTES_EOF
+
+          echo "Generated release notes:"
+          cat RELEASE_NOTES.md
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
