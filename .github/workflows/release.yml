@@ -276,12 +276,21 @@ jobs:
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
         run: |
           if ($env:WINDOWS_CERTIFICATE) {
-            Write-Host "Setting up code signing..."
+            Write-Host "Setting up Windows code signing..."
+
+            # Decode and save the certificate
             $cert = [System.Convert]::FromBase64String($env:WINDOWS_CERTIFICATE)
-            $certPath = "certificate.pfx"
+            $certPath = "${{ runner.temp }}\certificate.pfx"
             [System.IO.File]::WriteAllBytes($certPath, $cert)
-            $env:CSC_LINK = $certPath
-            $env:CSC_KEY_PASSWORD = $env:WINDOWS_CERTIFICATE_PASSWORD
+
+            # Export to GITHUB_ENV so subsequent steps can use them
+            "WINDOWS_CERT_PATH=$certPath" | Out-File -FilePath $env:GITHUB_ENV -Append
+            "WINDOWS_CERT_PASSWORD=$($env:WINDOWS_CERTIFICATE_PASSWORD)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+            Write-Host "Windows certificate saved to: $certPath"
+            Write-Host "Certificate file size: $((Get-Item $certPath).Length) bytes"
+          } else {
+            Write-Host "No Windows certificate provided, skipping code signing setup"
           }
         shell: powershell
 
@@ -289,12 +298,15 @@ jobs:
       - name: Create .env file for notarization
         if: matrix.platform == 'darwin'
         run: |
-          cat > .env << EOF
+          cat > .env << 'ENVEOF'
           APPLE_ID=${{ secrets.APPLE_ID }}
           APPLE_APP_PASSWORD=${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}
-          EOF
+          APPLE_IDENTITY=Developer ID Application: Jinhu Wang (5DA3687T6S)
+          ENVEOF
           echo "Created .env file for notarization"
+          echo "Contents (redacted):"
+          cat .env | sed 's/=.*/=***/'
 
       # Build distributables
       - name: Build distributables
@@ -305,6 +317,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_IDENTITY: Developer ID Application: Jinhu Wang (5DA3687T6S)
 
       # Notarize macOS apps (handled by electron-forge with osxNotarize config)
       # The forge.config.js already includes notarization when APPLE_* env vars are set
@@ -320,7 +333,24 @@ jobs:
             fi
           done
 
-      # Cleanup keychain
+      # Verify Windows code signing
+      - name: Verify Windows code signing
+        if: matrix.platform == 'win32' && github.event_name == 'push' && (contains(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        run: |
+          Write-Host "Verifying Windows code signing status..."
+          $exeFiles = Get-ChildItem -Path "out/make/squirrel.windows" -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue
+          foreach ($exe in $exeFiles) {
+            Write-Host "Checking: $($exe.FullName)"
+            $sig = Get-AuthenticodeSignature -FilePath $exe.FullName
+            if ($sig.Status -eq "Valid") {
+              Write-Host "✓ Signed by: $($sig.SignerCertificate.Subject)"
+            } else {
+              Write-Host "⚠ Signature status: $($sig.Status)"
+            }
+          }
+        shell: powershell
+
+      # Cleanup keychain (macOS)
       - name: Cleanup keychain
         if: matrix.platform == 'darwin' && always()
         run: |
@@ -328,6 +358,16 @@ jobs:
             security delete-keychain "$KEYCHAIN_PATH" || true
           fi
           rm -f .env || true
+
+      # Cleanup Windows certificate
+      - name: Cleanup Windows certificate
+        if: matrix.platform == 'win32' && always()
+        run: |
+          if (Test-Path "${{ runner.temp }}\certificate.pfx") {
+            Remove-Item "${{ runner.temp }}\certificate.pfx" -Force
+            Write-Host "Cleaned up Windows certificate"
+          }
+        shell: powershell
 
       # Upload artifacts
       - name: Upload build artifacts
