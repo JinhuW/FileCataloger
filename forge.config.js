@@ -6,6 +6,12 @@ const getMacOSSignConfig = () => {
   // Use environment variable for identity (for CI) or default to local identity
   const identity = process.env.APPLE_IDENTITY || 'Developer ID Application: Jinhu Wang (5DA3687T6S)';
 
+  // Check if signing is explicitly disabled (CI sets this when certificate is invalid)
+  if (process.env.MACOS_SIGNING_ENABLED === 'false') {
+    console.log('macOS signing disabled via MACOS_SIGNING_ENABLED=false');
+    return null;
+  }
+
   // Only enable signing if we have the necessary credentials
   // In CI, APPLE_TEAM_ID will be set if certificate was properly imported
   const shouldSign = process.env.APPLE_TEAM_ID || process.platform === 'darwin';

@@ -219,6 +219,7 @@ jobs:
 
       # Code signing for macOS
       - name: Import macOS certificates
+        id: import-macos-cert
         if: matrix.platform == 'darwin' && github.event_name == 'push' && (contains(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -229,6 +230,12 @@ jobs:
 
             # Decode certificate
             echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
+
+            # Verify the p12 file is valid
+            echo "Verifying certificate file..."
+            if ! openssl pkcs12 -in certificate.p12 -passin "pass:$APPLE_CERTIFICATE_PASSWORD" -nokeys -info 2>/dev/null | head -5; then
+              echo "::warning::Certificate file appears to be invalid or password is incorrect"
+            fi
 
             # Create a temporary keychain
             KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
@@ -243,8 +250,9 @@ jobs:
             # Unlock keychain
             security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-            # Import certificate
-            security import certificate.p12 -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+            # Import certificate with all flags
+            echo "Importing certificate..."
+            security import certificate.p12 -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security -A
 
             # Set key partition list
             security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
@@ -259,6 +267,18 @@ jobs:
             echo "Available signing identities:"
             security find-identity -v -p codesigning "$KEYCHAIN_PATH"
 
+            # Check if we have a valid Developer ID Application certificate
+            VALID_IDENTITY=$(security find-identity -v -p codesigning "$KEYCHAIN_PATH" | grep "Developer ID Application" || true)
+            if [ -n "$VALID_IDENTITY" ]; then
+              echo "✓ Found valid Developer ID Application certificate"
+              echo "MACOS_SIGNING_ENABLED=true" >> $GITHUB_ENV
+            else
+              echo "::warning::No 'Developer ID Application' certificate found in the imported certificate."
+              echo "::warning::The APPLE_CERTIFICATE secret may contain the wrong certificate."
+              echo "::warning::Please re-export your Developer ID Application certificate."
+              echo "MACOS_SIGNING_ENABLED=false" >> $GITHUB_ENV
+            fi
+
             # Clean up
             rm certificate.p12
 
@@ -266,6 +286,7 @@ jobs:
             echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> $GITHUB_ENV
           else
             echo "No certificate provided, skipping code signing setup"
+            echo "MACOS_SIGNING_ENABLED=false" >> $GITHUB_ENV
           fi
 
       # Code signing for Windows
@@ -332,6 +353,50 @@ jobs:
               xcrun stapler validate "$DMG" || echo "Note: Stapling may have been done during build"
             fi
           done
+
+      # Upload unsigned Windows artifacts for SignPath signing
+      - name: Upload unsigned Windows artifacts for SignPath
+        if: matrix.platform == 'win32'
+        id: upload-unsigned-windows
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-windows-${{ matrix.arch }}
+          path: out/make/squirrel.windows/**/*
+          retention-days: 1
+
+      # Sign Windows artifacts with SignPath (Free for Open Source)
+      # Prerequisites:
+      # 1. Apply at https://signpath.org/ for free OSS certificate
+      # 2. Set up SIGNPATH_API_TOKEN secret and SIGNPATH_ORGANIZATION_ID variable
+      # 3. Install SignPath GitHub App on your repository
+      - name: Sign Windows artifacts with SignPath
+        if: matrix.platform == 'win32' && vars.SIGNPATH_ORGANIZATION_ID != ''
+        id: signpath-signing
+        uses: SignPath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: FileCataloger
+          signing-policy-slug: ${{ (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')) && 'release-signing' || 'test-signing' }}
+          artifact-configuration-slug: windows-executable
+          github-artifact-id: ${{ steps.upload-unsigned-windows.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 600
+          output-artifact-directory: out/make/squirrel.windows-signed
+
+      # Copy signed artifacts back (if SignPath signing succeeded)
+      - name: Use SignPath signed artifacts
+        if: matrix.platform == 'win32' && steps.signpath-signing.outcome == 'success'
+        run: |
+          Write-Host "Using SignPath signed artifacts..."
+          if (Test-Path "out/make/squirrel.windows-signed") {
+            # Backup unsigned
+            Move-Item "out/make/squirrel.windows" "out/make/squirrel.windows-unsigned" -Force
+            # Use signed
+            Move-Item "out/make/squirrel.windows-signed" "out/make/squirrel.windows" -Force
+            Write-Host "✓ Switched to SignPath signed artifacts"
+          }
+        shell: powershell
 
       # Verify Windows code signing
       - name: Verify Windows code signing
