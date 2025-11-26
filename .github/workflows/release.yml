@@ -226,15 +226,46 @@ jobs:
         run: |
           if [ -n "$APPLE_CERTIFICATE" ]; then
             echo "Setting up code signing..."
+
+            # Decode certificate
             echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
-            security create-keychain -p actions temp.keychain
-            security default-keychain -s temp.keychain
-            security unlock-keychain -p actions temp.keychain
-            security import certificate.p12 -k temp.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions temp.keychain
+
+            # Create a temporary keychain
+            KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+            KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+
+            # Create keychain
+            security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+            # Set keychain settings
+            security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+
+            # Unlock keychain
+            security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+            # Import certificate
+            security import certificate.p12 -k "$KEYCHAIN_PATH" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+
+            # Set key partition list
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+            # Add to search list
+            security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+
+            # Set as default
+            security default-keychain -s "$KEYCHAIN_PATH"
+
+            # Verify certificate is available
+            echo "Available signing identities:"
+            security find-identity -v -p codesigning "$KEYCHAIN_PATH"
+
+            # Clean up
             rm certificate.p12
-            echo "CSC_LINK=temp.keychain" >> $GITHUB_ENV
-            echo "CSC_KEY_PASSWORD=actions" >> $GITHUB_ENV
+
+            echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> $GITHUB_ENV
+            echo "KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD" >> $GITHUB_ENV
+          else
+            echo "No certificate provided, skipping code signing setup"
           fi
 
       # Code signing for Windows
@@ -253,6 +284,17 @@ jobs:
             $env:CSC_KEY_PASSWORD = $env:WINDOWS_CERTIFICATE_PASSWORD
           }
         shell: powershell
+
+      # Create .env file for notarization (macOS)
+      - name: Create .env file for notarization
+        if: matrix.platform == 'darwin'
+        run: |
+          cat > .env << EOF
+          APPLE_ID=${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD=${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}
+          EOF
+          echo "Created .env file for notarization"
 
       # Build distributables
       - name: Build distributables
@@ -277,6 +319,15 @@ jobs:
               xcrun stapler validate "$DMG" || echo "Note: Stapling may have been done during build"
             fi
           done
+
+      # Cleanup keychain
+      - name: Cleanup keychain
+        if: matrix.platform == 'darwin' && always()
+        run: |
+          if [ -n "$KEYCHAIN_PATH" ] && [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
+          rm -f .env || true
 
       # Upload artifacts
       - name: Upload build artifacts
