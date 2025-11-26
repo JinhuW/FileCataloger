@@ -338,17 +338,10 @@ jobs:
           cat .env | sed 's/=.*/=***/'
 
       # Build distributables
+      # Note: Signing credentials are passed from .env file which is conditionally populated
       - name: Build distributables
         run: ${{ matrix.build_cmd }}
         shell: bash
-        env:
-          # Only enable auto-discovery when signing is enabled
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ env.MACOS_SIGNING_ENABLED == 'true' && 'true' || 'false' }}
-          # Only pass Apple credentials when signing is enabled (MACOS_SIGNING_ENABLED comes from env)
-          APPLE_ID: ${{ env.MACOS_SIGNING_ENABLED == 'true' && secrets.APPLE_ID || '' }}
-          APPLE_APP_PASSWORD: ${{ env.MACOS_SIGNING_ENABLED == 'true' && secrets.APPLE_ID_PASSWORD || '' }}
-          APPLE_TEAM_ID: ${{ env.MACOS_SIGNING_ENABLED == 'true' && secrets.APPLE_TEAM_ID || '' }}
-          APPLE_IDENTITY: ${{ env.MACOS_SIGNING_ENABLED == 'true' && 'Developer ID Application: Jinhu Wang (5DA3687T6S)' || '' }}
 
       # Notarize macOS apps (handled by electron-forge with osxNotarize config)
       # The forge.config.js already includes notarization when APPLE_* env vars are set
