@@ -447,14 +447,13 @@ jobs:
           }
         shell: powershell
 
-      # Upload artifacts
+      # Upload artifacts (excluding zip files)
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: build-${{ matrix.name }}
           path: |
             out/make/**/*.${{ matrix.artifact_ext }}
-            out/make/**/*.zip
           retention-days: 30
           if-no-files-found: error
 
@@ -584,9 +583,9 @@ jobs:
             if [ -d "$artifact_dir" ]; then
               platform_name=$(basename "$artifact_dir" | sed 's/build-//')
 
-              # Find and rename distributables
+              # Find and rename distributables (excluding zip files)
               shopt -s nullglob globstar
-              for ext in dmg exe deb AppImage zip; do
+              for ext in dmg exe deb AppImage; do
                 for file in "$artifact_dir"/**/*."$ext"; do
                   if [ -f "$file" ]; then
                     rename_artifact "$file" "$platform_name"
