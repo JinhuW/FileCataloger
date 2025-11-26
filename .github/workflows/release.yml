@@ -315,17 +315,25 @@ jobs:
           }
         shell: powershell
 
-      # Create .env file for notarization (macOS)
+      # Create .env file for notarization (macOS) - only if signing is enabled
       - name: Create .env file for notarization
         if: matrix.platform == 'darwin'
         run: |
-          cat > .env << 'ENVEOF'
+          if [ "$MACOS_SIGNING_ENABLED" = "true" ]; then
+            cat > .env << ENVEOF
           APPLE_ID=${{ secrets.APPLE_ID }}
           APPLE_APP_PASSWORD=${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}
-          APPLE_IDENTITY="Developer ID Application: Jinhu Wang (5DA3687T6S)"
+          APPLE_IDENTITY=Developer ID Application: Jinhu Wang (5DA3687T6S)
+          MACOS_SIGNING_ENABLED=true
           ENVEOF
-          echo "Created .env file for notarization"
+            echo "Created .env file with signing credentials"
+          else
+            cat > .env << ENVEOF
+          MACOS_SIGNING_ENABLED=false
+          ENVEOF
+            echo "Created .env file with signing disabled"
+          fi
           echo "Contents (redacted):"
           cat .env | sed 's/=.*/=***/'
 
@@ -334,11 +342,13 @@ jobs:
         run: ${{ matrix.build_cmd }}
         shell: bash
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.platform == 'darwin' && 'true' || 'false' }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_IDENTITY: "Developer ID Application: Jinhu Wang (5DA3687T6S)"
+          # Only enable auto-discovery when signing is enabled
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ env.MACOS_SIGNING_ENABLED == 'true' && 'true' || 'false' }}
+          # Only pass Apple credentials when signing is enabled (MACOS_SIGNING_ENABLED comes from env)
+          APPLE_ID: ${{ env.MACOS_SIGNING_ENABLED == 'true' && secrets.APPLE_ID || '' }}
+          APPLE_APP_PASSWORD: ${{ env.MACOS_SIGNING_ENABLED == 'true' && secrets.APPLE_ID_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ env.MACOS_SIGNING_ENABLED == 'true' && secrets.APPLE_TEAM_ID || '' }}
+          APPLE_IDENTITY: ${{ env.MACOS_SIGNING_ENABLED == 'true' && 'Developer ID Application: Jinhu Wang (5DA3687T6S)' || '' }}
 
       # Notarize macOS apps (handled by electron-forge with osxNotarize config)
       # The forge.config.js already includes notarization when APPLE_* env vars are set
@@ -403,17 +413,27 @@ jobs:
         if: matrix.platform == 'win32' && github.event_name == 'push' && (contains(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         run: |
           Write-Host "Verifying Windows code signing status..."
-          $exeFiles = Get-ChildItem -Path "out/make/squirrel.windows" -Filter "*.exe" -Recurse -ErrorAction SilentlyContinue
-          foreach ($exe in $exeFiles) {
-            Write-Host "Checking: $($exe.FullName)"
-            $sig = Get-AuthenticodeSignature -FilePath $exe.FullName
-            if ($sig.Status -eq "Valid") {
-              Write-Host "✓ Signed by: $($sig.SignerCertificate.Subject)"
+          $squirrelPath = "out/make/squirrel.windows"
+          if (Test-Path $squirrelPath) {
+            $exeFiles = Get-ChildItem -Path $squirrelPath -Filter "*.exe" -Recurse
+            if ($exeFiles) {
+              foreach ($exe in $exeFiles) {
+                Write-Host "Checking: $($exe.FullName)"
+                $sig = Get-AuthenticodeSignature -FilePath $exe.FullName
+                if ($sig.Status -eq "Valid") {
+                  Write-Host "Signed by: $($sig.SignerCertificate.Subject)"
+                } else {
+                  Write-Host "Signature status: $($sig.Status)"
+                }
+              }
             } else {
-              Write-Host "⚠ Signature status: $($sig.Status)"
+              Write-Host "No exe files found in $squirrelPath"
             }
+          } else {
+            Write-Host "Squirrel output directory not found"
           }
         shell: powershell
+        continue-on-error: true
 
       # Cleanup keychain (macOS)
       - name: Cleanup keychain
