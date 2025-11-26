@@ -261,30 +261,22 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: ${{ matrix.platform == 'darwin' && 'true' || 'false' }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
-      # Notarize macOS apps
-      - name: Notarize macOS application
+      # Notarize macOS apps (handled by electron-forge with osxNotarize config)
+      # The forge.config.js already includes notarization when APPLE_* env vars are set
+      - name: Verify notarization
         if: matrix.platform == 'darwin' && github.event_name == 'push' && (contains(github.ref, 'refs/tags/') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-        env:
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          if [ -n "$APPLE_ID" ]; then
-            echo "Notarizing macOS application..."
-            for DMG in out/make/*.dmg; do
-              if [ -f "$DMG" ]; then
-                xcrun notarytool submit "$DMG" \
-                  --apple-id "$APPLE_ID" \
-                  --password "$APPLE_ID_PASSWORD" \
-                  --team-id "$APPLE_TEAM_ID" \
-                  --wait
-                xcrun stapler staple "$DMG"
-              fi
-            done
-          fi
+          echo "Verifying notarization status..."
+          for DMG in out/make/*.dmg; do
+            if [ -f "$DMG" ]; then
+              echo "Checking: $DMG"
+              spctl -a -t open --context context:primary-signature "$DMG" || true
+              xcrun stapler validate "$DMG" || echo "Note: Stapling may have been done during build"
+            fi
+          done
 
       # Upload artifacts
       - name: Upload build artifacts

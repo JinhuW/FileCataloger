@@ -86,6 +86,9 @@ export function useShelfConfig(shelfId: string | null): UseShelfConfigResult {
         return;
       }
 
+      // Capture previous state for potential rollback
+      const previousConfig = shelf ? { ...shelf } : null;
+
       // Update local store first (optimistic update)
       updateShelfInStore(shelfId, changes);
 
@@ -96,13 +99,17 @@ export function useShelfConfig(shelfId: string | null): UseShelfConfigResult {
           logger.debug(`Successfully synced config update for shelf ${shelfId}`);
         } catch (error) {
           logger.error('Failed to update config via IPC:', error);
-          // TODO: Consider rolling back the optimistic update on error
+          // Rollback optimistic update on error
+          if (previousConfig) {
+            updateShelfInStore(shelfId, previousConfig);
+            logger.debug(`Rolled back config update for shelf ${shelfId}`);
+          }
         }
       } else {
         logger.warn('IPC not connected, config update not synced');
       }
     },
-    [shelfId, isConnected, invoke, updateShelfInStore]
+    [shelfId, shelf, isConnected, invoke, updateShelfInStore]
   );
 
   return {
