@@ -302,7 +302,7 @@ jobs:
           APPLE_ID=${{ secrets.APPLE_ID }}
           APPLE_APP_PASSWORD=${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID=${{ secrets.APPLE_TEAM_ID }}
-          APPLE_IDENTITY=Developer ID Application: Jinhu Wang (5DA3687T6S)
+          APPLE_IDENTITY="Developer ID Application: Jinhu Wang (5DA3687T6S)"
           ENVEOF
           echo "Created .env file for notarization"
           echo "Contents (redacted):"
@@ -317,7 +317,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          APPLE_IDENTITY: Developer ID Application: Jinhu Wang (5DA3687T6S)
+          APPLE_IDENTITY: "Developer ID Application: Jinhu Wang (5DA3687T6S)"
 
       # Notarize macOS apps (handled by electron-forge with osxNotarize config)
       # The forge.config.js already includes notarization when APPLE_* env vars are set
