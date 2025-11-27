@@ -405,14 +405,15 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-  # Create release when pushing tags or manual trigger
+  # Create release when pushing to main branch, tags, or manual trigger
   release:
     name: Create Release
     needs: [build]
     runs-on: ubuntu-latest
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'push' && contains(github.ref, 'refs/tags/'))
+      (github.event_name == 'push' && contains(github.ref, 'refs/tags/')) ||
+      (github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'))
 
     steps:
       - name: Checkout code
@@ -428,6 +429,9 @@ jobs:
             RELEASE_TYPE="${{ github.event.inputs.release_type }}"
           elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
             VERSION="${GITHUB_REF#refs/tags/v}"
+            RELEASE_TYPE="release"
+          elif [[ "${{ github.ref }}" == refs/heads/main ]] || [[ "${{ github.ref }}" == refs/heads/master ]]; then
+            VERSION=$(node -p "require('./package.json').version")
             RELEASE_TYPE="release"
           else
             VERSION=$(node -p "require('./package.json').version")
