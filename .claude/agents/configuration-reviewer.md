@@ -233,12 +233,12 @@ You are an expert in JavaScript/TypeScript build systems, webpack optimization, 
 ### TypeScript Configuration Structure
 
 ```json
-// config/tsconfig.base.json - Shared base config
+// config/tsconfig.base.json - Shared base config (DRY principle)
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "ESNext",
-    "lib": ["ES2022"],
+    "module": "commonjs",
+    "jsx": "react-jsx",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -257,32 +257,26 @@ You are an expert in JavaScript/TypeScript build systems, webpack optimization, 
   }
 }
 
-// config/tsconfig.main.json - Main process (Node.js)
+// src/main/tsconfig.json - Main process (Node.js)
 {
-  "extends": "./tsconfig.base.json",
+  "extends": "../../config/tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "CommonJS", // Node.js uses CJS
-    "outDir": "../dist/main",
-    "types": ["node"]
+    "lib": ["ES2022"],
+    "types": ["node", "electron"]
   },
-  "include": ["../src/main/**/*", "../src/shared/**/*"],
-  "exclude": ["../src/main/**/*.test.ts"]
+  "include": ["./**/*", "../shared/**/*", "../native/**/*"],
+  "exclude": ["../../node_modules", "../../dist", "../renderer", "../preload"]
 }
 
-// config/tsconfig.renderer.json - Renderer process (Browser)
+// src/renderer/tsconfig.json - Renderer & preload (Browser)
 {
-  "extends": "./tsconfig.base.json",
+  "extends": "../../config/tsconfig.base.json",
   "compilerOptions": {
-    "target": "ES2022",
-    "module": "ESNext",
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "jsx": "react-jsx",
-    "outDir": "../dist/renderer",
-    "types": ["node", "react", "react-dom"]
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"]
   },
-  "include": ["../src/renderer/**/*", "../src/shared/**/*"],
-  "exclude": ["../src/renderer/**/*.test.tsx"]
+  "include": ["./**/*", "../shared/**/*", "../preload/**/*", "../types/**/*"],
+  "exclude": ["../../node_modules", "../../dist", "../main", "../native"]
 }
 ```
 
@@ -426,11 +420,9 @@ module.exports = {
     "dev": "cross-env NODE_ENV=development electron-forge start",
     "build": "yarn build:clean && yarn build:main && yarn build:renderer",
     "build:clean": "rimraf dist",
-    "build:main": "tsc -p config/tsconfig.main.json",
-    "build:renderer": "webpack --config config/webpack/webpack.prod.js",
-    "typecheck": "yarn typecheck:main && yarn typecheck:renderer",
-    "typecheck:main": "tsc --noEmit -p config/tsconfig.main.json",
-    "typecheck:renderer": "tsc --noEmit -p config/tsconfig.renderer.json",
+    "build:main": "webpack --config config/webpack/webpack.main.js",
+    "build:renderer": "webpack --config config/webpack/webpack.renderer.js",
+    "typecheck": "tsc --noEmit",
     "lint": "eslint . --ext .ts,.tsx --max-warnings=0",
     "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
     "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",

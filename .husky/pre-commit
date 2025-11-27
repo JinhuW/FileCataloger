@@ -16,7 +16,7 @@ fi
 
 # Run lint-staged for incremental checks
 echo "📝 Running lint-staged..."
-npx lint-staged
+npx lint-staged --config config/.lintstagedrc.json
 
 # Check for TypeScript errors across entire project
 echo "🔎 Running full TypeScript type checking..."

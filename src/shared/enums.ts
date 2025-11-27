@@ -33,17 +33,6 @@ export enum ShelfItemType {
   IMAGE = 'image',
 }
 
-/**
- * Animation easing functions
- */
-export enum AnimationEasing {
-  LINEAR = 'linear',
-  EASE_IN = 'ease-in',
-  EASE_OUT = 'ease-out',
-  EASE_IN_OUT = 'ease-in-out',
-  CUBIC_BEZIER = 'cubic-bezier(0.4, 0, 0.2, 1)',
-}
-
 // LogLevel is already defined in logger.ts, so we'll skip it here to avoid conflicts
 
 /**
@@ -121,16 +110,6 @@ export enum ModuleStatus {
 }
 
 /**
- * Performance warning types
- */
-export enum PerformanceWarningType {
-  HIGH_CPU = 'high_cpu',
-  HIGH_MEMORY = 'high_memory',
-  SLOW_RENDER = 'slow_render',
-  MEMORY_LEAK = 'memory_leak',
-}
-
-/**
  * User preference keys
  */
 export enum PreferenceKey {
@@ -152,58 +131,6 @@ export enum Theme {
   LIGHT = 'light',
   DARK = 'dark',
   AUTO = 'auto',
-}
-
-/**
- * IPC message types for better organization
- */
-export enum IPCMessageType {
-  REQUEST = 'request',
-  RESPONSE = 'response',
-  EVENT = 'event',
-  ERROR = 'error',
-  BROADCAST = 'broadcast',
-}
-
-/**
- * Mouse button identifiers
- */
-export enum MouseButton {
-  LEFT = 0,
-  MIDDLE = 1,
-  RIGHT = 2,
-  BACK = 3,
-  FORWARD = 4,
-}
-
-/**
- * Keyboard modifier keys
- */
-export enum ModifierKey {
-  CTRL = 'ctrl',
-  CMD = 'cmd',
-  ALT = 'alt',
-  SHIFT = 'shift',
-  META = 'meta',
-}
-
-/**
- * Rate limiter actions
- */
-export enum RateLimiterAction {
-  ALLOW = 'allow',
-  BLOCK = 'block',
-  THROTTLE = 'throttle',
-}
-
-/**
- * Timer types for TimerManager
- */
-export enum TimerType {
-  TIMEOUT = 'timeout',
-  INTERVAL = 'interval',
-  IMMEDIATE = 'immediate',
-  ANIMATION_FRAME = 'animationFrame',
 }
 
 /**

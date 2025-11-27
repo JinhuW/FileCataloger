@@ -1,0 +1,20 @@
+{
+  "src/**/*.{ts,tsx}": [
+    "prettier --config config/.prettierrc --write",
+    "eslint --config config/.eslintrc.js --fix",
+    "bash -c 'yarn typecheck'"
+  ],
+  "src/**/*.{js,jsx}": [
+    "prettier --config config/.prettierrc --write",
+    "eslint --config config/.eslintrc.js --fix"
+  ],
+  "src/**/*.{json,css,scss,md}": [
+    "prettier --config config/.prettierrc --write"
+  ],
+  "package.json": [
+    "prettier --config config/.prettierrc --write"
+  ],
+  "*.md": [
+    "prettier --config config/.prettierrc --write"
+  ]
+}

@@ -12,8 +12,8 @@
  * - Electron externals to prevent bundling Electron APIs
  *
  * Build notes:
- * - transpileOnly is set to false for type checking during build
- * - Uses the main tsconfig.json for TypeScript configuration
+ * - transpileOnly is set to true for faster builds (type checking done separately)
+ * - Uses the renderer tsconfig.json for TypeScript configuration (preload has DOM access)
  * - Inherits common webpack settings from webpack.common.js
  */
 
@@ -42,7 +42,7 @@ module.exports = merge(common, {
         use: [{
           loader: 'ts-loader',
           options: {
-            configFile: path.resolve(projectRoot, 'config/tsconfig.renderer.json'),
+            configFile: path.resolve(projectRoot, 'src/renderer/tsconfig.json'),
             // Type checking should be done separately for better performance
             transpileOnly: true,
             // Disable project references to avoid ts-loader issues

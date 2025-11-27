@@ -157,7 +157,7 @@ window.electronAPI.shelf.onItemsUpdate(callback);
 
 - **Strict mode enabled**: No implicit `any` types allowed
 - **Path aliases**: Use `@renderer/*`, `@shared/*`, `@main/*` for imports
-- **Separate tsconfig**: `config/tsconfig.renderer.json` for renderer-specific settings
+- **Separate tsconfig**: `src/renderer/tsconfig.json` for renderer-specific settings
 - **React 19 types**: Latest React types with concurrent features
 
 #### Styling with Tailwind CSS

@@ -138,11 +138,14 @@ All IPC channels are strictly validated in preload script:
 
 ### TypeScript Configuration
 
-Separate configs for security and type safety:
+Separate configs for security and type safety, organized within each subproject:
 
-- `config/tsconfig.main.json` - Node.js environment
-- `config/tsconfig.renderer.json` - Browser environment
+- `src/main/tsconfig.json` - Main process (Node.js environment)
+- `src/renderer/tsconfig.json` - Renderer process (Browser environment)
+- `config/tsconfig.base.json` - Shared base configuration (DRY principle)
 - Path aliases: `@main/*`, `@renderer/*`, `@native/*`, `@shared/*`
+
+The TypeScript configuration uses project references for proper type isolation between processes.
 
 ## Key Implementation Details
 

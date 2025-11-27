@@ -20,10 +20,13 @@
   // DO NOT MERGE THESE CONFIGS - it would break type safety!
 
   // This file now uses TypeScript Project References for the solution
-  // All TypeScript configurations are organized in the config/ directory
+  // TypeScript configurations are now organized within each subproject directory:
+  // - src/main/tsconfig.json     → Main process configuration
+  // - src/renderer/tsconfig.json → Renderer process configuration
+  // - config/tsconfig.base.json  → Shared base configuration (DRY principle)
   "files": [],
   "references": [
-    { "path": "./config/tsconfig.main.json" },
-    { "path": "./config/tsconfig.renderer.json" }
+    { "path": "./src/main/tsconfig.json" },
+    { "path": "./src/renderer/tsconfig.json" }
   ]
 }

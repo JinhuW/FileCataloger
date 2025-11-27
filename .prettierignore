@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+dist/
+out/
+build/
+
+# Native modules
+*.node
+prebuilds/
+
+# Coverage
+coverage/
+
+# Build artifacts
+*.log
+*.tsbuildinfo
+
+# Claude Code configuration
+src/.claude/
+.claude/
+**/CLAUDE.md

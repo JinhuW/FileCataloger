@@ -1,6 +1,12 @@
-# FileCataloger - Desktop Application
+# FileCataloger
 
-A feature-complete Electron-based desktop application for temporary file storage with floating shelf windows and native system integration for macOS.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-lightgrey.svg)](https://github.com/JinhuW/FileCataloger)
+[![Electron](https://img.shields.io/badge/Electron-37.x-47848F.svg)](https://www.electronjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6.svg)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-19.x-61DAFB.svg)](https://react.dev/)
+
+A feature-complete Electron-based desktop application for temporary file storage with floating shelf windows and native system integration.
 
 ## ✅ Project Status: COMPLETE
 
@@ -9,6 +15,7 @@ All core features have been successfully implemented and tested. The application
 ## 🎯 Features Implemented
 
 ### Core Functionality
+
 - ✅ **Drag + Shake Detection**: Combined drag and shake detection for intuitive shelf creation
 - ✅ **Multiple Shelves**: Support for multiple floating shelf windows with window pooling
 - ✅ **Drag & Drop**: Full drag and drop support for files and content
@@ -17,6 +24,7 @@ All core features have been successfully implemented and tested. The application
 - ✅ **Shelf Persistence**: Shelves maintain their state and position
 
 ### Advanced Features
+
 - ✅ **Comprehensive Error Handling**: Multi-level error system with severity categorization
 - ✅ **Performance Monitoring**: CPU and memory usage tracking with auto-cleanup
 - ✅ **Preferences System**: Full preferences management with ElectronStore
@@ -28,24 +36,33 @@ All core features have been successfully implemented and tested. The application
 ## 🚀 Quick Start
 
 ### Prerequisites
-- Node.js 20+ LTS
-- Yarn package manager
-- macOS (for full functionality)
+
+#### All Platforms
+
+- **Node.js**: 20.x LTS or higher
+- **Yarn**: Package manager (v1.22+ or v3+)
+- **Python**: 3.x (required for native module builds)
+
+#### macOS
+
+- **Xcode Command Line Tools**: `xcode-select --install`
+- Full native functionality supported
+
+#### Windows (Experimental)
+
+- **Visual Studio Build Tools**: Required for native modules
+- Windows 10/11 recommended
+- Native module support in development
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/JinhuW/FileCataloger.git
 cd FileCataloger
 
-# Install dependencies
+# Install dependencies (native modules build automatically)
 yarn install
-
-# Build native modules
-cd src/native/mouse-tracker/darwin
-node-gyp rebuild
-cd ../../../..
 ```
 
 ### Development
@@ -70,6 +87,7 @@ yarn clean
 ## 🏗️ Architecture
 
 ### Technology Stack
+
 - **Core**: Electron 37.x, Node.js 20 LTS, TypeScript 5.x
 - **UI**: React 19, Tailwind CSS 4, Framer Motion 12, Zustand
 - **Native**: node-gyp, CGEventTap (macOS), NSPasteboard
@@ -181,18 +199,21 @@ Preferences are stored in `~/Library/Application Support/FileCataloger/preferenc
 ## 🛡️ Key Components
 
 ### DragShakeDetector
+
 - Combines native drag monitoring with mouse tracking
 - Detects simultaneous drag operations and shake gestures
 - Uses CGEventTap for high-performance mouse tracking
 - Fallback to Node.js implementation if native module fails
 
 ### ShelfManager
+
 - Manages creation and lifecycle of shelf windows
 - Window pooling for better performance
 - Handles positioning and docking logic
 - Maintains shelf state and persistence
 
 ### Native Modules
+
 - **MouseTracker**: Platform-specific mouse tracking with CGEventTap
 - **DragMonitor**: NSPasteboard monitoring for drag operations
 - Built with node-gyp for optimal performance
@@ -209,11 +230,13 @@ The application includes comprehensive error handling:
 ## 🔍 Development Features
 
 ### Performance Monitoring
+
 - Real-time CPU and memory tracking
 - Automatic garbage collection on high memory
 - Performance warnings and alerts
 
 ### Error Tracking
+
 - Detailed error logs in `~/Library/Application Support/FileCataloger/logs/`
 - Automatic log rotation (7-day retention)
 - User-friendly error messages
@@ -221,6 +244,7 @@ The application includes comprehensive error handling:
 ## 📝 Implementation Status
 
 ### ✅ Completed Phases
+
 1. **Foundation** - Project setup and structure
 2. **Core Modules** - All main functionality
 3. **Window Management** - Multi-shelf support
@@ -230,6 +254,7 @@ The application includes comprehensive error handling:
 7. **User Experience** - Preferences, shortcuts, persistence
 
 ### 🚧 Future Enhancements
+
 - Windows support (Win32 hooks)
 - Linux support (X11/Wayland)
 - Auto-updater integration
@@ -237,34 +262,143 @@ The application includes comprehensive error handling:
 - Advanced file preview
 - Custom themes
 
-## 🐛 Known Issues
+## 🐛 Known Issues & Troubleshooting
 
-- Native drag monitoring requires additional Python setup for building
+### Known Issues
+
+- Native drag monitoring requires Python for building
 - Accessibility permissions required on macOS (one-time setup)
+- Windows native modules are experimental
+
+### Troubleshooting
+
+#### Native Modules Won't Build
+
+```bash
+# Verify Python is installed
+python --version  # Should be 3.x
+
+# Clean and rebuild
+yarn clean
+yarn install
+
+# Force rebuild native modules
+yarn rebuild:native
+
+# Validate build
+yarn test:native:validate
+```
+
+#### Shelf Not Appearing on macOS
+
+1. Grant Accessibility permissions:
+   - System Settings → Privacy & Security → Accessibility
+   - Add FileCataloger and toggle ON
+2. Restart the application
+3. Test shake detection (6+ direction changes while dragging)
+
+#### Type Errors After Update
+
+```bash
+# Run type checking
+yarn typecheck
+
+# Clean and rebuild
+yarn clean
+yarn build
+```
+
+#### Performance Issues
+
+- Check Performance Monitor logs in app data
+- Verify memory usage < 200MB
+- Ensure no zombie shelf processes
+
+For more issues, check [GitHub Issues](https://github.com/JinhuW/FileCataloger/issues).
 
 ## 🤝 Contributing
 
-This project is complete and production-ready. For improvements or bug fixes:
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+### Quick Start for Contributors
 
 1. Fork the repository
-2. Create a feature branch
-3. Commit your changes
-4. Push to the branch
-5. Open a Pull Request
+2. Create a feature branch: `git checkout -b feat/amazing-feature`
+3. Make your changes following our coding standards
+4. Run quality checks: `yarn quality:check`
+5. Commit using conventional commits: `git commit -m 'feat: add amazing feature'`
+6. Push to your fork: `git push origin feat/amazing-feature`
+7. Open a Pull Request
+
+### Development Workflow
+
+```bash
+# Install dependencies
+yarn install
+
+# Run in development mode
+yarn dev
+
+# Run all quality checks before committing
+yarn quality:check
+
+# Run tests
+yarn test
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for:
+
+- Code of conduct
+- Detailed contribution guidelines
+- Architecture overview
+- Testing requirements
+- Commit message conventions
+
+## 🔒 Security
+
+Security is a top priority. If you discover a security vulnerability:
+
+- **DO NOT** open a public issue
+- See [SECURITY.md](SECURITY.md) for responsible disclosure guidelines
+- Security updates are released with high priority
+
+For code signing verification, see [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md).
 
 ## 📄 License
 
-MIT License
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+Copyright (c) 2024 FileCataloger Contributors
 
 ## 🙏 Acknowledgments
 
-- A modern file cataloging application with shelf UI
-- Built with Electron and React
-- Native integration via node-gyp
+- **[Electron](https://www.electronjs.org/)** - Cross-platform desktop framework
+- **[React](https://react.dev/)** - UI library
+- **[Tailwind CSS](https://tailwindcss.com/)** - Utility-first CSS framework
+- **[Framer Motion](https://www.framer.com/motion/)** - Animation library
+- **[Zustand](https://zustand-demo.pmnd.rs/)** - State management
+- **[SignPath.io](https://signpath.io)** - Free code signing for open source (Windows)
+- All our [contributors](https://github.com/JinhuW/FileCataloger/graphs/contributors)
+
+## 📚 Additional Resources
+
+- [CLAUDE.md](CLAUDE.md) - Detailed architecture and development guide
+- [CODE_SIGNING_POLICY.md](CODE_SIGNING_POLICY.md) - Code signing information
+- [GitHub Discussions](https://github.com/JinhuW/FileCataloger/discussions) - Ask questions
+- [GitHub Issues](https://github.com/JinhuW/FileCataloger/issues) - Report bugs
+
+## 📞 Support
+
+- **Documentation**: This README and CLAUDE.md
+- **Issues**: [GitHub Issues](https://github.com/JinhuW/FileCataloger/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/JinhuW/FileCataloger/discussions)
+- **Security**: [SECURITY.md](SECURITY.md)
 
 ---
 
-**Status**: ✅ Production Ready (macOS)  
-**Version**: 1.0.0  
-**Last Updated**: 2025-09-07  
-**Architecture**: Electron 37 + React 19 + Native C++ Modules
+**Status**: ✅ Production Ready (macOS) | 🚧 Experimental (Windows)
+**Version**: 1.0.0
+**Last Updated**: 2024-11-27
+**Architecture**: Electron 37 + React 19 + TypeScript 5 + Native C++ Modules
+
+**⭐ If you find this project useful, please consider giving it a star!**

@@ -24,7 +24,7 @@ module.exports = merge(common, {
         use: [{
           loader: 'ts-loader',
           options: {
-            configFile: path.resolve(projectRoot, 'config/tsconfig.main.json'),
+            configFile: path.resolve(projectRoot, 'src/main/tsconfig.json'),
             transpileOnly: false
           }
         }]
