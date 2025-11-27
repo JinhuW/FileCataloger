@@ -22,7 +22,7 @@ module-name/
 │   ├── index.ts           # Cross-platform factory
 │   ├── moduleNameMac.ts   # macOS TypeScript wrapper
 │   └── moduleNameWin.ts   # Windows TypeScript wrapper
-└── binding.gyp           # Build configuration (cross-platform)
+└── binding.gyp            # Build configuration (cross-platform)
 ```
 
 ### Active Modules
@@ -140,10 +140,17 @@ Currently supports **macOS and Windows**. When adding Linux support:
 
 ### Build Flags
 
+**macOS:**
 - `-O3` - Maximum optimization
 - `-ffast-math` - Fast floating point
-- `-march=native` - CPU-specific optimizations
-- LTO enabled - Link-time optimization
+- `-funroll-loops` - Loop optimization
+- `LLVM_LTO: YES` - Link-time optimization
+- `-fobjc-arc` - Automatic Reference Counting
+
+**Windows:**
+- `/O2` - Maximum optimization
+- `/GL` - Whole program optimization
+- `LinkTimeCodeGeneration: 1` - Link-time code generation
 
 ## Common Issues & Solutions
 
