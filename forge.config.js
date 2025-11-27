@@ -59,7 +59,9 @@ const osxNotarizeConfig = getMacOSNotarizeConfig();
 
 module.exports = {
   packagerConfig: {
-    asar: true,
+    asar: {
+      unpack: '**/*.node'
+    },
     appBundleId: 'com.filecataloger',
     appCopyright: 'Copyright © 2025 FileCataloger',
     name: 'FileCataloger',
@@ -67,14 +69,7 @@ module.exports = {
     // Code signing configuration for Apple Distribution
     ...(osxSignConfig && { osxSign: osxSignConfig }),
     // Notarization configuration for Apple Distribution
-    ...(osxNotarizeConfig && { osxNotarize: osxNotarizeConfig }),
-    // Native modules need to be unpacked
-    asarUnpack: [
-      'dist/main/**/*.node',
-      'dist/native/**/*.node',
-      'node_modules/**/build/Release/*.node',
-      '**/*.node'
-    ]
+    ...(osxNotarizeConfig && { osxNotarize: osxNotarizeConfig })
   },
   rebuildConfig: {},
   makers: [
@@ -84,14 +79,15 @@ module.exports = {
         name: 'filecataloger',
         authors: 'FileCataloger Team',
         exe: 'FileCataloger.exe',
-        description: 'A Windows application for organizing files with floating shelf windows',
+        description: 'A cross-platform application for organizing files with floating shelf windows',
+        // Note: Add setupIcon: './src/main/assets/icon.ico' when Windows icon is available
         // Windows code signing - uses environment variables from CI
         ...getWindowsSignConfig()
       }
     },
     {
       name: '@electron-forge/maker-zip',
-      platforms: ['darwin']
+      platforms: ['darwin', 'win32']
     },
     {
       name: '@electron-forge/maker-deb',

@@ -150,61 +150,9 @@ jobs:
           yarn install --frozen-lockfile
         shell: bash
 
-      - name: Build native modules (macOS)
-        if: matrix.platform == 'darwin'
+      - name: Build native modules
+        if: matrix.platform == 'darwin' || matrix.platform == 'win32'
         run: yarn build:native
-
-      - name: Build native modules (Windows)
-        if: matrix.platform == 'win32'
-        run: |
-          set -e  # Exit on error
-          echo "Building Windows native modules..."
-
-          cd src/native/mouse-tracker
-          echo "Building mouse-tracker..."
-          if ! node-gyp rebuild; then
-            echo "ERROR: Failed to build mouse-tracker"
-            exit 1
-          fi
-
-          cd ../drag-monitor
-          echo "Building drag-monitor..."
-          if ! node-gyp rebuild; then
-            echo "ERROR: Failed to build drag-monitor"
-            exit 1
-          fi
-
-          cd ../../..
-          echo "Windows native modules built successfully"
-        shell: bash
-
-      - name: Copy native modules to dist (Windows)
-        if: matrix.platform == 'win32'
-        run: |
-          set -e  # Exit on error
-          echo "Copying Windows native modules to dist..."
-          mkdir -p dist/main
-
-          # Copy mouse tracker
-          if [ -f "src/native/mouse-tracker/build/Release/mouse_tracker_win.node" ]; then
-            cp src/native/mouse-tracker/build/Release/mouse_tracker_win.node dist/main/
-            echo "Copied mouse_tracker_win.node"
-          else
-            echo "ERROR: mouse_tracker_win.node not found!"
-            exit 1
-          fi
-
-          # Copy drag monitor
-          if [ -f "src/native/drag-monitor/build/Release/drag_monitor_win.node" ]; then
-            cp src/native/drag-monitor/build/Release/drag_monitor_win.node dist/main/
-            echo "Copied drag_monitor_win.node"
-          else
-            echo "ERROR: drag_monitor_win.node not found!"
-            exit 1
-          fi
-
-          echo "Validating copied modules..."
-          ls -la dist/main/*.node
         shell: bash
 
       - name: Build application
