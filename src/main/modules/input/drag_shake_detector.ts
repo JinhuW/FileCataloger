@@ -144,15 +144,9 @@ export class DragShakeDetector extends EventEmitter {
         intensity: event.intensity,
         directionChanges: event.directionChanges,
       });
-      this.logger.info('🔄 Shake detected!', {
-        isDragging: this.isDragging,
-        intensity: event.intensity,
-        directionChanges: event.directionChanges,
-      });
       if (this.isDragging) {
         this.handleDragShake(event);
       } else {
-        this.logger.info('⏸️ Shake ignored - not dragging');
         this.logger.debug('⏸️ Shake ignored - not dragging');
       }
     });

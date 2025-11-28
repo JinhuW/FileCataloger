@@ -76,8 +76,13 @@ try {
       // Production: from dist/main (webpack output)
       nativeModule = require('./drag_monitor_darwin.node');
     } catch {
-      // Last resort: absolute path from __dirname
-      nativeModule = require(path.join(__dirname, 'drag_monitor_darwin.node'));
+      // Asar packaged: need to convert asar path to unpacked path
+      let nativePath = path.join(__dirname, 'drag_monitor_darwin.node');
+      // If running from asar, convert to .asar.unpacked path
+      if (nativePath.includes('.asar')) {
+        nativePath = nativePath.replace(/\.asar([/\\])/i, '.asar.unpacked$1');
+      }
+      nativeModule = require(nativePath);
     }
   }
   logger.info('Successfully loaded drag monitor native module');

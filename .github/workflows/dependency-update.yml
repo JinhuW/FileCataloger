@@ -90,29 +90,29 @@ jobs:
         id: report
         run: |
           # Generate a detailed report of changes
-          cat << 'EOF' > UPDATE_REPORT.md
-          ## Dependency Update Report
-
-          ### Update Type: ${{ github.event.inputs.update_type || 'minor' }}
-
-          ### Changes Made:
-          ```diff
-          $(git diff package.json | grep -E "^[+-]" | grep -v "^[+-]{3}" | head -30)
-          ```
-
-          ### Quality Checks:
-          - ✅ TypeScript: Passed
-          - ✅ Linting: Passed
-          - ✅ Format: Checked
-
-          ### Security Scan:
-          ```
-          $(yarn audit --level moderate 2>&1 | head -20 || echo "No critical vulnerabilities found")
-          ```
-
-          ---
-          Please review the changes and test the application before merging.
-          EOF
+          {
+            echo "## Dependency Update Report"
+            echo ""
+            echo "### Update Type: ${{ github.event.inputs.update_type || 'minor' }}"
+            echo ""
+            echo "### Changes Made:"
+            echo '```diff'
+            git diff package.json | grep -E "^[+-]" | grep -v "^[+-]{3}" | head -30 || echo "No changes detected"
+            echo '```'
+            echo ""
+            echo "### Quality Checks:"
+            echo "- ✅ TypeScript: Passed"
+            echo "- ✅ Linting: Passed"
+            echo "- ✅ Format: Checked"
+            echo ""
+            echo "### Security Scan:"
+            echo '```'
+            yarn audit --level moderate 2>&1 | head -20 || echo "No critical vulnerabilities found"
+            echo '```'
+            echo ""
+            echo "---"
+            echo "Please review the changes and test the application before merging."
+          } > UPDATE_REPORT.md
 
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v5

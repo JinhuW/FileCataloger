@@ -141,20 +141,6 @@ export const formatFileMetadataText = (metadata: FileMetadata): string => {
 };
 
 /**
- * Build truncated text tooltip (shows full text when truncated)
- */
-export const buildTruncatedTextTooltip = (
-  text: string,
-  maxDisplayLength: number
-): string | null => {
-  if (text.length <= maxDisplayLength) {
-    return null; // No tooltip needed
-  }
-
-  return text;
-};
-
-/**
  * Build component description tooltip for rename pattern components
  */
 export const buildComponentDescriptionTooltip = (
@@ -248,18 +234,6 @@ export const getTooltipContentAsString = (content: string | TooltipContent): str
 };
 
 /**
- * Check if text needs tooltip (is it truncated?)
- */
-export const needsTooltip = (element: HTMLElement | null): boolean => {
-  if (!element) return false;
-
-  // Check if content is truncated using scrollWidth
-  const isTruncated = element.scrollWidth > element.clientWidth;
-
-  return isTruncated;
-};
-
-/**
  * Pattern component descriptions
  */
 export const PATTERN_COMPONENT_DESCRIPTIONS: Record<string, ComponentDescription> = {
@@ -314,20 +288,3 @@ export const PATTERN_COMPONENT_DESCRIPTIONS: Record<string, ComponentDescription
   },
 };
 
-/**
- * Get pattern component tooltip content
- */
-export const getPatternComponentTooltip = (componentType: string): TooltipContent | null => {
-  const description = PATTERN_COMPONENT_DESCRIPTIONS[componentType];
-
-  if (!description) {
-    return null;
-  }
-
-  return buildComponentDescriptionTooltip(
-    description.name,
-    description.description,
-    description.example,
-    description.options
-  );
-};

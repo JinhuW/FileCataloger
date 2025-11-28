@@ -8,47 +8,15 @@ NC='\033[0m' # No Color
 
 echo "🔍 Pre-commit hook: Running code quality checks..."
 
-# Check if native modules need rebuilding
-echo "⚙️  Checking native module status..."
-if ! yarn native:check 2>/dev/null; then
-  echo -e "${YELLOW}⚠️  Native modules check skipped (script not yet implemented)${NC}"
-fi
-
-# Run lint-staged for incremental checks
+# Run lint-staged for incremental checks (includes prettier, eslint, and typecheck)
 echo "📝 Running lint-staged..."
 npx lint-staged --config config/.lintstagedrc.json
-
-# Check for TypeScript errors across entire project
-echo "🔎 Running full TypeScript type checking..."
-if ! yarn typecheck; then
-  echo -e "${RED}❌ TypeScript type checking failed${NC}"
-  echo "Please fix type errors before committing."
-  exit 1
-fi
 
 # Run renderer validation (hooks, imports, etc)
 echo "🎯 Validating renderer code..."
 if ! yarn validate:renderer 2>/dev/null; then
   echo -e "${YELLOW}⚠️  Renderer validation found issues - fix these in next iteration${NC}"
   # Don't fail the commit for now, just warn
-fi
-
-# Check for security issues in Electron main process
-echo "🔐 Checking Electron security..."
-if ! yarn security:check 2>/dev/null; then
-  echo -e "${YELLOW}⚠️  Security check skipped (script not yet implemented)${NC}"
-fi
-
-# Validate documentation
-echo "📚 Validating documentation..."
-if ! yarn docs:validate 2>/dev/null; then
-  echo -e "${YELLOW}⚠️  Documentation validation skipped (script not yet implemented)${NC}"
-fi
-
-# Check for dependency issues
-echo "📦 Checking dependencies..."
-if ! yarn deps:check 2>/dev/null; then
-  echo -e "${YELLOW}⚠️  Dependency check skipped (script not yet implemented)${NC}"
 fi
 
 echo -e "${GREEN}✅ Pre-commit checks passed!${NC}"

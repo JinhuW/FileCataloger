@@ -13,7 +13,7 @@
   // If you see errors about missing DOM APIs in main process files, that's good!
   // It means TypeScript is protecting you from runtime crashes.
 
-  "extends": "../../config/tsconfig.base.json",
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
     "lib": ["ES2022"],
     "types": ["node", "electron"],

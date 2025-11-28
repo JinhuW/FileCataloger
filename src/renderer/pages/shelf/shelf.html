@@ -10,7 +10,7 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             background: transparent;
             margin: 0;
@@ -18,12 +18,35 @@
             overflow: hidden;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
-        
+
         #root {
             width: 100vw;
             height: 100vh;
         }
     </style>
+    <script>
+        // Provide minimal require shim for webpack externals
+        // This must be defined BEFORE any bundled scripts load
+        window.require = window.require || function(moduleName) {
+            if (moduleName === 'node:crypto' || moduleName === 'crypto') {
+                // Return a proxy that binds all methods to window.crypto
+                const cryptoObj = window.crypto || globalThis.crypto || {};
+                // Create a wrapper object with bound methods to prevent "Illegal invocation" errors
+                return {
+                    randomUUID: cryptoObj.randomUUID ? cryptoObj.randomUUID.bind(cryptoObj) : function() {
+                        // Fallback if randomUUID not available
+                        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                            const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+                            return v.toString(16);
+                        });
+                    },
+                    subtle: cryptoObj.subtle,
+                    getRandomValues: cryptoObj.getRandomValues ? cryptoObj.getRandomValues.bind(cryptoObj) : null
+                };
+            }
+            throw new Error('require() is not available in renderer. Module: ' + moduleName);
+        };
+    </script>
 </head>
 <body>
     <div id="root"></div>

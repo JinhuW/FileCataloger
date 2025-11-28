@@ -130,7 +130,7 @@ export class AutoHideManager extends EventEmitter {
    */
   private async executeAutoHide(shelfId: string): Promise<void> {
     // Check if we should block auto-hide
-    if (this.shouldBlockAutoHide(shelfId)) {
+    if (this.shouldBlockAutoHide()) {
       // Reschedule for later
       this.logger.info(`⏸️ Auto-hide blocked for shelf ${shelfId}, rescheduling`);
       this.scheduleAutoHide(shelfId);
@@ -170,7 +170,7 @@ export class AutoHideManager extends EventEmitter {
   /**
    * Check if auto-hide should be blocked
    */
-  private shouldBlockAutoHide(_shelfId: string): boolean {
+  private shouldBlockAutoHide(): boolean {
     const context = this.stateMachine.getContext();
 
     // Block during drag if configured
@@ -192,8 +192,7 @@ export class AutoHideManager extends EventEmitter {
    * Cancel auto-hide for a specific shelf
    */
   public cancelAutoHide(shelfId: string): void {
-    const timerId = this.pendingAutoHides.get(shelfId);
-    if (timerId) {
+    if (this.pendingAutoHides.has(shelfId)) {
       this.timerManager.clearTimeout(`autohide-${shelfId}`);
       this.pendingAutoHides.delete(shelfId);
       this.logger.info(`❌ Cancelled auto-hide for shelf ${shelfId}`);

@@ -21,6 +21,18 @@
 
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron';
 
+// Provide a minimal require shim for the renderer process
+// This handles webpack externals that try to require('node:crypto')
+// We redirect those to use the browser's Web Crypto API instead
+(globalThis as any).require = function (moduleName: string) {
+  if (moduleName === 'node:crypto' || moduleName === 'crypto') {
+    // Return browser's crypto object for Web Crypto API
+    return (globalThis as any).crypto || (typeof window !== 'undefined' ? window.crypto : {});
+  }
+  // For any other module, throw an error - renderer should not require Node modules
+  throw new Error(`require() is not available in renderer process. Attempted to require: ${moduleName}`);
+};
+
 // Helper function to log messages via IPC
 function logToMain(level: 'INFO' | 'WARN' | 'ERROR', message: string): void {
   try {

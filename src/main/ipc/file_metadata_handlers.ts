@@ -117,16 +117,3 @@ export function registerFileMetadataHandlers(): void {
 
   logger.info('File metadata IPC handlers registered successfully');
 }
-
-/**
- * Clean up function to remove handlers
- */
-export function unregisterFileMetadataHandlers(): void {
-  const channels = ['file:get-metadata', 'file:get-metadata-batch'];
-
-  channels.forEach(channel => {
-    ipcMain.removeAllListeners(channel);
-  });
-
-  logger.info('File metadata IPC handlers unregistered');
-}

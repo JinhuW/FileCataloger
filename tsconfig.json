@@ -1,29 +1,51 @@
 {
-  // ROOT TypeScript configuration
+  // ROOT TypeScript configuration - Base settings shared by all processes
   //
   // ⚠️ ARCHITECTURE DECISION: Multiple TypeScript Configs ⚠️
   //
   // This Electron app uses SEPARATE TypeScript configs for different processes:
-  // - tsconfig.base.json     → Shared settings (DRY principle)
-  // - tsconfig.main.json     → Main process (Node.js environment)
-  // - tsconfig.renderer.json → Renderer process (Browser environment)
+  // - tsconfig.json (this file) → Shared base settings (DRY principle)
+  // - src/main/tsconfig.json    → Main process (Node.js environment, NO DOM)
+  // - src/renderer/tsconfig.json → Renderer process (Browser environment, DOM access)
   //
   // WHY NOT A SINGLE CONFIG?
   // 1. Type Safety: Main process shouldn't access DOM, renderer shouldn't access fs
   // 2. Security: Prevents accidental Node.js usage in renderer (security risk)
-  // 3. Build Tools: webpack.main.config.js specifically uses tsconfig.main.json
+  // 3. Build Tools: webpack configs use process-specific tsconfig files
   //
   // EXAMPLE ERRORS THIS PREVENTS:
   // - In main process: window.alert() → TypeScript error (no DOM)
   // - In renderer: require('fs') → TypeScript error (no Node.js)
-  //
-  // DO NOT MERGE THESE CONFIGS - it would break type safety!
 
-  // This file now uses TypeScript Project References for the solution
-  // TypeScript configurations are now organized within each subproject directory:
-  // - src/main/tsconfig.json     → Main process configuration
-  // - src/renderer/tsconfig.json → Renderer process configuration
-  // - config/tsconfig.base.json  → Shared base configuration (DRY principle)
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "jsx": "react-jsx",
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "moduleResolution": "node",
+    "allowSyntheticDefaultImports": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "baseUrl": "./src",
+    "paths": {
+      "@main/*": ["main/*"],
+      "@renderer/*": ["renderer/*"],
+      "@preload/*": ["preload/*"],
+      "@native/*": ["native/*"],
+      "@shared/*": ["shared/*"],
+      "@/*": ["*"]
+    },
+    "removeComments": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
   "files": [],
   "references": [
     { "path": "./src/main/tsconfig.json" },

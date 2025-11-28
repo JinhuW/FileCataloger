@@ -20,7 +20,7 @@ import { LogEntry } from '@shared/logger';
 import { securityConfig } from './modules/config';
 import { ShelfConfig, ShelfItem } from '@shared/types';
 import { SHELF_CONSTANTS } from '@shared/constants';
-import { getGlobalTimerManager, destroyGlobalTimerManager } from './modules/utils';
+import { destroyGlobalTimerManager } from './modules/utils';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
@@ -370,26 +370,6 @@ class FileCatalogerApp {
     }
   }
 
-  private showMainWindow(): void {
-    // Create window lazily if needed
-    if (!this.mainWindow) {
-      this.createMainWindow();
-    }
-
-    if (this.mainWindow) {
-      if (this.mainWindow.isMinimized()) {
-        this.mainWindow.restore();
-      }
-      this.mainWindow.show();
-      this.mainWindow.focus();
-
-      // Send initial status to renderer
-      if (this.applicationController) {
-        this.mainWindow.webContents.send('app:status', this.applicationController.getStatus());
-      }
-    }
-  }
-
   private setupIpcHandlers(): void {
     // Register pattern handlers
     import('./ipc/pattern_handlers')
@@ -624,11 +604,6 @@ class FileCatalogerApp {
       }
     });
 
-    // Debug handler for renderer messages
-    ipcMain.on('shelf:debug', (_event, _data) => {
-      // Debug logging removed for production
-    });
-
     // Logger IPC handlers
     ipcMain.on('logger:log', (event, logEntry: LogEntry) => {
       // Forward renderer logs to main logger for file logging
@@ -825,117 +800,6 @@ class FileCatalogerApp {
         return { success: true, results };
       }
     );
-
-    // TEST: Add temporary test IPC for file rename validation
-    ipcMain.handle('fs:test-rename', async () => {
-      try {
-        const testSource = '/tmp/test_rename_source.txt';
-        const testTarget = '/tmp/test_rename_target.txt';
-
-        // Test if source exists
-        const sourceExists = await fs.promises
-          .access(testSource)
-          .then(() => true)
-          .catch(() => false);
-        if (!sourceExists) {
-          return { success: false, error: 'Test source file not found' };
-        }
-
-        // Perform test rename
-        await fs.promises.rename(testSource, testTarget);
-        this.logger.info(`✅ TEST: File rename IPC working - renamed test file`);
-
-        // Rename back for cleanup
-        await fs.promises.rename(testTarget, testSource);
-
-        return { success: true, message: 'File rename IPC backend working correctly' };
-      } catch (error) {
-        this.logger.error(`❌ TEST: File rename IPC failed:`, error);
-        return {
-          success: false,
-          error: error instanceof Error ? error.message : 'Unknown error',
-        };
-      }
-    });
-  }
-
-  private createMainWindow(): void {
-    // Only create window if it doesn't exist (lazy loading)
-    if (this.mainWindow) {
-      return;
-    }
-
-    // Create the browser window for settings/development
-    this.mainWindow = new BrowserWindow({
-      height: 600,
-      width: 900,
-      minHeight: 600,
-      minWidth: 900,
-      maxHeight: 600,
-      maxWidth: 900,
-      webPreferences: {
-        preload: path.join(__dirname, '../preload/index.js'),
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true, // Enable sandboxing for security
-        webviewTag: false, // Explicitly set to false as per Electron security recommendations
-      },
-      show: false, // Don't show by default - only when requested
-      title: 'FileCataloger - Status',
-      minimizable: true,
-      closable: true,
-      resizable: false, // Fixed size window
-      skipTaskbar: false,
-      backgroundColor: '#ffffff', // Set white background
-    });
-
-    // Load the index.html of the app from the built renderer
-    const rendererPath = path.join(__dirname, '../renderer/index.html');
-    this.mainWindow.loadFile(rendererPath);
-
-    // Open DevTools in development for debugging
-    if (!app.isPackaged) {
-      this.mainWindow.webContents.openDevTools({ mode: 'detach' });
-    }
-
-    // Show window in development for debugging
-    if (!app.isPackaged) {
-      this.mainWindow.once('ready-to-show', () => {
-        this.mainWindow?.show();
-      });
-    }
-
-    // Emitted when the window is closed - hide instead of destroy for menu bar apps
-    this.mainWindow.on('close', event => {
-      if (!this.isQuitting) {
-        event.preventDefault();
-        this.mainWindow?.hide();
-      }
-    });
-
-    // Clean up reference when destroyed
-    this.mainWindow.on('closed', () => {
-      this.mainWindow = null;
-      // Stop status updates when window is destroyed
-      getGlobalTimerManager().clearInterval('status-update');
-    });
-
-    // Open DevTools in development
-    if (process.env.NODE_ENV === 'development') {
-      this.mainWindow.webContents.openDevTools();
-    }
-
-    // Set up periodic status updates
-    getGlobalTimerManager().setInterval(
-      'status-update',
-      () => {
-        if (this.mainWindow && !this.mainWindow.isDestroyed() && this.applicationController) {
-          this.mainWindow.webContents.send('app:status', this.applicationController.getStatus());
-        }
-      },
-      2000,
-      'Send status updates to renderer'
-    );
   }
 
   public getMainWindow(): BrowserWindow | null {
@@ -947,18 +811,6 @@ class FileCatalogerApp {
   }
 
   private setupKeyboardHandlers(): void {
-    keyboardManager.on('toggle-shelf', () => {
-      // Toggle functionality to be implemented in ApplicationController
-    });
-
-    keyboardManager.on('clear-shelf', () => {
-      // Clear shelf functionality
-    });
-
-    keyboardManager.on('hide-all-shelves', () => {
-      // Hide all shelves functionality
-    });
-
     keyboardManager.on('new-shelf', async () => {
       if (this.applicationController) {
         await this.applicationController.createShelf({});
@@ -976,10 +828,6 @@ class FileCatalogerApp {
         category: ErrorCategory.PERFORMANCE,
         context: warning,
       });
-    });
-
-    performanceMonitor.on('performance-warning-cleared', _data => {
-      // Performance warning cleared
     });
   }
 

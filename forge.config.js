@@ -66,6 +66,7 @@ module.exports = {
     appCopyright: 'Copyright © 2025 FileCataloger',
     name: 'FileCataloger',
     executableName: process.platform === 'linux' ? 'filecataloger' : 'FileCataloger',
+    icon: './assets/icon', // Electron Forge will automatically append .icns for macOS, .ico for Windows
     // Code signing configuration for Apple Distribution
     ...(osxSignConfig && { osxSign: osxSignConfig }),
     // Notarization configuration for Apple Distribution
@@ -103,7 +104,8 @@ module.exports = {
       config: {
         name: 'FileCataloger',
         format: 'ULFO',
-        overwrite: true
+        overwrite: true,
+        icon: './assets/icon.icns'
       }
     }
   ],
